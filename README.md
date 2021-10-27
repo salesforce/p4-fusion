@@ -98,7 +98,7 @@ This tool uses C++11 and thus it should work with much older GCC versions. We ha
 3. Run!
 
 ```shell
-./build/p4-fusion/p4-fusion --path //depot/path/... --user $P4USER --port $P4PORT --client $P4CLIENT --src clones/.git --networkThreads 200 --printBatch 100 --lookAhead 2000 --retries 10 --refresh 100 --lookAhead 15000
+./build/p4-fusion/p4-fusion --path //depot/path/... --user $P4USER --port $P4PORT --client $P4CLIENT --src clones/.git --networkThreads 200 --printBatch 100 --lookAhead 2000 --retries 10 --refresh 100
 ```
 
 There should be a Git repo being created in the `clones/` directory with commits being created as the tool runs.
