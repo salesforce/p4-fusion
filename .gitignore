@@ -1,0 +1,12 @@
+build/
+.DS_Store
+
+.vscode/
+helix-core-api/
+
+# zip files
+*.zip
+
+# Depot conversion results
+clones/
+*.log

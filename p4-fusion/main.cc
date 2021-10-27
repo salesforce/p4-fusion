@@ -1,0 +1,333 @@
+/*
+ * Copyright (c) 2021, salesforce.com, inc.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+#include <thread>
+#include <map>
+#include <atomic>
+#include <mutex>
+#include <sstream>
+#include <typeinfo>
+#include <signal.h>
+
+#include "common.h"
+
+#include "utils/timer.h"
+#include "utils/arguments.h"
+
+#include "thread_pool.h"
+#include "p4_api.h"
+#include "git_api.h"
+
+#include "p4/p4libs.h"
+
+int Main(int argc, char** argv)
+{
+	Timer programTimer;
+
+	PRINT("Running p4-fusion from: " << argv[0]);
+
+	Arguments::GetSingleton()->RequiredParameter("--path", "P4 depot path to convert to a Git repo");
+	Arguments::GetSingleton()->RequiredParameter("--src", "Local relative source path with P4 code. Git repo will be created at this path. This path should be empty before running p4-fusion.");
+	Arguments::GetSingleton()->RequiredParameter("--port", "Specify which P4PORT to use.");
+	Arguments::GetSingleton()->RequiredParameter("--user", "Specify which P4USER to use. Please ensure that the user is logged in.");
+	Arguments::GetSingleton()->RequiredParameter("--client", "Name/path of the client workspace specification.");
+	Arguments::GetSingleton()->RequiredParameter("--lookAhead", "How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?");
+	Arguments::GetSingleton()->OptionalParameter("--networkThreads", std::to_string(std::thread::hardware_concurrency()), "Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.");
+	Arguments::GetSingleton()->OptionalParameter("--printBatch", "1", "Specify the p4 print batch size.");
+	Arguments::GetSingleton()->OptionalParameter("--maxChanges", "-1", "Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.");
+	Arguments::GetSingleton()->OptionalParameter("--retries", "10", "Specify how many times a command should be retried before the process exits in a failure.");
+	Arguments::GetSingleton()->OptionalParameter("--refresh", "100", "Specify how many times a connection should be reused before it is refreshed.");
+	Arguments::GetSingleton()->OptionalParameter("--fsyncEnable", "false", "Enable fsync() while writing objects to disk to ensure they get written to permanent storage immediately instead of being cached. This is to mitigate data loss in events of hardware failure.");
+	Arguments::GetSingleton()->OptionalParameter("--includeBinaries", "false", "Don't discard binary files while downloading changelists.");
+
+	Arguments::GetSingleton()->Initialize(argc, argv);
+	if (!Arguments::GetSingleton()->IsValid())
+	{
+		PRINT("Usage:" + Arguments::GetSingleton()->Help());
+		return 1;
+	}
+
+	const std::string depotPath = Arguments::GetSingleton()->GetDepotPath();
+	const std::string srcPath = Arguments::GetSingleton()->GetSourcePath();
+	const bool fsyncEnable = Arguments::GetSingleton()->GetFsyncEnable() != "false";
+	const bool includeBinaries = Arguments::GetSingleton()->GetIncludeBinaries() != "false";
+	const int maxChanges = std::atoi(Arguments::GetSingleton()->GetMaxChanges().c_str());
+
+	if (!P4API::InitializeLibraries())
+	{
+		return 1;
+	}
+
+	P4API::P4PORT = Arguments::GetSingleton()->GetPort();
+	P4API::P4USER = Arguments::GetSingleton()->GetUsername();
+	P4API::P4CLIENT = Arguments::GetSingleton()->GetClient();
+	P4API::ClientSpec = P4API().Client().GetClientSpec();
+
+	PRINT("Updated client workspace view " << P4API::ClientSpec.client << " with " << P4API::ClientSpec.mapping.size() << " mappings");
+
+	P4API p4;
+
+	if (!p4.IsDepotPathValid(depotPath))
+	{
+		ERR("Depot path should end with \"/...\". Please pass in the proper depot path and try again.");
+		return 1;
+	}
+
+	if (!p4.IsFileUnderClientSpec(depotPath))
+	{
+		ERR("The depot path specified is not under the " << P4API::ClientSpec.client << " client spec. Consider changing the client spec so that it does. Exiting.");
+		return 1;
+	}
+
+	int networkThreads = 1;
+	std::string networkThreadsStr = Arguments::GetSingleton()->GetNetworkThreads();
+	if (!networkThreadsStr.empty())
+	{
+		networkThreads = std::atoi(networkThreadsStr.c_str());
+	}
+
+	int printBatch = 1;
+	std::string printBatchStr = Arguments::GetSingleton()->GetPrintBatch();
+	if (!printBatchStr.empty())
+	{
+		printBatch = std::atoi(printBatchStr.c_str());
+	}
+
+	int lookAhead = 1;
+	std::string lookAheadStr = Arguments::GetSingleton()->GetLookAhead();
+	if (!lookAheadStr.empty())
+	{
+		lookAhead = std::atoi(lookAheadStr.c_str());
+	}
+
+	std::string retriesStr = Arguments::GetSingleton()->GetRetries();
+	if (!retriesStr.empty())
+	{
+		P4API::CommandRetries = std::atoi(retriesStr.c_str());
+	}
+
+	std::string refreshStr = Arguments::GetSingleton()->GetRefresh();
+	if (!refreshStr.empty())
+	{
+		P4API::CommandRefreshThreshold = std::atoi(refreshStr.c_str());
+	}
+
+	PRINT("Perforce Port: " << P4API::P4PORT);
+	PRINT("Perforce User: " << P4API::P4USER);
+	PRINT("Perforce Client: " << P4API::P4CLIENT);
+	PRINT("Depot Path: " << depotPath);
+	PRINT("Network Threads: " << networkThreads);
+	PRINT("Print Batch: " << printBatch);
+	PRINT("Look Ahead: " << lookAhead);
+	PRINT("Max Retries: " << retriesStr);
+	PRINT("Max Changes: " << maxChanges);
+	PRINT("Refresh Threshold: " << refreshStr);
+	PRINT("Fsync Enable: " << fsyncEnable);
+	PRINT("Include Binaries: " << includeBinaries);
+
+	GitAPI git(fsyncEnable);
+
+	if (!git.InitializeRepository(srcPath))
+	{
+		ERR("Could not initialize Git repository. Exiting.");
+		return 1;
+	}
+
+	std::string resumeFromCL;
+	if (git.IsHEADExists())
+	{
+		if (!git.IsRepositoryClonedFrom(depotPath))
+		{
+			ERR("Git repository at " << srcPath << " was not initially cloned with depotPath = " << depotPath << ". Exiting.");
+			return 1;
+		}
+
+		resumeFromCL = git.DetectLatestCL();
+		WARN("Detected last CL committed as CL " << resumeFromCL);
+	}
+
+	// Get all submitted CLs under depot path
+	std::vector<ChangeList> changes = p4.Changes(depotPath).GetChanges();
+
+	if (!resumeFromCL.empty())
+	{
+		WARN("Resuming run from CLs after CL " << resumeFromCL);
+
+		int resumeCLIndex = -1;
+		for (int i = 0; i < changes.size(); i++)
+		{
+			if (changes.at(i).number == resumeFromCL)
+			{
+				resumeCLIndex = i;
+				break;
+			}
+		}
+
+		if (resumeCLIndex == -1)
+		{
+			ERR("CL to be resumed from was not found in the depot history");
+			return 1;
+		}
+
+		// Trim the changelist vector down, also this discards the CL we are resuming from
+		changes = std::vector<ChangeList>(changes.begin(), changes.begin() + resumeCLIndex);
+	}
+	SUCCESS("Received " << changes.size() << " CLs to be downloaded.");
+
+	if (maxChanges > 0 && changes.size() > maxChanges)
+	{
+		WARN("Only downloading the chronologically first " << maxChanges << " CLs.");
+		changes = std::vector<ChangeList>(changes.begin() + (changes.size() - maxChanges), changes.end());
+	}
+
+	if (changes.empty())
+	{
+		SUCCESS("No CL are required to be downloaded. Exiting.");
+		return 0;
+	}
+
+	ThreadPool::GetSingleton()->Initialize(networkThreads);
+
+	int startupDownloadsCount = 0;
+	long long lastDownloadCL = -1;
+
+	// Go in the chronological order i.e. traverse in reverse
+	for (unsigned i = changes.size(); i-- > 0;)
+	{
+		if (startupDownloadsCount == lookAhead)
+		{
+			break;
+		}
+
+		// Start running `p4 print` on changed files
+		ChangeList& cl = changes.at(i);
+		cl.PrepareDownload();
+		cl.StartDownload(depotPath, printBatch, includeBinaries);
+		startupDownloadsCount++;
+		lastDownloadCL = i;
+	}
+
+	int timezoneMinutes = p4.Info().GetServerTimezoneMinutes();
+
+	// Map usernames to emails
+	const UsersResult& usersResult = p4.Users();
+	const std::unordered_map<std::string, std::string>& users = usersResult.GetUserEmails();
+
+	// Commit procedure start
+	Timer commitTimer;
+
+	git.CreateIndex();
+	for (unsigned i = changes.size(); i-- > 0;)
+	{
+		// See if the threadpool encountered any exceptions
+		try
+		{
+			ThreadPool::GetSingleton()->RaiseCaughtExceptions();
+		}
+		catch (const std::exception& e)
+		{
+			// Threadpool encountered an error, this is unrecoverable
+			ERR("Threadpool encountered an exception: " << e.what());
+			ThreadPool::GetSingleton()->ShutDown();
+			std::exit(1);
+		}
+
+		ChangeList& cl = changes.at(i);
+
+		cl.WaitForDownload();
+
+		for (auto& file : cl.changedFiles)
+		{
+			if (file.shouldCommit) // If the file survived the filters while being downloaded
+			{
+				if (p4.IsDeleted(file.action))
+				{
+					git.RemoveFileFromIndex(file.depotFile);
+				}
+				else
+				{
+					git.AddFileToIndex(file.depotFile, file.contents);
+				}
+
+				// No use for keeping the contents in memory once it has been added
+				file.Clear();
+			}
+		}
+
+		std::string email = "deleted@user";
+		if (users.find(cl.user) != users.end())
+		{
+			email = users.at(cl.user);
+		}
+		std::string commitSHA = git.Commit(depotPath,
+		    cl.number,
+		    cl.user,
+		    email,
+		    timezoneMinutes,
+		    cl.description,
+		    cl.timestamp);
+
+		SUCCESS(
+		    "CL " << cl.number << " --> Commit " << commitSHA << " with " << cl.changedFiles.size() << " files (" << changes.size() - i << "/" << changes.size() << "). "
+		          << "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins out of expected " << (commitTimer.GetTimeS() / 60.0f) / (float)(changes.size() - i) * i << " mins.");
+
+		// Start downloading the CL which is the one chronologically after the last CL that was previously downloaded
+		if (lastDownloadCL > 0)
+		{
+			lastDownloadCL--;
+			ChangeList& downloadCL = changes.at(lastDownloadCL);
+			downloadCL.PrepareDownload();
+			downloadCL.StartDownload(depotPath, printBatch, includeBinaries);
+		}
+
+		// Deallocate this CL's metadata from memory
+		cl.Clear();
+	}
+	git.CloseIndex();
+
+	SUCCESS("Completed conversion of " << changes.size() << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes.");
+
+	ThreadPool::GetSingleton()->ShutDown();
+
+	if (!P4API::ShutdownLibraries())
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+void SignalHandler(sig_atomic_t s)
+{
+	static bool called = false;
+	if (called)
+	{
+		WARN("Already received an interrupt signal, waiting for threads to shutdown.");
+		return;
+	}
+	called = true;
+
+	ERR("Signal Received: " << strsignal(s));
+	ThreadPool::GetSingleton()->ShutDown();
+	std::exit(1);
+}
+
+int main(int argc, char** argv)
+{
+	signal(SIGINT, SignalHandler);
+
+	try
+	{
+		Main(argc, argv);
+	}
+	catch (const std::exception& e)
+	{
+		ERR("Exception occurred: " << typeid(e).name() << ": " << e.what());
+		return 1;
+	}
+
+	return 0;
+}
