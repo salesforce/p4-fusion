@@ -1,10 +1,10 @@
+# Build binaries
 build/
-.DS_Store
-
-.vscode/
 helix-core-api/
 
-# zip files
+# Misc.
+.DS_Store
+.vscode/
 *.zip
 
 # Depot conversion results
