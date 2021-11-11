@@ -14,6 +14,7 @@ std::string P4API::P4USER;
 std::string P4API::P4CLIENT;
 int P4API::CommandRetries = 1;
 int P4API::CommandRefreshThreshold = 1;
+std::mutex P4API::ReinitializationMutex;
 
 P4API::P4API()
 {
@@ -58,7 +59,13 @@ bool P4API::Deinitialize()
 
 bool P4API::Reinitialize()
 {
-	return Deinitialize() && Initialize();
+	// Helix Core C++ API does not seem to like making connections parallely.
+	// The Initialize() function is immune to this because it is never run in
+	// parrallel, while Reinitialize() function can get in a situation where it is
+	// called in parallel.
+	std::unique_lock<std::mutex> lock(ReinitializationMutex);
+	bool status = Deinitialize() && Initialize();
+	return status;
 }
 
 P4API::~P4API()

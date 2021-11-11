@@ -43,6 +43,7 @@ public:
 	static ClientResult::ClientSpecData ClientSpec;
 	static int CommandRetries;
 	static int CommandRefreshThreshold;
+	static std::mutex ReinitializationMutex;
 
 	static bool InitializeLibraries();
 	static bool ShutdownLibraries();
