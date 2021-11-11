@@ -70,11 +70,9 @@ These execution times are expected to scale as expected with larger depots (mill
 
 0. Pre-requisites
   * Install openssl@1.0.2t at `/usr/local/ssl` by following the steps [here](https://askubuntu.com/a/1094690).
-  * Install CMake 3.16+
-  * Install g++ 11.2.0 (older versions are also supported)
-  * Clone this repository
-    * `cd p4-fusion`
-    * `git submodule update --init`
+  * Install CMake 3.16+.
+  * Install g++ 11.2.0 (older versions compatible with C++11 are also supported).
+  * Clone this repository or [get a release distribution](https://github.com/salesforce/p4-fusion/releases).
   * Get Helix Core C++ API from the [official Perforce distribution](https://www.perforce.com/downloads/helix-core-c/c-api). Version 2021.1/2179737 shall have the best compatibility. Extract the contents in `./helix-core-api/linux/` or `./helix-core-api/mac/` based on your OS.
 
 > For CentOS, you can try `yum install git make cmake gcc-c++ libarchive` to set up the compilation toolchain. Installing `libarchive` is only required to fix a bug that stops CMake from starting properly.
