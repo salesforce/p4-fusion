@@ -11,15 +11,15 @@ find_package(OpenSSL)
 add_executable(p4-fusion ${Headers} ${Sources})
 
 if (UNIX)
-    set(HELIX_API ../helix-core-api/linux)
+    set(HELIX_API ../vendor/helix-core-api/linux)
 endif()
 if (APPLE)
-    set(HELIX_API ../helix-core-api/mac)
+    set(HELIX_API ../vendor/helix-core-api/mac)
 endif()
 
 target_include_directories(p4-fusion PUBLIC
     ${HELIX_API}/include/
-    ../libgit2/include/
+    ../vendor/libgit2/include/
     ${CMAKE_CURRENT_LIST_DIR}
 )
 

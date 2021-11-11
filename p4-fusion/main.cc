@@ -41,7 +41,7 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameter("--retries", "10", "Specify how many times a command should be retried before the process exits in a failure.");
 	Arguments::GetSingleton()->OptionalParameter("--refresh", "100", "Specify how many times a connection should be reused before it is refreshed.");
 	Arguments::GetSingleton()->OptionalParameter("--fsyncEnable", "false", "Enable fsync() while writing objects to disk to ensure they get written to permanent storage immediately instead of being cached. This is to mitigate data loss in events of hardware failure.");
-	Arguments::GetSingleton()->OptionalParameter("--includeBinaries", "false", "Don't discard binary files while downloading changelists.");
+	Arguments::GetSingleton()->OptionalParameter("--includeBinaries", "false", "Do not discard binary files while downloading changelists.");
 
 	Arguments::GetSingleton()->Initialize(argc, argv);
 	if (!Arguments::GetSingleton()->IsValid())

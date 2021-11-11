@@ -13,6 +13,5 @@ project(
 set(BUILD_CLAR OFF)
 set(BUILD_SHARED_LIBS OFF)
 
-add_subdirectory(libgit2)
-
+add_subdirectory(vendor)
 add_subdirectory(p4-fusion)

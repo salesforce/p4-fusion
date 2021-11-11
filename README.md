@@ -45,7 +45,7 @@ These execution times are expected to scale as expected with larger depots (mill
         Specify which P4USER to use. Please ensure that the user is logged in.
 
 [Optional, Default is false] --includeBinaries
-        Don't discard binary files while downloading changelists.
+        Do not discard binary files while downloading changelists.
 
 [Optional, Default is false] --fsyncEnable
         Enable fsync() while writing objects to disk to ensure they get written to permanent storage immediately instead of being cached. This is to mitigate data loss in events of hardware failure.
@@ -73,7 +73,7 @@ These execution times are expected to scale as expected with larger depots (mill
   * Install CMake 3.16+.
   * Install g++ 11.2.0 (older versions compatible with C++11 are also supported).
   * Clone this repository or [get a release distribution](https://github.com/salesforce/p4-fusion/releases).
-  * Get Helix Core C++ API from the [official Perforce distribution](https://www.perforce.com/downloads/helix-core-c/c-api). Version 2021.1/2179737 shall have the best compatibility. Extract the contents in `./helix-core-api/linux/` or `./helix-core-api/mac/` based on your OS.
+  * Get Helix Core C++ API from the [official Perforce distribution](https://www.perforce.com/downloads/helix-core-c/c-api). Version 2021.1/2179737 shall have the best compatibility. Extract the contents in `./vendor/helix-core-api/linux/` or `./vendor/helix-core-api/mac/` based on your OS.
 
 > For CentOS, you can try `yum install git make cmake gcc-c++ libarchive` to set up the compilation toolchain. Installing `libarchive` is only required to fix a bug that stops CMake from starting properly.
 
