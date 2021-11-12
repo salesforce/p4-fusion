@@ -149,6 +149,7 @@ int Main(int argc, char** argv)
 		WARN("Detected last CL committed as CL " << resumeFromCL);
 	}
 
+	PRINT("Requesting changelists to convert from Perforce server");
 	// Get all submitted CLs under depot path
 	std::vector<ChangeList> changes = p4.Changes(depotPath).GetChanges();
 
@@ -185,10 +186,11 @@ int Main(int argc, char** argv)
 
 	if (changes.empty())
 	{
-		SUCCESS("No CL are required to be downloaded. Exiting.");
+		SUCCESS("Repository is up to date. Exiting.");
 		return 0;
 	}
 
+	PRINT("Creating " << networkThreads << " network threads");
 	ThreadPool::GetSingleton()->Initialize(networkThreads);
 
 	int startupDownloadsCount = 0;
@@ -210,11 +212,15 @@ int Main(int argc, char** argv)
 		lastDownloadCL = i;
 	}
 
+	SUCCESS("Queued " << lookAhead << " CLs to download right away");
+
 	int timezoneMinutes = p4.Info().GetServerTimezoneMinutes();
 
 	// Map usernames to emails
 	const UsersResult& usersResult = p4.Users();
 	const std::unordered_map<std::string, std::string>& users = usersResult.GetUserEmails();
+
+	SUCCESS("Received usernames and emails of Perforce users");
 
 	// Commit procedure start
 	Timer commitTimer;
@@ -229,7 +235,7 @@ int Main(int argc, char** argv)
 		}
 		catch (const std::exception& e)
 		{
-			// Threadpool encountered an error, this is unrecoverable
+			// Threadpool encountered an exception, this is unrecoverable
 			ERR("Threadpool encountered an exception: " << e.what());
 			ThreadPool::GetSingleton()->ShutDown();
 			std::exit(1);
@@ -271,10 +277,10 @@ int Main(int argc, char** argv)
 		    cl.timestamp);
 
 		SUCCESS(
-		    "CL " << cl.number << " --> Commit " << commitSHA << " with " << cl.changedFiles.size() << " files (" << changes.size() - i << "/" << changes.size() << "). "
-		          << "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins out of expected " << (commitTimer.GetTimeS() / 60.0f) / (float)(changes.size() - i) * i << " mins.");
+		    "CL " << cl.number << " --> Commit " << commitSHA << " with " << cl.changedFiles.size() << " files (" << changes.size() - i << "/" << changes.size() << "|" << i - lastDownloadCL << "). "
+		          << "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. " << ((commitTimer.GetTimeS() / 60.0f) / (float)(changes.size() - i)) * i << " mins left.");
 
-		// Start downloading the CL which is the one chronologically after the last CL that was previously downloaded
+		// Start downloading the CL chronologically after the last CL that was previously downloaded
 		if (lastDownloadCL > 0)
 		{
 			lastDownloadCL--;
@@ -288,7 +294,7 @@ int Main(int argc, char** argv)
 	}
 	git.CloseIndex();
 
-	SUCCESS("Completed conversion of " << changes.size() << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes.");
+	SUCCESS("Completed conversion of " << changes.size() << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes, taking " << commitTimer.GetTimeS() / 60.0f << " to commit CLs");
 
 	ThreadPool::GetSingleton()->ShutDown();
 

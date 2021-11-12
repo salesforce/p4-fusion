@@ -59,7 +59,7 @@ bool P4API::Deinitialize()
 
 bool P4API::Reinitialize()
 {
-	// Helix Core C++ API does not seem to like making connections parallely.
+	// Helix Core C++ API seems to crash while making connections parallely.
 	// The Initialize() function is immune to this because it is never run in
 	// parrallel, while Reinitialize() function can get in a situation where it is
 	// called in parallel.
