@@ -109,6 +109,29 @@ std::string GitAPI::DetectLatestCL()
 void GitAPI::CreateIndex()
 {
 	GIT2(git_repository_index(&m_Index, m_Repo));
+
+	if (IsHEADExists())
+	{
+		git_oid oid_parent_commit = {};
+		GIT2(git_reference_name_to_id(&oid_parent_commit, m_Repo, "HEAD"));
+
+		git_commit* head_commit = nullptr;
+		GIT2(git_commit_lookup(&head_commit, m_Repo, &oid_parent_commit));
+
+		git_tree* head_commit_tree = nullptr;
+		GIT2(git_commit_tree(&head_commit_tree, head_commit));
+
+		GIT2(git_index_read_tree(m_Index, head_commit_tree));
+
+		git_tree_free(head_commit_tree);
+		git_commit_free(head_commit);
+
+		WARN("Loaded index was refreshed to match the tree of the current HEAD commit");
+	}
+	else
+	{
+		WARN("No HEAD commit was found. Created a fresh index.");
+	}
 }
 
 void GitAPI::AddFileToIndex(const std::string& depotFile, const std::vector<char>& contents)
@@ -137,7 +160,6 @@ std::string GitAPI::Commit(
 {
 	git_oid commitTreeID;
 	GIT2(git_index_write_tree_to(&commitTreeID, m_Index, m_Repo));
-	GIT2(git_index_write(m_Index));
 
 	git_tree* commitTree = nullptr;
 	GIT2(git_tree_lookup(&commitTree, m_Repo, &commitTreeID));
@@ -169,5 +191,6 @@ std::string GitAPI::Commit(
 
 void GitAPI::CloseIndex()
 {
+	GIT2(git_index_write(m_Index));
 	git_index_free(m_Index);
 }
