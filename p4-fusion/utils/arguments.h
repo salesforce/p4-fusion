@@ -50,4 +50,5 @@ public:
 	std::string GetFsyncEnable() const { return GetParameter("--fsyncEnable"); };
 	std::string GetIncludeBinaries() const { return GetParameter("--includeBinaries"); };
 	std::string GetMaxChanges() const { return GetParameter("--maxChanges"); };
+	std::string GetFlushRate() const { return GetParameter("--flushRate"); };
 };

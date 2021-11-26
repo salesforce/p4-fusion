@@ -20,6 +20,7 @@ endif()
 target_include_directories(p4-fusion PUBLIC
     ${HELIX_API}/include/
     ../vendor/libgit2/include/
+    ../vendor/minitrace/
     ${CMAKE_CURRENT_LIST_DIR}
 )
 
@@ -54,4 +55,5 @@ target_link_libraries(p4-fusion PUBLIC
     p4script
     p4script_c
     git2
+    minitrace
 )

@@ -64,6 +64,9 @@ These execution times are expected to scale as expected with larger depots (mill
 
 [Optional, Default is 100] --refresh
         Specify how many times a connection should be reused before it is refreshed.
+
+[Optional, Default is 1000] --flushRate
+        Rate at which profiling data is flushed on the disk.
 ```
 
 ## Build
@@ -87,6 +90,8 @@ This tool uses C++11 and thus it should work with much older GCC versions. We ha
 
 > Replace `Debug` with `Release` for a speed-optimized binary. Debug builds will run marginally slower (considering the tool is mostly bottlenecked by network I/O) but will contain debug symbols and allow a better debugging experience while working with a debugger like gdb.
 
+> By default, profiling is active and p4-fusion generates trace JSON files in the cloning directory. These files can be opened in the `about:tracing` window in Chromium web browsers. To turn off profiling, edit `generate_cache.sh` to also send `-DMTR_ENABLED=OFF` while calling CMake.
+
 2. Build
 
 ```shell
@@ -101,7 +106,7 @@ This tool uses C++11 and thus it should work with much older GCC versions. We ha
 
 There should be a Git repo being created in the `clones/` directory with commits being created as the tool runs.
 
-> Note: The Git repository is created as bare and running the same command again shall detect the last committed CL and only continue from that CL onwards. We also don't handle binaries by default and `.git` directories in the Perforce history.
+> Note: The Git repository is created bare i.e. without a working directory and running the same command again shall detect the last committed CL and only continue from that CL onwards. Binaries files are ignored by default and this behaviour can be changed by using the `--includeBinaries` option. We do not handle `.git` directories in the Perforce history.
 
 ## Contributing
 

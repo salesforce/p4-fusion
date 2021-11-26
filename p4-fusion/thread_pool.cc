@@ -11,6 +11,8 @@
 #include "utils/arguments.h"
 #include "p4_api.h"
 
+#include "minitrace.h"
+
 ThreadPool* ThreadPool::GetSingleton()
 {
 	static ThreadPool singleton;
@@ -70,6 +72,7 @@ void ThreadPool::ShutDown()
 
 	m_Threads.clear();
 	m_ThreadExceptions.clear();
+	m_ThreadNames.clear();
 
 	SUCCESS("Thread pool shut down successfully");
 }
@@ -91,8 +94,11 @@ void ThreadPool::Initialize(int size)
 	for (int i = 0; i < size; i++)
 	{
 		m_ThreadExceptions.push_back(nullptr);
+		m_ThreadNames.push_back("Worker #" + std::to_string(i));
 		m_Threads.push_back(std::thread([this, i]()
 		    {
+			    MTR_META_THREAD_NAME(m_ThreadNames.at(i).c_str());
+
 			    P4API* localP4 = &m_P4Contexts[i];
 
 			    while (true)

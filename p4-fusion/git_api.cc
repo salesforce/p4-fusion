@@ -11,6 +11,7 @@
 
 #include "git2.h"
 #include "git2/sys/repository.h"
+#include "minitrace.h"
 
 #define GIT2(x)                                                                \
 	do                                                                         \
@@ -108,6 +109,8 @@ std::string GitAPI::DetectLatestCL()
 
 void GitAPI::CreateIndex()
 {
+	MTR_SCOPE("Git", __func__);
+
 	GIT2(git_repository_index(&m_Index, m_Repo));
 
 	if (IsHEADExists())
@@ -158,6 +161,8 @@ std::string GitAPI::Commit(
     const std::string& desc,
     const int64_t& timestamp)
 {
+	MTR_SCOPE("Git", __func__);
+
 	git_oid commitTreeID;
 	GIT2(git_index_write_tree_to(&commitTreeID, m_Index, m_Repo));
 

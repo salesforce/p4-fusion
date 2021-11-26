@@ -22,6 +22,7 @@ class ThreadPool
 
 	std::vector<std::thread> m_Threads;
 	std::vector<std::exception_ptr> m_ThreadExceptions;
+	std::vector<std::string> m_ThreadNames;
 	std::vector<P4API> m_P4Contexts;
 
 	std::deque<Job> m_Jobs;

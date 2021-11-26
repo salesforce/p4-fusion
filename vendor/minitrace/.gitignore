@@ -1,0 +1,39 @@
+# Object files
+*.o
+*.ko
+
+# Libraries
+*.lib
+*.a
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+minitrace_test
+minitrace_test_mt
+
+# MSVC stuff
+*.opensdf
+*.sdf
+Debug
+Release
+x64
+*.suo
+*.vs
+*.user
+
+# CMake build dir
+build/
+
+# Misc
+.gitattributes
+
+# Traces
+*.json

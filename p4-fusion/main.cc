@@ -22,12 +22,13 @@
 #include "git_api.h"
 
 #include "p4/p4libs.h"
+#include "minitrace.h"
 
 int Main(int argc, char** argv)
 {
-	Timer programTimer;
-
 	PRINT("Running p4-fusion from: " << argv[0]);
+
+	Timer programTimer;
 
 	Arguments::GetSingleton()->RequiredParameter("--path", "P4 depot path to convert to a Git repo");
 	Arguments::GetSingleton()->RequiredParameter("--src", "Local relative source path with P4 code. Git repo will be created at this path. This path should be empty before running p4-fusion.");
@@ -42,6 +43,7 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameter("--refresh", "100", "Specify how many times a connection should be reused before it is refreshed.");
 	Arguments::GetSingleton()->OptionalParameter("--fsyncEnable", "false", "Enable fsync() while writing objects to disk to ensure they get written to permanent storage immediately instead of being cached. This is to mitigate data loss in events of hardware failure.");
 	Arguments::GetSingleton()->OptionalParameter("--includeBinaries", "false", "Do not discard binary files while downloading changelists.");
+	Arguments::GetSingleton()->OptionalParameter("--flushRate", "1000", "Rate at which profiling data is flushed on the disk.");
 
 	Arguments::GetSingleton()->Initialize(argc, argv);
 	if (!Arguments::GetSingleton()->IsValid())
@@ -55,6 +57,7 @@ int Main(int argc, char** argv)
 	const bool fsyncEnable = Arguments::GetSingleton()->GetFsyncEnable() != "false";
 	const bool includeBinaries = Arguments::GetSingleton()->GetIncludeBinaries() != "false";
 	const int maxChanges = std::atoi(Arguments::GetSingleton()->GetMaxChanges().c_str());
+	const int flushRate = std::atoi(Arguments::GetSingleton()->GetFlushRate().c_str());
 
 	if (!P4API::InitializeLibraries())
 	{
@@ -115,6 +118,11 @@ int Main(int argc, char** argv)
 		P4API::CommandRefreshThreshold = std::atoi(refreshStr.c_str());
 	}
 
+	bool profiling = false;
+#if MTR_ENABLED
+	profiling = true;
+#endif
+
 	PRINT("Perforce Port: " << P4API::P4PORT);
 	PRINT("Perforce User: " << P4API::P4USER);
 	PRINT("Perforce Client: " << P4API::P4CLIENT);
@@ -127,6 +135,8 @@ int Main(int argc, char** argv)
 	PRINT("Refresh Threshold: " << refreshStr);
 	PRINT("Fsync Enable: " << fsyncEnable);
 	PRINT("Include Binaries: " << includeBinaries);
+	PRINT("Profiling: " << profiling);
+	PRINT("Profiling Flush Rate: " << flushRate);
 
 	GitAPI git(fsyncEnable);
 
@@ -135,6 +145,11 @@ int Main(int argc, char** argv)
 		ERR("Could not initialize Git repository. Exiting.");
 		return 1;
 	}
+
+	mtr_init((srcPath + (srcPath.back() == '/' ? "" : "/") + "trace.json").c_str());
+	MTR_META_PROCESS_NAME("p4-fusion");
+	MTR_META_THREAD_NAME("Main Thread");
+	MTR_META_THREAD_SORT_INDEX(0);
 
 	std::string resumeFromCL;
 	if (git.IsHEADExists())
@@ -147,6 +162,12 @@ int Main(int argc, char** argv)
 
 		resumeFromCL = git.DetectLatestCL();
 		WARN("Detected last CL committed as CL " << resumeFromCL);
+
+		if (p4.LatestChange(depotPath).GetChanges().front().number == resumeFromCL)
+		{
+			SUCCESS("Repository is up to date. Exiting.");
+			return 0;
+		}
 	}
 
 	PRINT("Requesting changelists to convert from Perforce server");
@@ -184,12 +205,6 @@ int Main(int argc, char** argv)
 		changes = std::vector<ChangeList>(changes.begin() + (changes.size() - maxChanges), changes.end());
 	}
 
-	if (changes.empty())
-	{
-		SUCCESS("Repository is up to date. Exiting.");
-		return 0;
-	}
-
 	PRINT("Creating " << networkThreads << " network threads");
 	ThreadPool::GetSingleton()->Initialize(networkThreads);
 
@@ -212,7 +227,7 @@ int Main(int argc, char** argv)
 		lastDownloadCL = i;
 	}
 
-	SUCCESS("Queued " << lookAhead << " CLs to download right away");
+	SUCCESS("Queued " << startupDownloadsCount << " CLs to download right away");
 
 	int timezoneMinutes = p4.Info().GetServerTimezoneMinutes();
 
@@ -289,6 +304,12 @@ int Main(int argc, char** argv)
 			downloadCL.StartDownload(depotPath, printBatch, includeBinaries);
 		}
 
+		// Occasionally flush the profiling data
+		if ((i % flushRate) == 0)
+		{
+			mtr_flush();
+		}
+
 		// Deallocate this CL's metadata from memory
 		cl.Clear();
 	}
@@ -302,6 +323,9 @@ int Main(int argc, char** argv)
 	{
 		return 1;
 	}
+
+	mtr_flush();
+	mtr_shutdown();
 
 	return 0;
 }
@@ -317,7 +341,9 @@ void SignalHandler(sig_atomic_t s)
 	called = true;
 
 	ERR("Signal Received: " << strsignal(s));
+
 	ThreadPool::GetSingleton()->ShutDown();
+
 	std::exit(1);
 }
 

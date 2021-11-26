@@ -7,6 +7,7 @@
 #include "p4_api.h"
 
 #include "p4/p4libs.h"
+#include "minitrace.h"
 
 ClientResult::ClientSpecData P4API::ClientSpec;
 std::string P4API::P4PORT;
@@ -29,6 +30,8 @@ P4API::P4API()
 
 bool P4API::Initialize()
 {
+	MTR_SCOPE("P4", __func__);
+
 	Error e;
 	StrBuf msg;
 
@@ -59,6 +62,8 @@ bool P4API::Deinitialize()
 
 bool P4API::Reinitialize()
 {
+	MTR_SCOPE("P4", __func__);
+
 	// Helix Core C++ API seems to crash while making connections parallely.
 	// The Initialize() function is immune to this because it is never run in
 	// parrallel, while Reinitialize() function can get in a situation where it is
@@ -78,7 +83,7 @@ P4API::~P4API()
 
 bool P4API::IsDepotPathValid(const std::string& depotPath)
 {
-	return depotPath.substr(depotPath.size() - 4, 4) == "/...";
+	return depotPath.substr(depotPath.size() - 4, 4) == "/..." && depotPath.substr(0, 2) == "//";
 }
 
 bool P4API::IsFileUnderDepotPath(const std::string& fileRevision, const std::string& depotPath)
@@ -208,6 +213,7 @@ ChangesResult P4API::ShortChanges(const std::string& path)
 
 ChangesResult P4API::Changes(const std::string& path)
 {
+	MTR_SCOPE("P4", __func__);
 	return Run<ChangesResult>("changes", {
 	                                         (char*)"-l", // Get full descriptions instead of sending cut-short ones
 	                                         (char*)"-s", (char*)"submitted", // Only include submitted CLs
@@ -226,6 +232,7 @@ ChangesResult P4API::ChangesFromTo(const std::string& path, const std::string& f
 
 ChangesResult P4API::LatestChange(const std::string& path)
 {
+	MTR_SCOPE("P4", __func__);
 	return Run<ChangesResult>("changes", {
 	                                         (char*)"-s", (char*)"submitted", // Only include submitted CLs,
 	                                         (char*)"-m", (char*)"1", // Get top-most change
@@ -245,6 +252,7 @@ ChangesResult P4API::OldestChange(const std::string& path)
 
 DescribeResult P4API::Describe(const std::string& cl)
 {
+	MTR_SCOPE("P4", __func__);
 	return Run<DescribeResult>("describe", { (char*)"-s", // Omit the diffs
 	                                           (char*)cl.c_str() });
 }
@@ -282,6 +290,8 @@ PrintResult P4API::PrintFile(const std::string& filePathRevision)
 
 PrintResult P4API::PrintFiles(const std::vector<std::string>& fileRevisions)
 {
+	MTR_SCOPE("P4", __func__);
+
 	if (fileRevisions.empty())
 	{
 		return PrintResult();

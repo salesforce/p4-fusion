@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
+option(MTR_ENABLED "Enable minitrace profiling" ON)
+
 set(CXX_STANDARD_REQUIRED true)
 set(CMAKE_CXX_STANDARD 11)
 
