@@ -104,7 +104,7 @@ This tool uses C++11 and thus it should work with much older GCC versions. We ha
 ./build/p4-fusion/p4-fusion --path //depot/path/... --user $P4USER --port $P4PORT --client $P4CLIENT --src clones/.git --networkThreads 200 --printBatch 100 --lookAhead 2000 --retries 10 --refresh 100
 ```
 
-There should be a Git repo being created in the `clones/` directory with commits being created as the tool runs.
+There should be a Git repo being created in the `clones/.git` directory with commits being created as the tool runs.
 
 > Note: The Git repository is created bare i.e. without a working directory and running the same command again shall detect the last committed CL and only continue from that CL onwards. Binaries files are ignored by default and this behaviour can be changed by using the `--includeBinaries` option. We do not handle `.git` directories in the Perforce history.
 
