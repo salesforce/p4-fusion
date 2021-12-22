@@ -1,4 +1,5 @@
 #!/bin/bash
+
 read -r -d '' license <<-"EOF"
 /*
  * Copyright (c) 2021, salesforce.com, inc.

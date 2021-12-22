@@ -1,3 +1,5 @@
+#!/bin/bash
+
 mkdir build
 cd build
 rm CMakeCache.txt
@@ -14,6 +16,7 @@ cmakeArgs=(
     -DCMAKE_CXX_COMPILER=/usr/bin/g++
 )
 
+# Decide if tracing needs to be enabled
 if [ "$2" == "--trace" ]; then
     cmakeArgs+=(
         -DMTR_ENABLED=ON
