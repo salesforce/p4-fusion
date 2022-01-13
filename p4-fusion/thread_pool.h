@@ -36,16 +36,23 @@ class ThreadPool
 	std::atomic<long> m_JobsProcessing;
 
 public:
-	static ThreadPool* GetSingleton();
+	ThreadPool(int size);
 
 	~ThreadPool();
 
 	void Initialize(int size);
 	void AddJob(Job function);
-	void Wait();
 	void RaiseCaughtExceptions();
 	void ShutDown();
 
-	void Resize(int size);
 	int GetThreadCount() const { return m_Threads.size(); }
+private:
+	void run(unsigned i);
 };
+
+namespace SystemThreadPool{
+	ThreadPool& instance(int size = std::thread::hardware_concurrency()){
+		static ThreadPool default_thread_pool(size);
+		return default_thread_pool;
+	}
+}
