@@ -19,16 +19,6 @@ ThreadPool* ThreadPool::GetSingleton()
 	return &singleton;
 }
 
-void ThreadPool::AddJob(Job function)
-{
-	{
-		std::unique_lock<std::mutex> lock(m_JobsMutex);
-		m_Jobs.push_back(function);
-		m_JobsProcessing++;
-	}
-	m_CV.notify_one();
-}
-
 void ThreadPool::Wait()
 {
 	while (true)
@@ -59,12 +49,10 @@ void ThreadPool::ShutDown()
 	}
 	m_HasShutDownBeenCalled = true;
 
+	for (auto& q : m_q)
 	{
-		std::unique_lock<std::mutex> lock(m_JobsMutex);
-		m_ShouldStop = true;
+		q.done();
 	}
-	m_CV.notify_all();
-
 	for (auto& thread : m_Threads)
 	{
 		thread.join();
@@ -83,56 +71,51 @@ void ThreadPool::Resize(int size)
 	Initialize(size);
 }
 
-void ThreadPool::Initialize(int size)
+void ThreadPool::Initialize(unsigned size)
 {
+	m_count = size;
+	m_index = 0;
+	m_q.resize(m_count);
 	m_HasShutDownBeenCalled = false;
-	m_ShouldStop = false;
 	m_JobsProcessing = 0;
 
 	m_P4Contexts.resize(size);
 
-	for (int i = 0; i < size; i++)
+	for (unsigned i = 0u; i < size; i++)
 	{
 		m_ThreadExceptions.push_back(nullptr);
 		m_ThreadNames.push_back("Worker #" + std::to_string(i));
-		m_Threads.push_back(std::thread([this, i]()
+		m_Threads.emplace_back([this, i]()
 		    {
 			    MTR_META_THREAD_NAME(m_ThreadNames.at(i).c_str());
-
-			    P4API* localP4 = &m_P4Contexts[i];
-
-			    while (true)
-			    {
-				    Job job;
-				    {
-					    std::unique_lock<std::mutex> lock(m_JobsMutex);
-
-					    m_CV.wait(lock, [this]()
-					        { return !m_Jobs.empty() || m_ShouldStop; });
-
-					    if (m_ShouldStop)
-					    {
-						    break;
-					    }
-
-					    job = m_Jobs.front();
-					    m_Jobs.pop_front();
-				    }
-
-				    try
-				    {
-					    job(localP4);
-				    }
-				    catch (const std::exception& e)
-				    {
-					    m_ThreadExceptions[i] = std::current_exception();
-				    }
-				    m_JobsProcessing--;
-			    }
-		    }));
+			    run(i); });
 	}
 
 	SUCCESS("Created " << size << " threads in thread pool");
+}
+
+void ThreadPool::run(unsigned i)
+{
+	while (true)
+	{
+		std::function<void(P4API*)> f;
+		for (unsigned n = 0; n != m_count; ++n)
+		{
+			if (!m_q[(i + n) % m_count].try_pop(f))
+				break;
+		}
+		if (!f && !m_q[i].pop(f))
+			break;
+		try
+		{
+			f(&m_P4Contexts[i]);
+		}
+		catch (const std::exception& e)
+		{
+			m_ThreadExceptions[i] = std::current_exception();
+		}
+		m_JobsProcessing--;
+	}
 }
 
 ThreadPool::~ThreadPool()
