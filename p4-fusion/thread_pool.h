@@ -25,9 +25,9 @@ class ThreadPool
 	std::vector<std::exception_ptr> m_ThreadExceptions;
 	std::vector<std::string> m_ThreadNames;
 	std::vector<P4API> m_P4Contexts;
-	unsigned m_count;
-	std::atomic<unsigned> m_index { 0 };
-	std::vector<notification_queue> m_q;
+	unsigned m_Count;
+	std::atomic<unsigned> m_Index { 0 };
+	std::vector<NotificationQueue> m_TaskQueue;
 
 	bool m_HasShutDownBeenCalled;
 
@@ -46,13 +46,13 @@ public:
 	template <typename F>
 	void AddJob(F&& function)
 	{
-		auto i = m_index++; // overflow of unsigned is well defined so no problem here
-		for (unsigned n = 0; n != m_count; ++n)
+		auto i = m_Index++; // overflow of unsigned is well defined so no problem here
+		for (unsigned n = 0; n != m_Count; ++n)
 		{
-			if (m_q[(i + n) % m_count].try_push(std::forward<F>(function)))
+			if (m_TaskQueue[(i + n) % m_Count].TryPush(std::forward<F>(function)))
 				return;
 		}
-		m_q[i % m_count].push(std::forward<F>(function));
+		m_TaskQueue[i % m_Count].Push(std::forward<F>(function));
 	}
 	void Wait();
 	void RaiseCaughtExceptions();

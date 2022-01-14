@@ -1,32 +1,37 @@
 #include "notification_queue.h"
 
-void notification_queue::done()
+NotificationQueue::NotificationQueue()
+    : m_Ready(new std::condition_variable), m_Mutex(new std::mutex)
 {
-	{
-		std::unique_lock<std::mutex> lock { mutex_ };
-		done_ = true;
-	}
-	ready_.notify_all();
 }
 
-bool notification_queue::pop(std::function<void(P4API*)>& x)
+void NotificationQueue::Done()
 {
-	std::unique_lock<std::mutex> lock { mutex_ };
-	while (q_.empty() && !done_)
-		ready_.wait(lock);
-	if (q_.empty())
+	{
+		std::unique_lock<std::mutex> lock { *m_Mutex };
+		m_Done = true;
+	}
+	m_Ready->notify_all();
+}
+
+bool NotificationQueue::Pop(std::function<void(P4API*)>& x)
+{
+	std::unique_lock<std::mutex> lock { *m_Mutex };
+	while (m_Queue.empty() && !m_Done)
+		m_Ready->wait(lock);
+	if (m_Queue.empty())
 		return false;
-	x = q_.front();
-	q_.pop_front();
+	x = m_Queue.front();
+	m_Queue.pop_front();
 	return true;
 }
 
-bool notification_queue::try_pop(std::function<void(P4API*)>& x)
+bool NotificationQueue::TryPop(std::function<void(P4API*)>& x)
 {
-	std::unique_lock<std::mutex> lock { mutex_, std::try_to_lock };
-	if (!lock || q_.empty())
+	std::unique_lock<std::mutex> lock { *m_Mutex, std::try_to_lock };
+	if (!lock || m_Queue.empty())
 		return false;
-	x = q_.front();
-	q_.pop_front();
+	x = m_Queue.front();
+	m_Queue.pop_front();
 	return true;
 }

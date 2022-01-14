@@ -7,40 +7,42 @@
 
 class P4API;
 
-class notification_queue
+class NotificationQueue
 {
-	std::deque<std::function<void(P4API*)>> q_;
-	std::mutex mutex_;
-	bool done_ { false };
-	std::condition_variable ready_;
+	std::deque<std::function<void(P4API*)>> m_Queue;
+	std::unique_ptr<std::mutex> m_Mutex;
+	bool m_Done { false };
+	std::unique_ptr<std::condition_variable> m_Ready;
 
 public:
-	void done();
+	NotificationQueue();
 
-	bool try_pop(std::function<void(P4API*)>& x);
+	void Done();
 
-	bool pop(std::function<void(P4API*)>& x);
+	bool TryPop(std::function<void(P4API*)>& x);
+
+	bool Pop(std::function<void(P4API*)>& x);
 
 	template <typename F>
-	void push(F&& f)
+	void Push(F&& f)
 	{
 		{
-			std::unique_lock<std::mutex> lock { mutex_ };
-			q_.emplace_back(std::forward<F>(f));
+			std::unique_lock<std::mutex> lock { *m_Mutex };
+			m_Queue.emplace_back(std::forward<F>(f));
 		}
-		ready_.notify_one();
+		m_Ready->notify_one();
 	}
 
 	template <typename F>
-	bool try_push(F&& f)
+	bool TryPush(F&& f)
 	{
 		{
-			std::unique_lock<std::mutex> lock { mutex_, std::try_to_lock };
+			std::unique_lock<std::mutex> lock { *m_Mutex, std::try_to_lock };
 			if (!lock)
 				return false;
-			q_.emplace_back(std::forward<F>(f));
+			m_Queue.emplace_back(std::forward<F>(f));
 		}
-		ready_.notify_one();
+		m_Ready->notify_one();
 		return true;
 	}
 };

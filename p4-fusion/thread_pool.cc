@@ -49,9 +49,9 @@ void ThreadPool::ShutDown()
 	}
 	m_HasShutDownBeenCalled = true;
 
-	for (auto& q : m_q)
+	for (auto& q : m_TaskQueue)
 	{
-		q.done();
+		q.Done();
 	}
 	for (auto& thread : m_Threads)
 	{
@@ -73,9 +73,9 @@ void ThreadPool::Resize(int size)
 
 void ThreadPool::Initialize(unsigned size)
 {
-	m_count = size;
-	m_index = 0;
-	m_q.resize(m_count);
+	m_Count = size;
+	m_Index = 0;
+	m_TaskQueue.clear();
 	m_HasShutDownBeenCalled = false;
 	m_JobsProcessing = 0;
 
@@ -83,6 +83,7 @@ void ThreadPool::Initialize(unsigned size)
 
 	for (unsigned i = 0u; i < size; i++)
 	{
+		m_TaskQueue.push_back(NotificationQueue());
 		m_ThreadExceptions.push_back(nullptr);
 		m_ThreadNames.push_back("Worker #" + std::to_string(i));
 		m_Threads.emplace_back([this, i]()
@@ -99,12 +100,12 @@ void ThreadPool::run(unsigned i)
 	while (true)
 	{
 		std::function<void(P4API*)> f;
-		for (unsigned n = 0; n != m_count; ++n)
+		for (unsigned n = 0; n != m_Count; ++n)
 		{
-			if (!m_q[(i + n) % m_count].try_pop(f))
+			if (!m_TaskQueue[(i + n) % m_Count].TryPop(f))
 				break;
 		}
-		if (!f && !m_q[i].pop(f))
+		if (!f && !m_TaskQueue[i].Pop(f))
 			break;
 		try
 		{
