@@ -31,8 +31,6 @@ class ThreadPool
 
 	bool m_HasShutDownBeenCalled;
 
-	std::atomic<long> m_JobsProcessing;
-
 private:
 	void run(unsigned i);
 
@@ -54,7 +52,6 @@ public:
 		}
 		m_TaskQueue[i % m_Count].Push(std::forward<F>(function));
 	}
-	void Wait();
 	void RaiseCaughtExceptions();
 	void ShutDown();
 

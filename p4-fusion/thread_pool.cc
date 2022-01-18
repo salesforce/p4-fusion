@@ -19,17 +19,6 @@ ThreadPool* ThreadPool::GetSingleton()
 	return &singleton;
 }
 
-void ThreadPool::Wait()
-{
-	while (true)
-	{
-		if (m_JobsProcessing == 0)
-		{
-			return;
-		}
-	}
-}
-
 void ThreadPool::RaiseCaughtExceptions()
 {
 	for (auto& exceptionPtr : m_ThreadExceptions)
@@ -77,7 +66,6 @@ void ThreadPool::Initialize(unsigned size)
 	m_Index = 0;
 	m_TaskQueue.clear();
 	m_HasShutDownBeenCalled = false;
-	m_JobsProcessing = 0;
 
 	m_P4Contexts.resize(size);
 
@@ -115,7 +103,6 @@ void ThreadPool::run(unsigned i)
 		{
 			m_ThreadExceptions[i] = std::current_exception();
 		}
-		m_JobsProcessing--;
 	}
 }
 
