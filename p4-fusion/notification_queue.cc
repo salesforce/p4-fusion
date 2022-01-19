@@ -1,7 +1,8 @@
 #include "notification_queue.h"
 
 NotificationQueue::NotificationQueue()
-    : m_Ready(new std::condition_variable), m_Mutex(new std::mutex)
+    : m_Ready(new std::condition_variable)
+    , m_Mutex(new std::mutex)
 {
 }
 
@@ -21,7 +22,7 @@ bool NotificationQueue::Pop(std::function<void(P4API*)>& x)
 		m_Ready->wait(lock);
 	if (m_Queue.empty())
 		return false;
-	x = m_Queue.front();
+	x = std::move(m_Queue.front());
 	m_Queue.pop_front();
 	return true;
 }
@@ -31,7 +32,7 @@ bool NotificationQueue::TryPop(std::function<void(P4API*)>& x)
 	std::unique_lock<std::mutex> lock { *m_Mutex, std::try_to_lock };
 	if (!lock || m_Queue.empty())
 		return false;
-	x = m_Queue.front();
+	x = std::move(m_Queue.front());
 	m_Queue.pop_front();
 	return true;
 }

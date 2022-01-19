@@ -90,7 +90,7 @@ void ThreadPool::run(unsigned i)
 		std::function<void(P4API*)> f;
 		for (unsigned n = 0; n != m_Count; ++n)
 		{
-			if (!m_TaskQueue[(i + n) % m_Count].TryPop(f))
+			if (m_TaskQueue[(i + n) % m_Count].TryPop(f))
 				break;
 		}
 		if (!f && !m_TaskQueue[i].Pop(f))
