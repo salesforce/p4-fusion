@@ -64,14 +64,13 @@ void ThreadPool::Initialize(unsigned size)
 {
 	m_Count = size;
 	m_Index = 0;
-	m_TaskQueue.clear();
+	m_TaskQueue.resize(m_Count);
 	m_HasShutDownBeenCalled = false;
 
 	m_P4Contexts.resize(size);
 
 	for (unsigned i = 0u; i < size; i++)
 	{
-		m_TaskQueue.push_back(NotificationQueue());
 		m_ThreadExceptions.push_back(nullptr);
 		m_ThreadNames.push_back("Worker #" + std::to_string(i));
 		m_Threads.emplace_back([this, i]()
