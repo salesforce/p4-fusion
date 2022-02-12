@@ -10,3 +10,8 @@ helix-core-api/
 # Depot conversion results
 clones/
 *.log
+
+# LSP
+compile_commands.json
+.cache/
+.ccls-cache/
