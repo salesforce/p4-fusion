@@ -13,6 +13,7 @@
 
 #include "common.h"
 #include "file_data.h"
+#include "thread_pool.h"
 
 struct ChangeList
 {
@@ -28,8 +29,8 @@ struct ChangeList
 	std::shared_ptr<std::mutex> commitMutex;
 	std::shared_ptr<std::condition_variable> commitCV;
 
-	void PrepareDownload();
-	void StartDownload(const std::string& depotPath, const int& printBatch, const bool includeBinaries);
+	void PrepareDownload(ThreadPool& thread_pool = SystemThreadPool::instance());
+	void StartDownload(const std::string& depotPath, const int& printBatch, const bool includeBinaries, ThreadPool& thread_pool = SystemThreadPool::instance());
 	void WaitForDownload();
 	void Clear();
 };

@@ -10,13 +10,11 @@
 #include "describe_result.h"
 #include "print_result.h"
 
-#include "thread_pool.h"
-
-void ChangeList::PrepareDownload()
+void ChangeList::PrepareDownload(ThreadPool& thread_pool)
 {
 	ChangeList& cl = *this;
 
-	ThreadPool::GetSingleton()->AddJob([&cl](P4API* p4)
+	thread_pool.AddJob([&cl](P4API* p4)
 	    {
 		    const DescribeResult& describe = p4->Describe(cl.number);
 		    cl.changedFiles = std::move(describe.GetFileData());
@@ -28,11 +26,10 @@ void ChangeList::PrepareDownload()
 	    });
 }
 
-void ChangeList::StartDownload(const std::string& depotPath, const int& printBatch, const bool includeBinaries)
+void ChangeList::StartDownload(const std::string& depotPath, const int& printBatch, const bool includeBinaries, ThreadPool& thread_pool)
 {
 	ChangeList& cl = *this;
-
-	ThreadPool::GetSingleton()->AddJob([&cl, &depotPath, printBatch, includeBinaries](P4API* p4)
+	auto download_job = [&cl, &depotPath, printBatch, includeBinaries, &thread_pool](P4API* p4)
 	    {
 		    // Wait for describe to finish, if it is still running
 		    {
@@ -77,7 +74,7 @@ void ChangeList::StartDownload(const std::string& depotPath, const int& printBat
 					    continue;
 				    }
 
-				    ThreadPool::GetSingleton()->AddJob([&cl, printBatchFiles, printBatchFileData](P4API* p4)
+				    auto print_batch_job = [&cl, printBatchFiles, printBatchFileData](P4API* p4)
 				        {
 					        const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
 
@@ -89,13 +86,15 @@ void ChangeList::StartDownload(const std::string& depotPath, const int& printBat
 					        (*cl.filesDownloaded) += printBatchFiles->size();
 
 					        cl.commitCV->notify_all();
-				        });
+				        };
+				    thread_pool.AddJob(std::move(print_batch_job));
 
 				    printBatchFiles = std::make_shared<std::vector<std::string>>();
 				    printBatchFileData = std::make_shared<std::vector<FileData*>>();
 			    }
 		    }
-	    });
+	    };
+	thread_pool.AddJob(std::move(download_job));
 }
 
 void ChangeList::WaitForDownload()

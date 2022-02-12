@@ -206,7 +206,7 @@ int Main(int argc, char** argv)
 	}
 
 	PRINT("Creating " << networkThreads << " network threads");
-	ThreadPool::GetSingleton()->Initialize(networkThreads);
+	SystemThreadPool::instance(networkThreads);
 
 	int startupDownloadsCount = 0;
 	long long lastDownloadCL = -1;
@@ -246,13 +246,13 @@ int Main(int argc, char** argv)
 		// See if the threadpool encountered any exceptions
 		try
 		{
-			ThreadPool::GetSingleton()->RaiseCaughtExceptions();
+		  SystemThreadPool::instance().RaiseCaughtExceptions();
 		}
 		catch (const std::exception& e)
 		{
 			// Threadpool encountered an exception, this is unrecoverable
 			ERR("Threadpool encountered an exception: " << e.what());
-			ThreadPool::GetSingleton()->ShutDown();
+			SystemThreadPool::instance().ShutDown();
 			std::exit(1);
 		}
 
@@ -317,7 +317,7 @@ int Main(int argc, char** argv)
 
 	SUCCESS("Completed conversion of " << changes.size() << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes, taking " << commitTimer.GetTimeS() / 60.0f << " to commit CLs");
 
-	ThreadPool::GetSingleton()->ShutDown();
+	SystemThreadPool::instance().ShutDown();
 
 	if (!P4API::ShutdownLibraries())
 	{
@@ -342,7 +342,7 @@ void SignalHandler(sig_atomic_t s)
 
 	ERR("Signal Received: " << strsignal(s));
 
-	ThreadPool::GetSingleton()->ShutDown();
+	SystemThreadPool::instance().ShutDown();;
 
 	std::exit(1);
 }
