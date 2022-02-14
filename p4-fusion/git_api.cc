@@ -183,7 +183,7 @@ std::string GitAPI::Commit(
 	}
 
 	git_oid commitID;
-	std::string commitMsg = desc + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl + "]";
+	std::string commitMsg = cl + " - " + desc + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl + "]";
 	GIT2(git_commit_create_v(&commitID, m_Repo, "HEAD", author, author, "UTF-8", commitMsg.c_str(), commitTree, parent ? 1 : 0, parent));
 
 	git_object_free(parent);
