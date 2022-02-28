@@ -95,41 +95,39 @@ void ThreadPool::Initialize(int size)
 	{
 		m_ThreadExceptions.push_back(nullptr);
 		m_ThreadNames.push_back("Worker #" + std::to_string(i));
-		m_Threads.push_back(std::thread([this, i]()
-		    {
-			    MTR_META_THREAD_NAME(m_ThreadNames.at(i).c_str());
+		m_Threads.push_back(std::thread([this, i]() {
+			MTR_META_THREAD_NAME(m_ThreadNames.at(i).c_str());
 
-			    P4API* localP4 = &m_P4Contexts[i];
+			P4API* localP4 = &m_P4Contexts[i];
 
-			    while (true)
-			    {
-				    Job job;
-				    {
-					    std::unique_lock<std::mutex> lock(m_JobsMutex);
+			while (true)
+			{
+				Job job;
+				{
+					std::unique_lock<std::mutex> lock(m_JobsMutex);
 
-					    m_CV.wait(lock, [this]()
-					        { return !m_Jobs.empty() || m_ShouldStop; });
+					m_CV.wait(lock, [this]() { return !m_Jobs.empty() || m_ShouldStop; });
 
-					    if (m_ShouldStop)
-					    {
-						    break;
-					    }
+					if (m_ShouldStop)
+					{
+						break;
+					}
 
-					    job = m_Jobs.front();
-					    m_Jobs.pop_front();
-				    }
+					job = m_Jobs.front();
+					m_Jobs.pop_front();
+				}
 
-				    try
-				    {
-					    job(localP4);
-				    }
-				    catch (const std::exception& e)
-				    {
-					    m_ThreadExceptions[i] = std::current_exception();
-				    }
-				    m_JobsProcessing--;
-			    }
-		    }));
+				try
+				{
+					job(localP4);
+				}
+				catch (const std::exception& e)
+				{
+					m_ThreadExceptions[i] = std::current_exception();
+				}
+				m_JobsProcessing--;
+			}
+		}));
 	}
 
 	SUCCESS("Created " << size << " threads in thread pool");
