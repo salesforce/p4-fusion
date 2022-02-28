@@ -1,4 +1,5 @@
 #!/bin/bash
 
 cd build/
-cmake --build . -j8
+CORES=$(grep -c \^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu)
+cmake --build . -j$CORES
