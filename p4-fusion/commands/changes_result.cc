@@ -6,6 +6,16 @@
  */
 #include "changes_result.h"
 
+void ChangesResult::SkipFirst()
+{
+	if (m_Changes.empty())
+	{
+		return;
+	}
+
+	m_Changes = std::vector<ChangeList>(m_Changes.begin() + 1, m_Changes.end());
+}
+
 void ChangesResult::OutputStat(StrDict* varList)
 {
 	m_Changes.push_back({});

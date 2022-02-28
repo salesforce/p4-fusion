@@ -1,5 +1,7 @@
 # P4 Fusion
 
+[![format-check](https://github.com/salesforce/p4-fusion/actions/workflows/format.yaml/badge.svg)](https://github.com/salesforce/p4-fusion/actions/workflows/format.yaml)
+
 A fast Perforce depot to Git repository converter using the Helix Core C/C++ API as an attempt to mitigate the performance bottlenecks in [git-p4.py](https://github.com/git/git/blob/master/git-p4.py).
 
 This project was started as a proof of concept for an internal project which required converting P4 depots to Git repositories. A similar solution exists within Git, known as [git-p4.py](https://github.com/git/git/blob/master/git-p4.py), however, it has (as of the time of writing) performance issues with any depot greater than 1 GB in size, and it runs in a single thread using Python2 which adds another set of limitations to the use of git-p4.py for larger use-cases.

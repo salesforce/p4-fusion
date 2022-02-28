@@ -75,7 +75,7 @@ int Main(int argc, char** argv)
 
 	if (!p4.IsDepotPathValid(depotPath))
 	{
-		ERR("Depot path should end with \"/...\". Please pass in the proper depot path and try again.");
+		ERR("Depot path should begin with \"//\" and end with \"/...\". Please pass in the proper depot path and try again.");
 		return 1;
 	}
 
@@ -146,6 +146,7 @@ int Main(int argc, char** argv)
 		return 1;
 	}
 
+	// Setup trace file generation
 	mtr_init((srcPath + (srcPath.back() == '/' ? "" : "/") + "trace.json").c_str());
 	MTR_META_PROCESS_NAME("p4-fusion");
 	MTR_META_THREAD_NAME("Main Thread");
@@ -162,48 +163,21 @@ int Main(int argc, char** argv)
 
 		resumeFromCL = git.DetectLatestCL();
 		WARN("Detected last CL committed as CL " << resumeFromCL);
-
-		if (p4.LatestChange(depotPath).GetChanges().front().number == resumeFromCL)
-		{
-			SUCCESS("Repository is up to date. Exiting.");
-			return 0;
-		}
 	}
 
-	PRINT("Requesting changelists to convert from Perforce server");
-	// Get all submitted CLs under depot path
-	std::vector<ChangeList> changes = p4.Changes(depotPath).GetChanges();
+	PRINT("Requesting changelists to convert from the Perforce server");
 
-	if (!resumeFromCL.empty())
+	std::vector<ChangeList> changes = p4.Changes(depotPath, resumeFromCL, maxChanges).GetChanges();
+
+	// Return early if we have no work to do
+	if (changes.empty())
 	{
-		WARN("Resuming run from CLs after CL " << resumeFromCL);
-
-		int resumeCLIndex = -1;
-		for (int i = 0; i < changes.size(); i++)
-		{
-			if (changes.at(i).number == resumeFromCL)
-			{
-				resumeCLIndex = i;
-				break;
-			}
-		}
-
-		if (resumeCLIndex == -1)
-		{
-			ERR("CL to be resumed from was not found in the depot history");
-			return 1;
-		}
-
-		// Trim the changelist vector down, also this discards the CL we are resuming from
-		changes = std::vector<ChangeList>(changes.begin(), changes.begin() + resumeCLIndex);
+		SUCCESS("Repository is up to date. Exiting.");
+		return 0;
 	}
-	SUCCESS("Received " << changes.size() << " CLs to be downloaded.");
 
-	if (maxChanges > 0 && changes.size() > maxChanges)
-	{
-		WARN("Only downloading the chronologically first " << maxChanges << " CLs.");
-		changes = std::vector<ChangeList>(changes.begin() + (changes.size() - maxChanges), changes.end());
-	}
+	// The changes are received in chronological order
+	SUCCESS("Found " << changes.size() << " uncloned CLs starting from CL " << changes.front().number << " to CL " << changes.back().number);
 
 	PRINT("Creating " << networkThreads << " network threads");
 	ThreadPool::GetSingleton()->Initialize(networkThreads);
@@ -211,8 +185,8 @@ int Main(int argc, char** argv)
 	int startupDownloadsCount = 0;
 	long long lastDownloadCL = -1;
 
-	// Go in the chronological order i.e. traverse in reverse
-	for (unsigned i = changes.size(); i-- > 0;)
+	// Go in the chronological order
+	for (size_t i = 0; i < changes.size(); i++)
 	{
 		if (startupDownloadsCount == lookAhead)
 		{
@@ -227,7 +201,7 @@ int Main(int argc, char** argv)
 		lastDownloadCL = i;
 	}
 
-	SUCCESS("Queued " << startupDownloadsCount << " CLs to download right away");
+	SUCCESS("Queued first " << startupDownloadsCount << " CLs for downloading");
 
 	int timezoneMinutes = p4.Info().GetServerTimezoneMinutes();
 
@@ -241,7 +215,7 @@ int Main(int argc, char** argv)
 	Timer commitTimer;
 
 	git.CreateIndex();
-	for (unsigned i = changes.size(); i-- > 0;)
+	for (size_t i = 0; i < changes.size(); i++)
 	{
 		// See if the threadpool encountered any exceptions
 		try
@@ -258,6 +232,7 @@ int Main(int argc, char** argv)
 
 		ChangeList& cl = changes.at(i);
 
+		// Ensure the files are downloaded before committing them to the repository
 		cl.WaitForDownload();
 
 		for (auto& file : cl.changedFiles)
@@ -292,13 +267,13 @@ int Main(int argc, char** argv)
 		    cl.timestamp);
 
 		SUCCESS(
-		    "CL " << cl.number << " --> Commit " << commitSHA << " with " << cl.changedFiles.size() << " files (" << changes.size() - i << "/" << changes.size() << "|" << i - lastDownloadCL << "). "
-		          << "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. " << ((commitTimer.GetTimeS() / 60.0f) / (float)(changes.size() - i)) * i << " mins left.");
+		    "CL " << cl.number << " --> Commit " << commitSHA << " with " << cl.changedFiles.size() << " files (" << i << "/" << changes.size() << "|" << i - lastDownloadCL << "). "
+		          << "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. " << ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
 
-		// Start downloading the CL chronologically after the last CL that was previously downloaded
-		if (lastDownloadCL > 0)
+		// Start downloading the CL chronologically after the last CL that was previously downloaded, if there's still some left
+		if (lastDownloadCL + 1 < changes.size())
 		{
-			lastDownloadCL--;
+			lastDownloadCL++;
 			ChangeList& downloadCL = changes.at(lastDownloadCL);
 			downloadCL.PrepareDownload();
 			downloadCL.StartDownload(depotPath, printBatch, includeBinaries);

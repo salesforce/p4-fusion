@@ -8,6 +8,7 @@
 
 #include <thread>
 #include <chrono>
+#include <cstdint>
 
 #include "common.h"
 
@@ -34,7 +35,7 @@ class P4API
 	bool CheckErrors(Error& e, StrBuf& msg);
 
 	template <class T>
-	T Run(const char* command, const std::vector<char*>& args);
+	T Run(const char* command, const std::vector<std::string>& stringArguments);
 
 public:
 	static std::string P4PORT;
@@ -61,6 +62,7 @@ public:
 
 	ChangesResult ShortChanges(const std::string& path);
 	ChangesResult Changes(const std::string& path);
+	ChangesResult Changes(const std::string& path, const std::string& from, int32_t maxCount);
 	ChangesResult ChangesFromTo(const std::string& path, const std::string& from, const std::string& to);
 	ChangesResult LatestChange(const std::string& path);
 	ChangesResult OldestChange(const std::string& path);
@@ -79,17 +81,23 @@ public:
 };
 
 template <class T>
-inline T P4API::Run(const char* command, const std::vector<char*>& args)
+inline T P4API::Run(const char* command, const std::vector<std::string>& stringArguments)
 {
 	std::string argsString;
-	for (int i = 0; i < args.size(); i++)
+	for (const std::string& stringArg : stringArguments)
 	{
-		argsString = argsString + " " + args[i];
+		argsString = argsString + " " + stringArg;
+	}
+
+	std::vector<char*> argsCharArray;
+	for (const std::string& arg : stringArguments)
+	{
+		argsCharArray.push_back((char*)arg.c_str());
 	}
 
 	T clientUser;
 
-	m_ClientAPI.SetArgv(args.size(), args.data());
+	m_ClientAPI.SetArgv(argsCharArray.size(), argsCharArray.data());
 	m_ClientAPI.Run(command, &clientUser);
 
 	int retries = CommandRetries;
@@ -116,7 +124,7 @@ inline T P4API::Run(const char* command, const std::vector<char*>& args)
 
 		clientUser = T();
 
-		m_ClientAPI.SetArgv(args.size(), args.data());
+		m_ClientAPI.SetArgv(argsCharArray.size(), argsCharArray.data());
 		m_ClientAPI.Run(command, &clientUser);
 
 		retries--;

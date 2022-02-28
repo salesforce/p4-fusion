@@ -199,15 +199,15 @@ void P4API::UpdateClientSpec()
 
 ClientResult P4API::Client()
 {
-	return Run<ClientResult>("client", { (char*)"-o" });
+	return Run<ClientResult>("client", { "-o" });
 }
 
 ChangesResult P4API::ShortChanges(const std::string& path)
 {
 	return Run<ChangesResult>("changes", {
-	                                         (char*)"-r", // Get CLs from earliest to latest
-	                                         (char*)"-s", (char*)"submitted", // Only include submitted CLs
-	                                         (char*)path.c_str() // Depot path to get CLs from
+	                                         "-r", // Get CLs from earliest to latest
+	                                         "-s", "submitted", // Only include submitted CLs
+	                                         path // Depot path to get CLs from
 	                                     });
 }
 
@@ -215,18 +215,64 @@ ChangesResult P4API::Changes(const std::string& path)
 {
 	MTR_SCOPE("P4", __func__);
 	return Run<ChangesResult>("changes", {
-	                                         (char*)"-l", // Get full descriptions instead of sending cut-short ones
-	                                         (char*)"-s", (char*)"submitted", // Only include submitted CLs
-	                                         (char*)path.c_str() // Depot path to get CLs from
+	                                         "-l", // Get full descriptions instead of sending cut-short ones
+	                                         "-s", "submitted", // Only include submitted CLs
+	                                         path // Depot path to get CLs from
 	                                     });
+}
+
+ChangesResult P4API::Changes(const std::string& path, const std::string& from, int32_t maxCount)
+{
+	std::vector<std::string> args = {
+		"-l", // Get full descriptions instead of sending cut-short ones
+		"-s", "submitted", // Only include submitted CLs
+		"-r" // Send CLs in chronological order
+	};
+
+	// This needs to be declared outside the if scope below to
+	// keep the internal character array alive till the p4 call is made
+	std::string maxCountStr;
+	if (maxCount != -1)
+	{
+		if (!from.empty())
+		{
+			// P4 will return an extra result when we resume from a CL, so we adjust
+			maxCount++;
+		}
+
+		maxCountStr = std::to_string(maxCount);
+
+		args.push_back("-m"); // Only send max this many number of CLs
+		args.push_back(maxCountStr);
+	}
+
+	std::string pathAddition;
+	if (!from.empty())
+	{
+		// Append a @CL_NUMBER,@now to start from a particular CL in that path up until now
+		pathAddition = "@" + from + ",@now";
+	}
+
+	args.push_back(path + pathAddition);
+
+	ChangesResult result = Run<ChangesResult>("changes", args);
+
+	if (!from.empty())
+	{
+		// The first CL in the result will be the CL we want to resume from.
+		// This is a weird behavior, but we need to remove the first CL
+		result.SkipFirst();
+	}
+
+	return result;
 }
 
 ChangesResult P4API::ChangesFromTo(const std::string& path, const std::string& from, const std::string& to)
 {
 	std::string pathArg = path + "@" + from + "," + to;
 	return Run<ChangesResult>("changes", {
-	                                         (char*)"-s", (char*)"submitted", // Only include submitted CLs
-	                                         (char*)pathArg.c_str() // Depot path to get CLs from
+	                                         "-s", "submitted", // Only include submitted CLs
+	                                         pathArg // Depot path to get CLs from
 	                                     });
 }
 
@@ -234,37 +280,37 @@ ChangesResult P4API::LatestChange(const std::string& path)
 {
 	MTR_SCOPE("P4", __func__);
 	return Run<ChangesResult>("changes", {
-	                                         (char*)"-s", (char*)"submitted", // Only include submitted CLs,
-	                                         (char*)"-m", (char*)"1", // Get top-most change
-	                                         (char*)path.c_str() // Depot path to get CLs from
+	                                         "-s", "submitted", // Only include submitted CLs,
+	                                         "-m", "1", // Get top-most change
+	                                         path // Depot path to get CLs from
 	                                     });
 }
 
 ChangesResult P4API::OldestChange(const std::string& path)
 {
 	return Run<ChangesResult>("changes", {
-	                                         (char*)"-s", (char*)"submitted", // Only include submitted CLs,
-	                                         (char*)"-r", // List from earliest to latest
-	                                         (char*)"-m", (char*)"1", // Get top-most change
-	                                         (char*)path.c_str() // Depot path to get CLs from
+	                                         "-s", "submitted", // Only include submitted CLs,
+	                                         "-r", // List from earliest to latest
+	                                         "-m", "1", // Get top-most change
+	                                         path // Depot path to get CLs from
 	                                     });
 }
 
 DescribeResult P4API::Describe(const std::string& cl)
 {
 	MTR_SCOPE("P4", __func__);
-	return Run<DescribeResult>("describe", { (char*)"-s", // Omit the diffs
-	                                           (char*)cl.c_str() });
+	return Run<DescribeResult>("describe", { "-s", // Omit the diffs
+	                                           cl });
 }
 
 FilesResult P4API::Files(const std::string& path)
 {
-	return Run<FilesResult>("files", { (char*)path.c_str() });
+	return Run<FilesResult>("files", { path });
 }
 
 SizesResult P4API::Size(const std::string& file)
 {
-	return Run<SizesResult>("sizes", { (char*)"-a", (char*)"-s", (char*)file.c_str() });
+	return Run<SizesResult>("sizes", { "-a", "-s", file });
 }
 
 Result P4API::Sync()
@@ -276,15 +322,15 @@ SyncResult P4API::GetFilesToSyncAtCL(const std::string& path, const std::string&
 {
 	std::string clCommand = "@" + cl;
 	return Run<SyncResult>("sync", {
-	                                   (char*)"-n", // Only preview the files to sync. Don't send file contents...yet
-	                                   (char*)clCommand.c_str(),
+	                                   "-n", // Only preview the files to sync. Don't send file contents...yet
+	                                   clCommand,
 	                               });
 }
 
 PrintResult P4API::PrintFile(const std::string& filePathRevision)
 {
 	return Run<PrintResult>("print", {
-	                                     (char*)filePathRevision.c_str(),
+	                                     filePathRevision,
 	                                 });
 }
 
@@ -297,27 +343,20 @@ PrintResult P4API::PrintFiles(const std::vector<std::string>& fileRevisions)
 		return PrintResult();
 	}
 
-	std::vector<char*> args;
-	args.reserve(fileRevisions.size());
-	for (auto& file : fileRevisions)
-	{
-		args.push_back((char*)file.c_str());
-	}
-
-	return Run<PrintResult>("print", args);
+	return Run<PrintResult>("print", fileRevisions);
 }
 
 Result P4API::Sync(const std::string& path)
 {
 	return Run<Result>("sync", {
-	                               (char*)path.c_str() // Sync a particular depot path
+	                               path // Sync a particular depot path
 	                           });
 }
 
 UsersResult P4API::Users()
 {
 	return Run<UsersResult>("users", {
-	                                     (char*)"-a" // Include service accounts
+	                                     "-a" // Include service accounts
 	                                 });
 }
 
