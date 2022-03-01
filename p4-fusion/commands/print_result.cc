@@ -14,10 +14,7 @@ void PrintResult::OutputStat(StrDict* varList)
 void PrintResult::OutputText(const char* data, int length)
 {
 	std::vector<char>& fileContent = m_Data.back().contents;
-
-	size_t originalSize = fileContent.size();
-	fileContent.resize(originalSize + length);
-	memcpy(fileContent.data() + originalSize, data, length);
+	fileContent.insert(fileContent.end(), data, data + length);
 }
 
 void PrintResult::OutputBinary(const char* data, int length)
