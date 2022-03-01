@@ -1,5 +1,6 @@
 # P4 Fusion
 
+[![build-check](https://github.com/salesforce/p4-fusion/actions/workflows/build.yaml/badge.svg)](https://github.com/salesforce/p4-fusion/actions/workflows/build.yaml)
 [![format-check](https://github.com/salesforce/p4-fusion/actions/workflows/format.yaml/badge.svg)](https://github.com/salesforce/p4-fusion/actions/workflows/format.yaml)
 
 A fast Perforce depot to Git repository converter using the Helix Core C/C++ API as an attempt to mitigate the performance bottlenecks in [git-p4.py](https://github.com/git/git/blob/master/git-p4.py).
