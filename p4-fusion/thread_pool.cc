@@ -42,6 +42,8 @@ void ThreadPool::Wait()
 
 void ThreadPool::RaiseCaughtExceptions()
 {
+	std::unique_lock<std::mutex> lock(m_ThreadExceptionsMutex);
+
 	for (auto& exceptionPtr : m_ThreadExceptions)
 	{
 		if (exceptionPtr)
@@ -123,6 +125,8 @@ void ThreadPool::Initialize(int size)
 				}
 				catch (const std::exception& e)
 				{
+					std::unique_lock<std::mutex> lock(m_ThreadExceptionsMutex);
+
 					m_ThreadExceptions[i] = std::current_exception();
 				}
 				m_JobsProcessing--;
