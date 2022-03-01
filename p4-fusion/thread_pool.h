@@ -21,6 +21,7 @@ class ThreadPool
 	typedef std::function<void(P4API*)> Job;
 
 	std::vector<std::thread> m_Threads;
+	std::mutex m_ThreadExceptionsMutex;
 	std::vector<std::exception_ptr> m_ThreadExceptions;
 	std::vector<std::string> m_ThreadNames;
 	std::vector<P4API> m_P4Contexts;
