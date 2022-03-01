@@ -207,9 +207,9 @@ int Main(int argc, char** argv)
 
 	// Map usernames to emails
 	const UsersResult& usersResult = p4.Users();
-	const std::unordered_map<std::string, std::string>& users = usersResult.GetUserEmails();
+	const std::unordered_map<UsersResult::UserID, UsersResult::UserData>& users = usersResult.GetUserEmails();
 
-	SUCCESS("Received usernames and emails of Perforce users");
+	SUCCESS("Received userbase details from the Perforce server");
 
 	// Commit procedure start
 	Timer commitTimer;
@@ -253,14 +253,16 @@ int Main(int argc, char** argv)
 			}
 		}
 
+		std::string fullName = cl.user;
 		std::string email = "deleted@user";
 		if (users.find(cl.user) != users.end())
 		{
-			email = users.at(cl.user);
+			fullName = users.at(cl.user).fullName;
+			email = users.at(cl.user).email;
 		}
 		std::string commitSHA = git.Commit(depotPath,
 		    cl.number,
-		    cl.user,
+		    fullName,
 		    email,
 		    timezoneMinutes,
 		    cl.description,
