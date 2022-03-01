@@ -3,7 +3,7 @@ name: format-check
 on: [push]
 
 jobs:
-  build:
+  format:
     runs-on: ubuntu-latest
 
     steps:

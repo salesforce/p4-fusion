@@ -24,7 +24,6 @@ private:
 
 public:
 	std::vector<ChangeList>& GetChanges() { return m_Changes; }
-	void SkipFirst();
 
 	void OutputStat(StrDict* varList) override;
 };
