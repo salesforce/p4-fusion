@@ -267,8 +267,10 @@ int Main(int argc, char** argv)
 		    cl.timestamp);
 
 		SUCCESS(
-		    "CL " << cl.number << " --> Commit " << commitSHA << " with " << cl.changedFiles.size() << " files (" << i << "/" << changes.size() << "|" << i - lastDownloadCL << "). "
-		          << "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. " << ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
+		    "CL " << cl.number << " --> Commit " << commitSHA
+		          << " with " << cl.changedFiles.size() << " files (" << i << "/" << changes.size() << "|" << lastDownloadCL - (long long)i << "). "
+		          << "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
+		          << ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
 
 		// Start downloading the CL chronologically after the last CL that was previously downloaded, if there's still some left
 		if (lastDownloadCL + 1 < changes.size())

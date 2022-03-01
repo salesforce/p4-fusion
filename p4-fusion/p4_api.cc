@@ -234,12 +234,6 @@ ChangesResult P4API::Changes(const std::string& path, const std::string& from, i
 	std::string maxCountStr;
 	if (maxCount != -1)
 	{
-		if (!from.empty())
-		{
-			// P4 will return an extra result when we resume from a CL, so we adjust
-			maxCount++;
-		}
-
 		maxCountStr = std::to_string(maxCount);
 
 		args.push_back("-m"); // Only send max this many number of CLs
@@ -249,20 +243,16 @@ ChangesResult P4API::Changes(const std::string& path, const std::string& from, i
 	std::string pathAddition;
 	if (!from.empty())
 	{
-		// Append a @CL_NUMBER,@now to start from a particular CL in that path up until now
-		pathAddition = "@" + from + ",@now";
+		// Appending "@CL_NUMBER,@now" seems to include the current CL,
+		// which makes this awkward to deal with in general. So instead,
+		// we append "@>CL_NUMBER" so that we only receive the CLs after
+		// the current one.
+		pathAddition = "@>" + from;
 	}
 
 	args.push_back(path + pathAddition);
 
 	ChangesResult result = Run<ChangesResult>("changes", args);
-
-	if (!from.empty())
-	{
-		// The first CL in the result will be the CL we want to resume from.
-		// This is a weird behavior, but we need to remove the first CL
-		result.SkipFirst();
-	}
 
 	return result;
 }
