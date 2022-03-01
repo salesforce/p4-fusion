@@ -11,10 +11,20 @@
 
 class UsersResult : public Result
 {
-	std::unordered_map<std::string, std::string> m_Users;
+public:
+	using UserID = std::string;
+
+	struct UserData
+	{
+		std::string fullName;
+		std::string email;
+	};
+
+private:
+	std::unordered_map<UserID, UserData> m_Users;
 
 public:
-	const std::unordered_map<std::string, std::string>& GetUserEmails() const { return m_Users; }
+	const std::unordered_map<UserID, UserData>& GetUserEmails() const { return m_Users; }
 
 	void OutputStat(StrDict* varList) override;
 };

@@ -8,5 +8,20 @@
 
 void UsersResult::OutputStat(StrDict* varList)
 {
-	m_Users.insert({ varList->GetVar("User")->Text(), varList->GetVar("Email")->Text() });
+	UserID userID = varList->GetVar("User")->Text();
+	UserData userData;
+
+	userData.email = varList->GetVar("Email")->Text();
+
+	StrPtr* fullNamePtr = varList->GetVar("FullName");
+	if (fullNamePtr)
+	{
+		userData.fullName = fullNamePtr->Text();
+	}
+	else
+	{
+		userData.fullName = userID;
+	}
+
+	m_Users.insert({ userID, userData });
 }
