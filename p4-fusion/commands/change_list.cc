@@ -54,7 +54,8 @@ void ChangeList::StartDownload(const std::string& depotPath, const int& printBat
 			if (p4->IsFileUnderDepotPath(fileData.depotFile, depotPath)
 			    && p4->IsFileUnderClientSpec(fileData.depotFile)
 			    && (includeBinaries || !p4->IsBinary(fileData.type))
-			    && (fileData.depotFile.find("/.git/") == std::string::npos)) // To avoid adding .git files in the Perforce history if any
+			    && (fileData.depotFile.find("/.git/") == std::string::npos) // To avoid adding .git/ files in the Perforce history if any
+			    && (std::string(fileData.depotFile.end() - 5, fileData.depotFile.end()) != "/.git")) // To avoid adding .git submodule file in the Perforce history if any
 			{
 				fileData.shouldCommit = true;
 				printBatchFiles->push_back(fileData.depotFile + "#" + fileData.revision);
