@@ -43,7 +43,7 @@ jobs:
 
     - name: Configure CMake cache
       run: |
-        ./generate_cache.sh Release
+        ./generate_cache.sh Release pt
 
     - name: Build p4-fusion
       run: |
@@ -53,3 +53,4 @@ jobs:
       run: |
         ldd build/p4-fusion/p4-fusion
         ./build/p4-fusion/p4-fusion
+        ./build/tests/p4-fusion-test
