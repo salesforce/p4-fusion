@@ -19,8 +19,19 @@ cmakeArgs=(
     -DCMAKE_CXX_COMPILER=/usr/bin/g++
 )
 
-# Decide if tracing needs to be enabled
-if [ "$2" == "--trace" ]; then
+# Decide if tests/ should be built
+if [[ "$2" == *"t"* ]]; then
+    cmakeArgs+=(
+        -DBUILD_TESTS=ON
+    )
+else
+    cmakeArgs+=(
+        -DBUILD_TESTS=OFF
+    )
+fi
+
+# Decide if profiling needs to be enabled
+if [[ "$2" == *"p"* ]]; then
     cmakeArgs+=(
         -DMTR_ENABLED=ON
     )

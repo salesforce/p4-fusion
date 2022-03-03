@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 option(MTR_ENABLED "Enable minitrace profiling" OFF)
+option(BUILD_TESTS "Build tests" OFF)
 
 set(CXX_STANDARD_REQUIRED true)
 set(CMAKE_CXX_STANDARD 11)
@@ -15,5 +16,17 @@ project(
 set(BUILD_CLAR OFF)
 set(BUILD_SHARED_LIBS OFF)
 
+if (UNIX)
+    set(HELIX_API vendor/helix-core-api/linux)
+endif()
+if (APPLE)
+    set(HELIX_API vendor/helix-core-api/mac)
+endif()
+
 add_subdirectory(vendor)
 add_subdirectory(p4-fusion)
+
+if (BUILD_TESTS)
+    message(STATUS "Building tests")
+    add_subdirectory(tests)
+endif()

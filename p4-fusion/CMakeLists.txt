@@ -10,22 +10,15 @@ find_package(OpenSSL)
 
 add_executable(p4-fusion ${Headers} ${Sources})
 
-if (UNIX)
-    set(HELIX_API ../vendor/helix-core-api/linux)
-endif()
-if (APPLE)
-    set(HELIX_API ../vendor/helix-core-api/mac)
-endif()
-
 target_include_directories(p4-fusion PUBLIC
-    ${HELIX_API}/include/
+    ../${HELIX_API}/include/
     ../vendor/libgit2/include/
     ../vendor/minitrace/
     ${CMAKE_CURRENT_LIST_DIR}
 )
 
 target_link_directories(p4-fusion PUBLIC
-    ${HELIX_API}/lib/
+    ../${HELIX_API}/lib/
 )
 
 set(Frameworks "")
