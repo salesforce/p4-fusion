@@ -9,6 +9,7 @@
 #include "p4_api.h"
 #include "describe_result.h"
 #include "print_result.h"
+#include "utils/std_helpers.h"
 
 #include "thread_pool.h"
 
@@ -57,8 +58,8 @@ void ChangeList::StartDownload(const std::string& depotPath, const int& printBat
 			    if (p4->IsFileUnderDepotPath(fileData.depotFile, depotPath)
 			        && p4->IsFileUnderClientSpec(fileData.depotFile)
 			        && (includeBinaries || !p4->IsBinary(fileData.type))
-			        && (fileData.depotFile.find("/.git/") == std::string::npos) // To avoid adding .git/ files in the Perforce history if any
-			        && (std::string(fileData.depotFile.end() - 5, fileData.depotFile.end()) != "/.git")) // To avoid adding a .git submodule file in the Perforce history if any
+			        && !STDHelpers::Contains(fileData.depotFile, "/.git/") // To avoid adding .git/ files in the Perforce history if any
+			        && !STDHelpers::EndsWith(fileData.depotFile, "/.git")) // To avoid adding a .git submodule file in the Perforce history if any
 			    {
 				    fileData.shouldCommit = true;
 				    printBatchFiles->push_back(fileData.depotFile + "#" + fileData.revision);

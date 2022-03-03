@@ -6,6 +6,8 @@
  */
 #include "p4_api.h"
 
+#include "utils/std_helpers.h"
+
 #include "p4/p4libs.h"
 #include "minitrace.h"
 
@@ -83,12 +85,12 @@ P4API::~P4API()
 
 bool P4API::IsDepotPathValid(const std::string& depotPath)
 {
-	return depotPath.substr(depotPath.size() - 4, 4) == "/..." && depotPath.substr(0, 2) == "//";
+	return STDHelpers::EndsWith(depotPath, "/...") && STDHelpers::StartsWith(depotPath, "//");
 }
 
 bool P4API::IsFileUnderDepotPath(const std::string& fileRevision, const std::string& depotPath)
 {
-	return fileRevision.substr(0, depotPath.size() - 4) + "/..." == depotPath;
+	return STDHelpers::Contains(fileRevision, depotPath.substr(0, depotPath.size() - 3)); // -3 to remove the trailing "..."
 }
 
 bool P4API::IsFileUnderClientSpec(const std::string& fileRevision)
@@ -100,12 +102,12 @@ bool P4API::IsFileUnderClientSpec(const std::string& fileRevision)
 
 bool P4API::IsDeleted(const std::string& action)
 {
-	return action.find("delete") != std::string::npos;
+	return STDHelpers::Contains(action, "delete");
 }
 
 bool P4API::IsBinary(const std::string& fileType)
 {
-	return fileType.find("binary") != std::string::npos;
+	return STDHelpers::Contains(fileType, "binary");
 }
 
 bool P4API::CheckErrors(Error& e, StrBuf& msg)
