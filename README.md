@@ -15,9 +15,11 @@ This tool solves some of the most impactful scaling and performance limitations 
 
 ## Performance
 
-Please be aware that this tool is fast enough to instantaneously generate a tremendous amount of load (more than 150K requests in a few minutes if running with a moderate number of threads) on your Perforce server, thus, it needs careful monitoring to ensure that the Perforce server does not get impacted. This tool will continue generating load without any rate limitations (apart from the runtime options that this tool provides) till the conversion process is complete. However, having no rate limits and running this tool with several hundred network threads (or more if possible) is the ideal case for achieving maximum speed in the conversion process.
+Please be aware that this tool is fast enough to instantaneously generate a tremendous amount of load on your Perforce server (more than 150K requests in a few seconds if running with a couple hundred network threads). Since p4-fusion will continue generating load within the limits set using the runtime arguments, it needs careful monitoring to ensure that your Perforce server does not get impacted. 
 
-The number of network threads shall be set to a number generally be more than the number of logical CPUs because the most time-taking step is downloading the CL data, which is mostly network I/O bounded.
+However, having no rate limits and running this tool with several hundred network threads (or more if possible) is the ideal case for achieving maximum speed in the conversion process.
+
+The number of network threads should be set to a number that generally is much more than the number of logical CPUs because the most time-taking step is a low CPU intensive task i.e. downloading the CL data from the Perforce server.
 
 In our study, this tool is running upwards of 100 times faster than git-p4.py. We have observed an average time of 26 seconds for the conversion of the history inside a depot path containing around 3393 moderately sized changelists using 200 parallel connections, while git-p4.py was taking close to 42 minutes to convert the same depot path. If the Perforce server has the files cached completely then these conversion times might be reproducible, else if the file cache is empty then the first couple of runs are expected to take much more time.
 
