@@ -181,6 +181,7 @@ int Main(int argc, char** argv)
 
 	PRINT("Creating " << networkThreads << " network threads");
 	ThreadPool::GetSingleton()->Initialize(networkThreads);
+	SUCCESS("Created " << ThreadPool::GetSingleton()->GetThreadCount() << " threads in thread pool");
 
 	int startupDownloadsCount = 0;
 	long long lastDownloadCL = -1;

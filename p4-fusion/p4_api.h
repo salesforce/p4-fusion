@@ -24,7 +24,6 @@
 
 class P4API
 {
-
 	ClientApi m_ClientAPI;
 	MapApi m_ClientMapping;
 	int m_Usage;
