@@ -1,0 +1,143 @@
+p4-fusion/commands/change_list.h:31:7: style:inconclusive: Technically the member function 'ChangeList::PrepareDownload' can be const. [functionConst]
+ void PrepareDownload();
+      ^
+p4-fusion/commands/change_list.cc:16:18: note: Technically the member function 'ChangeList::PrepareDownload' can be const.
+void ChangeList::PrepareDownload()
+                 ^
+p4-fusion/commands/change_list.h:31:7: note: Technically the member function 'ChangeList::PrepareDownload' can be const.
+ void PrepareDownload();
+      ^
+p4-fusion/commands/info_result.h:12:1: style: The class 'InfoResult' does not have a constructor although it has private member variables. [noConstructor]
+class InfoResult : public Result
+^
+p4-fusion/git_api.h:24:2: style: Class 'GitAPI' has a constructor with 1 argument that is not explicit. [noExplicitConstructor]
+ GitAPI(bool fsyncEnable);
+ ^
+p4-fusion/thread_pool.h:19:1: style: The class 'ThreadPool' does not have a constructor although it has private member variables. [noConstructor]
+class ThreadPool
+^
+p4-fusion/p4_api.h:89:14: style: Consider using std::accumulate algorithm instead of a raw loop. [useStlAlgorithm]
+  argsString = argsString + " " + stringArg;
+             ^
+p4-fusion/p4_api.h:95:17: style: Consider using std::transform algorithm instead of a raw loop. [useStlAlgorithm]
+  argsCharArray.push_back((char*)arg.c_str());
+                ^
+p4-fusion/p4_api.h:35:7: performance:inconclusive: Technically the member function 'P4API::CheckErrors' can be static (but you may consider moving to unnamed namespace). [functionStatic]
+ bool CheckErrors(Error& e, StrBuf& msg);
+      ^
+p4-fusion/p4_api.cc:113:13: note: Technically the member function 'P4API::CheckErrors' can be static (but you may consider moving to unnamed namespace).
+bool P4API::CheckErrors(Error& e, StrBuf& msg)
+            ^
+p4-fusion/p4_api.h:35:7: note: Technically the member function 'P4API::CheckErrors' can be static (but you may consider moving to unnamed namespace).
+ bool CheckErrors(Error& e, StrBuf& msg);
+      ^
+p4-fusion/p4_api.h:55:7: performance:inconclusive: Technically the member function 'P4API::IsDepotPathValid' can be static (but you may consider moving to unnamed namespace). [functionStatic]
+ bool IsDepotPathValid(const std::string& depotPath);
+      ^
+p4-fusion/p4_api.cc:86:13: note: Technically the member function 'P4API::IsDepotPathValid' can be static (but you may consider moving to unnamed namespace).
+bool P4API::IsDepotPathValid(const std::string& depotPath)
+            ^
+p4-fusion/p4_api.h:55:7: note: Technically the member function 'P4API::IsDepotPathValid' can be static (but you may consider moving to unnamed namespace).
+ bool IsDepotPathValid(const std::string& depotPath);
+      ^
+p4-fusion/p4_api.h:56:7: performance:inconclusive: Technically the member function 'P4API::IsFileUnderDepotPath' can be static (but you may consider moving to unnamed namespace). [functionStatic]
+ bool IsFileUnderDepotPath(const std::string& fileRevision, const std::string& depotPath);
+      ^
+p4-fusion/p4_api.cc:91:13: note: Technically the member function 'P4API::IsFileUnderDepotPath' can be static (but you may consider moving to unnamed namespace).
+bool P4API::IsFileUnderDepotPath(const std::string& fileRevision, const std::string& depotPath)
+            ^
+p4-fusion/p4_api.h:56:7: note: Technically the member function 'P4API::IsFileUnderDepotPath' can be static (but you may consider moving to unnamed namespace).
+ bool IsFileUnderDepotPath(const std::string& fileRevision, const std::string& depotPath);
+      ^
+p4-fusion/p4_api.h:58:7: performance:inconclusive: Technically the member function 'P4API::IsDeleted' can be static (but you may consider moving to unnamed namespace). [functionStatic]
+ bool IsDeleted(const std::string& action);
+      ^
+p4-fusion/p4_api.cc:103:13: note: Technically the member function 'P4API::IsDeleted' can be static (but you may consider moving to unnamed namespace).
+bool P4API::IsDeleted(const std::string& action)
+            ^
+p4-fusion/p4_api.h:58:7: note: Technically the member function 'P4API::IsDeleted' can be static (but you may consider moving to unnamed namespace).
+ bool IsDeleted(const std::string& action);
+      ^
+p4-fusion/p4_api.h:59:7: performance:inconclusive: Technically the member function 'P4API::IsBinary' can be static (but you may consider moving to unnamed namespace). [functionStatic]
+ bool IsBinary(const std::string& fileType);
+      ^
+p4-fusion/p4_api.cc:108:13: note: Technically the member function 'P4API::IsBinary' can be static (but you may consider moving to unnamed namespace).
+bool P4API::IsBinary(const std::string& fileType)
+            ^
+p4-fusion/p4_api.h:59:7: note: Technically the member function 'P4API::IsBinary' can be static (but you may consider moving to unnamed namespace).
+ bool IsBinary(const std::string& fileType);
+      ^
+p4-fusion/p4_api.cc:329:63: style:inconclusive: Function 'PrintFiles' argument 1 names different: declaration 'files' definition 'fileRevisions'. [funcArgNamesDifferent]
+PrintResult P4API::PrintFiles(const std::vector<std::string>& fileRevisions)
+                                                              ^
+p4-fusion/p4_api.h:76:57: note: Function 'PrintFiles' argument 1 names different: declaration 'files' definition 'fileRevisions'.
+ PrintResult PrintFiles(const std::vector<std::string>& files);
+                                                        ^
+p4-fusion/p4_api.cc:329:63: note: Function 'PrintFiles' argument 1 names different: declaration 'files' definition 'fileRevisions'.
+PrintResult P4API::PrintFiles(const std::vector<std::string>& fileRevisions)
+                                                              ^
+p4-fusion/thread_pool.h:46:7: style:inconclusive: Technically the member function 'ThreadPool::Wait' can be const. [functionConst]
+ void Wait();
+      ^
+p4-fusion/thread_pool.cc:32:18: note: Technically the member function 'ThreadPool::Wait' can be const.
+void ThreadPool::Wait()
+                 ^
+p4-fusion/thread_pool.h:46:7: note: Technically the member function 'ThreadPool::Wait' can be const.
+ void Wait();
+      ^
+p4-fusion/p4_api.cc:262:0: style: The function 'ChangesFromTo' is never used. [unusedFunction]
+
+^
+p4-fusion/git_api.cc:86:0: style: The function 'CreateBlob' is never used. [unusedFunction]
+
+^
+p4-fusion/p4_api.cc:298:0: style: The function 'Files' is never used. [unusedFunction]
+
+^
+p4-fusion/p4_api.cc:313:0: style: The function 'GetFilesToSyncAtCL' is never used. [unusedFunction]
+
+^
+p4-fusion/commands/result.cc:9:0: style: The function 'HandleError' is never used. [unusedFunction]
+
+^
+p4-fusion/p4_api.cc:271:0: style: The function 'LatestChange' is never used. [unusedFunction]
+
+^
+p4-fusion/p4_api.cc:281:0: style: The function 'OldestChange' is never used. [unusedFunction]
+
+^
+p4-fusion/git_api.cc:62:0: style: The function 'OpenRepository' is never used. [unusedFunction]
+
+^
+p4-fusion/commands/describe_result.cc:37:0: style: The function 'OutputBinary' is never used. [unusedFunction]
+
+^
+p4-fusion/commands/changes_result.cc:9:0: style: The function 'OutputStat' is never used. [unusedFunction]
+
+^
+p4-fusion/commands/describe_result.cc:13:0: style: The function 'OutputStatPartial' is never used. [unusedFunction]
+
+^
+p4-fusion/p4_api.cc:322:0: style: The function 'PrintFile' is never used. [unusedFunction]
+
+^
+p4-fusion/thread_pool.cc:82:0: style: The function 'Resize' is never used. [unusedFunction]
+
+^
+p4-fusion/p4_api.cc:207:0: style: The function 'ShortChanges' is never used. [unusedFunction]
+
+^
+p4-fusion/p4_api.cc:303:0: style: The function 'Size' is never used. [unusedFunction]
+
+^
+p4-fusion/p4_api.cc:308:0: style: The function 'Sync' is never used. [unusedFunction]
+
+^
+p4-fusion/p4_api.cc:197:0: style: The function 'UpdateClientSpec' is never used. [unusedFunction]
+
+^
+p4-fusion/thread_pool.cc:32:0: style: The function 'Wait' is never used. [unusedFunction]
+
+^
+nofile:0:0: information: Cppcheck cannot find all the include files (use --check-config for details) [missingInclude]
+
