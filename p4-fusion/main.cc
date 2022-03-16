@@ -184,36 +184,36 @@ int Main(int argc, char** argv)
 	SUCCESS("Created " << ThreadPool::GetSingleton()->GetThreadCount() << " threads in thread pool");
 
 	int startupDownloadsCount = 0;
-	long long lastDownloadCL = -1;
 
 	// Go in the chronological order
-	for (size_t i = 0; i < changes.size(); i++)
+	size_t lastDownloadedCL = 0;
+	for (size_t currentCL = 0; currentCL < changes.size() && currentCL < lookAhead; currentCL++)
 	{
-		if (startupDownloadsCount == lookAhead)
-		{
-			break;
-		}
+		ChangeList& cl = changes.at(currentCL);
 
-		// Start running `p4 print` on changed files
-		ChangeList& cl = changes.at(i);
+		// Start gathering changed files with `p4 describe`
 		cl.PrepareDownload();
+
+		// Start running `p4 print` on changed files when the describe is finished
 		cl.StartDownload(depotPath, printBatch, includeBinaries);
 		startupDownloadsCount++;
-		lastDownloadCL = i;
+
+		lastDownloadedCL = currentCL;
 	}
 
-	SUCCESS("Queued first " << startupDownloadsCount << " CLs for downloading");
+	SUCCESS("Queued first " << startupDownloadsCount << " CLs up until CL " << changes.at(lastDownloadedCL).number << " for downloading");
 
 	int timezoneMinutes = p4.Info().GetServerTimezoneMinutes();
+	SUCCESS("Perforce server timezone is " << timezoneMinutes << " minutes");
 
 	// Map usernames to emails
-	const UsersResult& usersResult = p4.Users();
-	const std::unordered_map<UsersResult::UserID, UsersResult::UserData>& users = usersResult.GetUserEmails();
-
+	const std::unordered_map<UsersResult::UserID, UsersResult::UserData> users = std::move(p4.Users().GetUserEmails());
 	SUCCESS("Received userbase details from the Perforce server");
 
 	// Commit procedure start
 	Timer commitTimer;
+
+	PRINT("Last CL to start downloading is CL " << changes.at(lastDownloadedCL).number);
 
 	git.CreateIndex();
 	for (size_t i = 0; i < changes.size(); i++)
@@ -271,15 +271,15 @@ int Main(int argc, char** argv)
 
 		SUCCESS(
 		    "CL " << cl.number << " --> Commit " << commitSHA
-		          << " with " << cl.changedFiles.size() << " files (" << i << "/" << changes.size() << "|" << lastDownloadCL - (long long)i << "). "
+		          << " with " << cl.changedFiles.size() << " files (" << i + 1 << "/" << changes.size() << "|" << lastDownloadedCL - (long long)i << "). "
 		          << "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
 		          << ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
 
 		// Start downloading the CL chronologically after the last CL that was previously downloaded, if there's still some left
-		if (lastDownloadCL + 1 < changes.size())
+		if (lastDownloadedCL + 1 < changes.size())
 		{
-			lastDownloadCL++;
-			ChangeList& downloadCL = changes.at(lastDownloadCL);
+			lastDownloadedCL++;
+			ChangeList& downloadCL = changes.at(lastDownloadedCL);
 			downloadCL.PrepareDownload();
 			downloadCL.StartDownload(depotPath, printBatch, includeBinaries);
 		}

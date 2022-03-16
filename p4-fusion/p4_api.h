@@ -43,7 +43,9 @@ public:
 	static ClientResult::ClientSpecData ClientSpec;
 	static int CommandRetries;
 	static int CommandRefreshThreshold;
-	static std::mutex ReinitializationMutex;
+
+	// Helix Core C++ API seems to crash while making connections parallely.
+	static std::mutex InitializationMutex;
 
 	static bool InitializeLibraries();
 	static bool ShutdownLibraries();
@@ -72,7 +74,7 @@ public:
 	Result Sync(const std::string& path);
 	SyncResult GetFilesToSyncAtCL(const std::string& path, const std::string& cl);
 	PrintResult PrintFile(const std::string& filePathRevision);
-	PrintResult PrintFiles(const std::vector<std::string>& files);
+	PrintResult PrintFiles(const std::vector<std::string>& fileRevisions);
 	void UpdateClientSpec();
 	ClientResult Client();
 	UsersResult Users();

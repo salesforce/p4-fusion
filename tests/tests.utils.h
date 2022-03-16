@@ -49,6 +49,7 @@ int TestUtils()
 	TEST(STDHelpers::EndsWith("//depot/path/.git", "/.git/"), false);
 	TEST(STDHelpers::EndsWith("//depot/path/.git", ".git"), true);
 
+	TEST(Time::GetTimezoneMinutes("2022/03/15 09:56:15 -0400 EDT"), -240);
 	TEST(Time::GetTimezoneMinutes("2022/03/09 22:59:04 -0800 PST"), -480);
 	TEST(Time::GetTimezoneMinutes("2022/03/09 22:59:04 +0800 PST"), +480);
 	TEST(Time::GetTimezoneMinutes("2022/03/09 22:59:04 -1800 PST"), -1080);

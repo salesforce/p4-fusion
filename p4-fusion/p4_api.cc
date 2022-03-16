@@ -17,14 +17,20 @@ std::string P4API::P4USER;
 std::string P4API::P4CLIENT;
 int P4API::CommandRetries = 1;
 int P4API::CommandRefreshThreshold = 1;
-std::mutex P4API::ReinitializationMutex;
+std::mutex P4API::InitializationMutex;
 
 P4API::P4API()
 {
-	if (!Initialize())
 	{
-		ERR("Could not initialize P4API");
-		return;
+		// Helix Core C++ API seems to crash while making connections parallely.
+		// Although, this function is not currently accessed in parallel, it can
+		// be during retries.
+		std::unique_lock<std::mutex> lock(InitializationMutex);
+		if (!Initialize())
+		{
+			ERR("Could not initialize P4API");
+			return;
+		}
 	}
 
 	AddClientSpecView(ClientSpec.mapping);
@@ -43,6 +49,7 @@ bool P4API::Initialize()
 	m_ClientAPI.SetClient(P4CLIENT.c_str());
 	m_ClientAPI.SetProtocol("tag", "");
 	m_ClientAPI.Init(&e);
+
 	if (!CheckErrors(e, msg))
 	{
 		ERR("Could not initialize Helix Core C/C++ API");
@@ -54,11 +61,14 @@ bool P4API::Initialize()
 
 bool P4API::Deinitialize()
 {
+	std::unique_lock<std::mutex> lock(InitializationMutex);
+
 	Error e;
 	StrBuf msg;
 
 	m_ClientAPI.Final(&e);
 	CheckErrors(e, msg);
+
 	return true;
 }
 
@@ -66,11 +76,6 @@ bool P4API::Reinitialize()
 {
 	MTR_SCOPE("P4", __func__);
 
-	// Helix Core C++ API seems to crash while making connections parallely.
-	// The Initialize() function is immune to this because it is never run in
-	// parrallel, while Reinitialize() function can get in a situation where it is
-	// called in parallel.
-	std::unique_lock<std::mutex> lock(ReinitializationMutex);
 	bool status = Deinitialize() && Initialize();
 	return status;
 }
