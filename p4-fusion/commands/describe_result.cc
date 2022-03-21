@@ -13,13 +13,18 @@ void DescribeResult::OutputStat(StrDict* varList)
 int DescribeResult::OutputStatPartial(StrDict* varList)
 {
 	std::string indexString = std::to_string(m_FileData.size());
-	m_FileData.push_back(FileData {});
 
 	StrPtr* depotFile = varList->GetVar(("depotFile" + indexString).c_str());
+	if (!depotFile)
+	{
+		// Quick exit if the object returned is not a file
+		return 0;
+	}
 	StrPtr* type = varList->GetVar(("type" + indexString).c_str());
 	StrPtr* revision = varList->GetVar(("rev" + indexString).c_str());
 	StrPtr* action = varList->GetVar(("action" + indexString).c_str());
 
+	m_FileData.push_back(FileData {});
 	FileData* fileData = &m_FileData.back();
 
 	fileData->depotFile = depotFile->Text();
