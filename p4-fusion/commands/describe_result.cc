@@ -23,7 +23,7 @@ int DescribeResult::OutputStatPartial(StrDict* varList)
 	StrPtr* type = varList->GetVar(("type" + indexString).c_str());
 	StrPtr* revision = varList->GetVar(("rev" + indexString).c_str());
 	StrPtr* action = varList->GetVar(("action" + indexString).c_str());
-	
+
 	m_FileData.push_back(FileData {});
 	FileData* fileData = &m_FileData.back();
 
