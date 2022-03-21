@@ -15,7 +15,8 @@ int DescribeResult::OutputStatPartial(StrDict* varList)
 	std::string indexString = std::to_string(m_FileData.size());
 
 	StrPtr* depotFile = varList->GetVar(("depotFile" + indexString).c_str());
-	if(depotFile == nullptr){
+	if (!depotFile)
+	{
 		// Quick exit if the object returned is not a file
 		return 0;
 	}
