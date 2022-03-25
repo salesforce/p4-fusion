@@ -8,17 +8,9 @@
 
 void ChangesResult::OutputStat(StrDict* varList)
 {
-	m_Changes.push_back({});
-	ChangeList& data = m_Changes.back();
-
-	data.number = varList->GetVar("change")->Text();
-	data.description = varList->GetVar("desc")->Text();
-	data.user = varList->GetVar("user")->Text();
-	data.timestamp = varList->GetVar("time")->Atoi64();
-	data.filesDownloaded = std::make_shared<std::atomic<int>>(-1);
-	data.canDownload = std::make_shared<std::atomic<bool>>(false);
-	data.canDownloadMutex = std::make_shared<std::mutex>();
-	data.canDownloadCV = std::make_shared<std::condition_variable>();
-	data.commitMutex = std::make_shared<std::mutex>();
-	data.commitCV = std::make_shared<std::condition_variable>();
+	m_Changes.emplace_back(
+	    varList->GetVar("change")->Text(),
+	    varList->GetVar("desc")->Text(),
+	    varList->GetVar("user")->Text(),
+	    varList->GetVar("time")->Atoi64());
 }

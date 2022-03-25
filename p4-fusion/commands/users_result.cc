@@ -8,10 +8,19 @@
 
 void UsersResult::OutputStat(StrDict* varList)
 {
-	UserID userID = varList->GetVar("User")->Text();
+	StrPtr* userIDPtr = varList->GetVar("User");
+	StrPtr* emailPtr = varList->GetVar("Email");
+
+	if (!userIDPtr || !emailPtr)
+	{
+		ERR("UserID or email not found for a Perforce user");
+		return;
+	}
+
+	UserID userID = userIDPtr->Text();
 	UserData userData;
 
-	userData.email = varList->GetVar("Email")->Text();
+	userData.email = emailPtr->Text();
 
 	StrPtr* fullNamePtr = varList->GetVar("FullName");
 	if (fullNamePtr)

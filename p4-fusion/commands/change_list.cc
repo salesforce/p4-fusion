@@ -13,6 +13,14 @@
 
 #include "thread_pool.h"
 
+ChangeList::ChangeList(const std::string& clNumber, const std::string& clDescription, const std::string& userID, const int64_t& clTimestamp)
+    : number(clNumber)
+    , user(userID)
+    , description(clDescription)
+    , timestamp(clTimestamp)
+{
+}
+
 void ChangeList::PrepareDownload()
 {
 	ChangeList& cl = *this;
@@ -25,7 +33,7 @@ void ChangeList::PrepareDownload()
 			    std::unique_lock<std::mutex> lock((*(cl.canDownloadMutex)));
 			    *cl.canDownload = true;
 		    }
-		    cl.canDownloadCV->notify_one();
+		    cl.canDownloadCV->notify_all();
 	    });
 }
 
@@ -71,32 +79,41 @@ void ChangeList::StartDownload(const std::string& depotPath, const int& printBat
 				    cl.commitCV->notify_all();
 			    }
 
-			    // Empty the batches
-			    if (printBatchFiles->size() > printBatch || i == cl.changedFiles.size() - 1)
+			    // Clear the batches if it fits
+			    if (printBatchFiles->size() == printBatch)
 			    {
-				    if (printBatchFiles->empty())
-				    {
-					    continue;
-				    }
+				    cl.Flush(printBatchFiles, printBatchFileData);
 
-				    ThreadPool::GetSingleton()->AddJob([&cl, printBatchFiles, printBatchFileData](P4API* p4)
-				        {
-					        const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
-
-					        for (int i = 0; i < printBatchFiles->size(); i++)
-					        {
-						        printBatchFileData->at(i)->contents = std::move(printData.GetPrintData().at(i).contents);
-					        }
-
-					        (*cl.filesDownloaded) += printBatchFiles->size();
-
-					        cl.commitCV->notify_all();
-				        });
-
+				    // We let go of the refs held by us and create new ones to queue the next batch
 				    printBatchFiles = std::make_shared<std::vector<std::string>>();
 				    printBatchFileData = std::make_shared<std::vector<FileData*>>();
+				    // Now only the thread job has access to the older batch
 			    }
 		    }
+
+		    // Flush any remaining files that were smaller in number than the total batch size
+		    if (!printBatchFiles->empty())
+		    {
+			    cl.Flush(printBatchFiles, printBatchFileData);
+		    }
+	    });
+}
+
+void ChangeList::Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles, std::shared_ptr<std::vector<FileData*>> printBatchFileData)
+{
+	// Share ownership of this batch with the thread job
+	ThreadPool::GetSingleton()->AddJob([this, printBatchFiles, printBatchFileData](P4API* p4)
+	    {
+		    const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
+
+		    for (int i = 0; i < printBatchFiles->size(); i++)
+		    {
+			    printBatchFileData->at(i)->contents = std::move(printData.GetPrintData().at(i).contents);
+		    }
+
+		    (*filesDownloaded) += printBatchFiles->size();
+
+		    commitCV->notify_all();
 	    });
 }
 
@@ -113,7 +130,11 @@ void ChangeList::Clear()
 	user.clear();
 	description.clear();
 	changedFiles.clear();
+
 	filesDownloaded.reset();
+	canDownload.reset();
+	canDownloadMutex.reset();
+	canDownloadCV.reset();
 	commitMutex.reset();
 	commitCV.reset();
 }

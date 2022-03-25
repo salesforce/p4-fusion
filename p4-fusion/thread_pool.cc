@@ -135,8 +135,6 @@ void ThreadPool::Initialize(int size)
 			    }
 		    }));
 	}
-
-	SUCCESS("Created " << size << " threads in thread pool");
 }
 
 ThreadPool::~ThreadPool()
