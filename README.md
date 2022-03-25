@@ -91,7 +91,7 @@ This tool uses C++11 and thus it should work with much older GCC versions. We ha
 ./generate_cache.sh Debug
 ```
 
-Replace `Debug` with `Release` for a speed-optimized binary. Debug will run marginally slower (considering the tool is mostly bottlenecked by network I/O) but will contain debug symbols and allows a better debugging experience while working with a debugger.
+Replace `Debug` with `Release` or `RelWithDebInfo` or `MinSizeRel` for a differently optimized binary. Debug will run marginally slower (considering the tool is mostly bottlenecked by network I/O) but will contain debug symbols and allows a better debugging experience while working with a debugger.
 
 By default tracing is disabled in p4-fusion. It can be enabled by including `p` in the second argument while generating the CMake cache. If tracing is enabled, p4-fusion generates trace JSON files in the cloning directory. These files can be opened in the `about:tracing` window in Chromium web browsers to view the tracing data.
 
