@@ -21,16 +21,10 @@ std::mutex P4API::InitializationMutex;
 
 P4API::P4API()
 {
+	if (!Initialize())
 	{
-		// Helix Core C++ API seems to crash while making connections parallely.
-		// Although, this function is not currently accessed in parallel, it can
-		// be during retries.
-		std::unique_lock<std::mutex> lock(InitializationMutex);
-		if (!Initialize())
-		{
-			ERR("Could not initialize P4API");
-			return;
-		}
+		ERR("Could not initialize P4API");
+		return;
 	}
 
 	AddClientSpecView(ClientSpec.mapping);
@@ -39,6 +33,9 @@ P4API::P4API()
 bool P4API::Initialize()
 {
 	MTR_SCOPE("P4", __func__);
+
+	// Helix Core C++ API seems to crash while making connections parallely.
+	std::unique_lock<std::mutex> lock(InitializationMutex);
 
 	Error e;
 	StrBuf msg;
