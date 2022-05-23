@@ -4,6 +4,7 @@ add_executable(p4-fusion-test
     ../p4-fusion/utils/std_helpers.cc
     ../p4-fusion/utils/time_helpers.cc
     ../p4-fusion/git_api.cc
+    ../p4-fusion/p4_api.cc
 )
 
 target_include_directories(p4-fusion-test PRIVATE

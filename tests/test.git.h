@@ -6,7 +6,7 @@
  */
 #pragma once
 
-#include "tests.common.h"
+#include "test.common.h"
 #include "git_api.h"
 
 int TestGitAPI()

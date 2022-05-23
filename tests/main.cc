@@ -6,14 +6,16 @@
  */
 #include <iostream>
 
-#include "tests.common.h"
-#include "tests.utils.h"
-#include "tests.git.h"
+#include "test.common.h"
+#include "test.utils.h"
+#include "test.git.h"
+#include "test.perforce.h"
 
 int main()
 {
 	TEST_REPORT("Utils", TestUtils());
 	TEST_REPORT("GitAPI", TestGitAPI());
+	TEST_REPORT("P4API", TestP4API());
 
 	SUCCESS("All test cases passed");
 	return 0;
