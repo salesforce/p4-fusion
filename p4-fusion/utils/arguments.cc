@@ -63,15 +63,15 @@ std::string Arguments::Help()
 		const std::string& name = param.first;
 		const ParameterData& paramData = param.second;
 
+		text += name + " ";
 		if (paramData.isRequired)
 		{
-			text += "\033[91m[Required]\033[0m ";
+			text += "\033[91m[Required]\033[0m";
 		}
 		else
 		{
-			text += "\033[93m[Optional, Default is " + (paramData.value.empty() ? "empty" : paramData.value) + "]\033[0m ";
+			text += "\033[93m[Optional, Default is " + (paramData.value.empty() ? "empty" : paramData.value) + "]\033[0m";
 		}
-		text += name;
 		text += "\n        " + paramData.helpText + "\n\n";
 	}
 

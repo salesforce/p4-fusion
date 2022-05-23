@@ -6,7 +6,7 @@
  */
 #pragma once
 
-#include <unordered_map>
+#include <map>
 #include <string>
 
 #include "common.h"
@@ -21,7 +21,7 @@ class Arguments
 		std::string helpText;
 	};
 
-	std::unordered_map<std::string, ParameterData> m_Parameters;
+	std::map<std::string, ParameterData> m_Parameters;
 
 	std::string GetParameter(const std::string& argName) const;
 
