@@ -31,7 +31,7 @@ int Main(int argc, char** argv)
 	Timer programTimer;
 
 	Arguments::GetSingleton()->RequiredParameter("--path", "P4 depot path to convert to a Git repo");
-	Arguments::GetSingleton()->RequiredParameter("--src", "Local relative source path with P4 code. Git repo will be created at this path. This path should be empty before running p4-fusion.");
+	Arguments::GetSingleton()->RequiredParameter("--src", "Relative path where the git repository should be created. This path should be empty before running p4-fusion for the first time in a directory.");
 	Arguments::GetSingleton()->RequiredParameter("--port", "Specify which P4PORT to use.");
 	Arguments::GetSingleton()->RequiredParameter("--user", "Specify which P4USER to use. Please ensure that the user is logged in.");
 	Arguments::GetSingleton()->RequiredParameter("--client", "Name/path of the client workspace specification.");
@@ -68,6 +68,11 @@ int Main(int argc, char** argv)
 	P4API::P4USER = Arguments::GetSingleton()->GetUsername();
 	P4API::P4CLIENT = Arguments::GetSingleton()->GetClient();
 	P4API::ClientSpec = P4API().Client().GetClientSpec();
+
+	if (P4API::ClientSpec.mapping.empty())
+	{
+		WARN("Received a client spec with no mappings. Did you use the correct corresponding P4PORT for the " + P4API::ClientSpec.client + " client spec?");
+	}
 
 	PRINT("Updated client workspace view " << P4API::ClientSpec.client << " with " << P4API::ClientSpec.mapping.size() << " mappings");
 
