@@ -6,7 +6,7 @@
  */
 #pragma once
 
-#include "tests.common.h"
+#include "test.common.h"
 #include "utils/std_helpers.h"
 #include "utils/time_helpers.h"
 
