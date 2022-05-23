@@ -24,6 +24,8 @@
 #include "p4/p4libs.h"
 #include "minitrace.h"
 
+#define P4_FUSION_VERSION "v1.9.0"
+
 int Main(int argc, char** argv)
 {
 	PRINT("Running p4-fusion from: " << argv[0]);
@@ -48,6 +50,7 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->Initialize(argc, argv);
 	if (!Arguments::GetSingleton()->IsValid())
 	{
+		PRINT("p4-fusion " P4_FUSION_VERSION);
 		PRINT("Usage:" + Arguments::GetSingleton()->Help());
 		return 1;
 	}
