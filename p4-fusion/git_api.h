@@ -34,7 +34,7 @@ public:
 	git_oid CreateBlob(const std::vector<char>& data);
 
 	void CreateIndex();
-	void AddFileToIndex(const std::string& depotFile, const std::vector<char>& contents);
+	void AddFileToIndex(const std::string& depotFile, const std::vector<char>& contents, const bool plusx);
 	void RemoveFileFromIndex(const std::string& depotFile);
 	std::string Commit(
 	    const std::string& depotPath,
