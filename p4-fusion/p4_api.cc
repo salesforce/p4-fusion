@@ -114,7 +114,7 @@ bool P4API::IsBinary(const std::string& fileType)
 
 bool P4API::IsExecutable(const std::string& fileType)
 {
-	return STDHelpers::Contains(fileType, "text+x");
+	return STDHelpers::Contains(fileType, "+x");
 }
 
 bool P4API::CheckErrors(Error& e, StrBuf& msg)
