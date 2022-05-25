@@ -142,9 +142,10 @@ void GitAPI::AddFileToIndex(const std::string& depotFile, const std::vector<char
 	git_index_entry entry;
 	memset(&entry, 0, sizeof(entry));
 	entry.mode = GIT_FILEMODE_BLOB;
-	if (plusx) {
+	if (plusx)
+	{
 		entry.mode = GIT_FILEMODE_BLOB_EXECUTABLE; //0100755;
-        }
+	}
 	entry.path = depotFile.c_str() + 2; // +2 to skip the "//" in depot path
 
 	GIT2(git_index_add_from_buffer(m_Index, &entry, contents.data(), contents.size()));
