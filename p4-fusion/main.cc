@@ -254,7 +254,7 @@ int Main(int argc, char** argv)
 				}
 				else
 				{
-					git.AddFileToIndex(file.depotFile, file.contents);
+					git.AddFileToIndex(file.depotFile, file.contents, p4.IsExecutable(file.type));
 				}
 
 				// No use for keeping the contents in memory once it has been added

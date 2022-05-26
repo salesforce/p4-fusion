@@ -58,6 +58,7 @@ public:
 	bool IsFileUnderClientSpec(const std::string& fileRevision);
 	bool IsDeleted(const std::string& action);
 	bool IsBinary(const std::string& fileType);
+	bool IsExecutable(const std::string& fileType);
 
 	void AddClientSpecView(const std::vector<std::string>& viewStrings);
 
