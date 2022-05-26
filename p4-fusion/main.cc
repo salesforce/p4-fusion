@@ -250,11 +250,11 @@ int Main(int argc, char** argv)
 			{
 				if (p4.IsDeleted(file.action))
 				{
-					git.RemoveFileFromIndex(file.depotFile);
+					git.RemoveFileFromIndex(depotPath, file.depotFile);
 				}
 				else
 				{
-					git.AddFileToIndex(file.depotFile, file.contents, p4.IsExecutable(file.type));
+					git.AddFileToIndex(depotPath, file.depotFile, file.contents, p4.IsExecutable(file.type));
 				}
 
 				// No use for keeping the contents in memory once it has been added

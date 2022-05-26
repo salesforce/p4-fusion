@@ -9,17 +9,21 @@
 #define TEST_START() \
 	static int32_t failedTestCaseCount = 0;
 
-#define TEST(value, expected)                       \
-	if (value == expected)                          \
-	{                                               \
-		PRINT(#value << " == " << #expected);       \
-	}                                               \
-	else                                            \
-	{                                               \
-		failedTestCaseCount++;                      \
-		ERR(#value << " == " << value << " but != " \
-		           << #expected << " (expected)");  \
-	}
+#define TEST(value, expected)                            \
+	do                                                   \
+	{                                                    \
+		bool result = (value == expected);               \
+		if (result)                                      \
+		{                                                \
+			PRINT(#value << " == " << #expected);        \
+		}                                                \
+		else                                             \
+		{                                                \
+			failedTestCaseCount++;                       \
+			ERR(#value << " == " << result << " but != " \
+			           << #expected << " (expected)");   \
+		}                                                \
+	} while (false)
 
 #define TEST_END()                                          \
 	if (failedTestCaseCount != 0)                           \
