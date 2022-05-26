@@ -30,3 +30,13 @@ bool STDHelpers::Contains(const std::string& str, const std::string& subStr)
 {
 	return str.find(subStr) != std::string::npos;
 }
+
+void STDHelpers::Erase(std::string& source, const std::string& subStr)
+{
+	if (!Contains(source, subStr))
+	{
+		return;
+	}
+
+	source.erase(source.find(subStr), subStr.size());
+}

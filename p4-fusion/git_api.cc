@@ -12,6 +12,7 @@
 #include "git2.h"
 #include "git2/sys/repository.h"
 #include "minitrace.h"
+#include "utils/std_helpers.h"
 
 #define GIT2(x)                                                                \
 	do                                                                         \
@@ -137,23 +138,32 @@ void GitAPI::CreateIndex()
 	}
 }
 
-void GitAPI::AddFileToIndex(const std::string& depotFile, const std::vector<char>& contents, const bool plusx)
+void GitAPI::AddFileToIndex(const std::string& depotPath, const std::string& depotFile, const std::vector<char>& contents, const bool plusx)
 {
 	git_index_entry entry;
 	memset(&entry, 0, sizeof(entry));
 	entry.mode = GIT_FILEMODE_BLOB;
 	if (plusx)
 	{
-		entry.mode = GIT_FILEMODE_BLOB_EXECUTABLE; //0100755;
+		entry.mode = GIT_FILEMODE_BLOB_EXECUTABLE; // 0100755
 	}
-	entry.path = depotFile.c_str() + 2; // +2 to skip the "//" in depot path
+
+	std::string depotPathTrunc = depotPath.substr(0, depotPath.size() - 3); // -3 to remove trailing ...
+	std::string gitFilePath = depotFile;
+	STDHelpers::Erase(gitFilePath, depotPathTrunc);
+
+	entry.path = gitFilePath.c_str();
 
 	GIT2(git_index_add_from_buffer(m_Index, &entry, contents.data(), contents.size()));
 }
 
-void GitAPI::RemoveFileFromIndex(const std::string& depotFile)
+void GitAPI::RemoveFileFromIndex(const std::string& depotPath, const std::string& depotFile)
 {
-	GIT2(git_index_remove_bypath(m_Index, depotFile.c_str() + 2)); // +2 to skip the "//" in depot path
+	std::string depotPathTrunc = depotPath.substr(0, depotPath.size() - 3); // -3 to remove trailing ...
+	std::string gitFilePath = depotFile;
+	STDHelpers::Erase(gitFilePath, depotPathTrunc);
+
+	GIT2(git_index_remove_bypath(m_Index, gitFilePath.c_str()));
 }
 
 std::string GitAPI::Commit(

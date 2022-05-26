@@ -55,6 +55,22 @@ int TestUtils()
 	TEST(STDHelpers::EndsWith("//depot/path/.git", "/.git/"), false);
 	TEST(STDHelpers::EndsWith("//depot/path/.git", ".git"), true);
 
+	{
+		std::string depotPath = "//depot/path/";
+		std::string filePath = "//depot/path/foo/bar/crash.txt";
+		STDHelpers::Erase(filePath, depotPath);
+
+		TEST(filePath == "foo/bar/crash.txt", true);
+	}
+	{
+		std::string depotPath = "//depot/path/...";
+		std::string filePath = "//depot/path/foo/bar/crash.txt";
+		STDHelpers::Erase(filePath, depotPath);
+
+		TEST(filePath == "//depot/path/foo/bar/crash.txt", true);
+		TEST(filePath == "foo/bar/crash.txt", false);
+	}
+
 	TEST(Time::GetTimezoneMinutes("2022/03/15 09:56:15 -0400 EDT"), -240);
 	TEST(Time::GetTimezoneMinutes("2022/03/09 22:59:04 -0800 PST"), -480);
 	TEST(Time::GetTimezoneMinutes("2022/03/09 22:59:04 +0800 PST"), +480);
