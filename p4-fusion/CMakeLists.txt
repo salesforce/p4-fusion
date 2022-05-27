@@ -24,14 +24,16 @@ target_link_directories(p4-fusion PUBLIC
 set(Frameworks "")
 
 if (APPLE)
-    find_library(corefoundation_lib CoreFoundation REQUIRED)
-    find_library(cfnetwork_lib CFNetwork REQUIRED)
-    find_library(COCOA_LIBRARY Cocoa REQUIRED)
+    find_library(COREFOUNDATION_LIB CoreFoundation REQUIRED)
+    find_library(CFNETWORK_LIB CFNetwork REQUIRED)
+    find_library(COCOA_LIB Cocoa REQUIRED)
+    find_library(SECURITY_LIB Security REQUIRED)
     set(Frameworks
         ${Frameworks}
-        ${cfnetwork_lib}
-        ${corefoundation_lib}
-        ${COCOA_LIBRARY}
+        ${CFNETWORK_LIB}
+        ${COREFOUNDATION_LIB}
+        ${COCOA_LIB}
+        ${SECURITY_LIB}
     )
 endif(APPLE)
 
