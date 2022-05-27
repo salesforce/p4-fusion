@@ -99,6 +99,8 @@ By default tracing is disabled in p4-fusion. It can be enabled by including `p` 
 
 Tests can be enabled by including `t` in the second command argument.
 
+E.g. You can build tests and at the same time enable profiling by running `./generate_cache.sh Debug pt`.
+
 2. Build
 
 ```shell
