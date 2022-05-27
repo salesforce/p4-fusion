@@ -75,6 +75,7 @@ void ThreadPool::ShutDown()
 	m_Threads.clear();
 	m_ThreadExceptions.clear();
 	m_ThreadNames.clear();
+	m_P4Contexts.clear();
 
 	SUCCESS("Thread pool shut down successfully");
 }
