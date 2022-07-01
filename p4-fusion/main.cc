@@ -26,6 +26,8 @@
 
 #define P4_FUSION_VERSION "v1.10.0"
 
+void SignalHandler(sig_atomic_t s);
+
 int Main(int argc, char** argv)
 {
 	PRINT("Running p4-fusion from: " << argv[0]);
@@ -66,6 +68,8 @@ int Main(int argc, char** argv)
 	{
 		return 1;
 	}
+	// Set the signal here because it gets reset after P4API library is initialized
+	signal(SIGINT, SignalHandler);
 
 	P4API::P4PORT = Arguments::GetSingleton()->GetPort();
 	P4API::P4USER = Arguments::GetSingleton()->GetUsername();
@@ -337,8 +341,6 @@ void SignalHandler(sig_atomic_t s)
 
 int main(int argc, char** argv)
 {
-	signal(SIGINT, SignalHandler);
-
 	try
 	{
 		Main(argc, argv);
