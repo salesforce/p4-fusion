@@ -6,9 +6,12 @@
  */
 #include "p4_api.h"
 
+#include <signal.h>
+
 #include "utils/std_helpers.h"
 
 #include "p4/p4libs.h"
+#include "p4/signaler.h"
 #include "minitrace.h"
 
 ClientResult::ClientSpecData P4API::ClientSpec;
@@ -140,6 +143,11 @@ bool P4API::InitializeLibraries()
 		ERR("Failed to initialize P4Libraries");
 		return false;
 	}
+
+	// We disable the default signaler to stop it from deleting memory from the wrong heap
+	// https://www.perforce.com/manuals/p4api/Content/P4API/chapter.clientprogramming.signaler.html
+	signal(SIGINT, SIG_DFL);
+	signaler.Disable();
 
 	SUCCESS("Initialized P4Libraries successfully");
 	return true;
