@@ -24,7 +24,7 @@
 #include "p4/p4libs.h"
 #include "minitrace.h"
 
-#define P4_FUSION_VERSION "v1.9.0"
+#define P4_FUSION_VERSION "v1.10.0"
 
 int Main(int argc, char** argv)
 {
