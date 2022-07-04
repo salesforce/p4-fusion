@@ -1,4 +1,4 @@
-# P4 Fusion
+# p4-fusion
 
 [![build-check](https://github.com/salesforce/p4-fusion/actions/workflows/build.yaml/badge.svg)](https://github.com/salesforce/p4-fusion/actions/workflows/build.yaml)
 [![format-check](https://github.com/salesforce/p4-fusion/actions/workflows/format.yaml/badge.svg)](https://github.com/salesforce/p4-fusion/actions/workflows/format.yaml)
@@ -81,7 +81,9 @@ These execution times are expected to scale as expected with larger depots (mill
   * Install CMake 3.16+.
   * Install g++ 11.2.0 (older versions compatible with C++11 are also supported).
   * Clone this repository or [get a release distribution](https://github.com/salesforce/p4-fusion/releases).
-  * Get Helix Core C++ API from the [official Perforce distribution](https://www.perforce.com/downloads/helix-core-c/c-api). Both the 2021.1 and 2021.2 versions of the Helix Core C++ API will work.
+  * Get the Helix Core C++ API binaries from the [official Perforce website](https://www.perforce.com/downloads/helix-core-c/c-api).
+    * Tested versions: 2021.1, 2021.2, 2022.1
+    * We recommend always picking the newest binaries that compiles with p4-fusion.
   * Extract the contents in `./vendor/helix-core-api/linux/` or `./vendor/helix-core-api/mac/` based on your OS.
 
 > For CentOS, you can try `yum install git make cmake gcc-c++ libarchive` to set up the compilation toolchain. Installing `libarchive` is only required to fix a bug that stops CMake from starting properly.
@@ -111,7 +113,17 @@ E.g. You can build tests and at the same time enable profiling by running `./gen
 3. Run!
 
 ```shell
-./build/p4-fusion/p4-fusion --path //depot/path/... --user $P4USER --port $P4PORT --client $P4CLIENT --src clones/.git --networkThreads 200 --printBatch 100 --lookAhead 2000 --retries 10 --refresh 100
+./build/p4-fusion/p4-fusion \
+        --path //depot/path/... \
+        --user $P4USER \
+        --port $P4PORT \
+        --client $P4CLIENT \
+        --src clones/.git \
+        --networkThreads 200 \
+        --printBatch 100 \
+        --lookAhead 2000 \
+        --retries 10 \
+        --refresh 100
 ```
 
 There should be a Git repo being created in the `clones/.git` directory with commits being created as the tool runs.
