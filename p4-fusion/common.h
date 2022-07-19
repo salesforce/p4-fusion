@@ -13,17 +13,4 @@
 
 #include "p4/clientapi.h"
 
-#define PRINT(x) std::cout << "[ PRINT @ " << __func__ << ":" << __LINE__ << " ] " << x << std::endl
-
-#define ERR(x)                                                        \
-	std::cerr << "\033[91m"                                           \
-	          << "[ ERROR @ " << __func__ << ":" << __LINE__ << " ] " \
-	          << x << "\033[0m" << std::endl
-
-#define WARN(x) std::cerr << "\033[93m"                                             \
-	                      << "[ WARNING @ " << __func__ << ":" << __LINE__ << " ] " \
-	                      << x << "\033[0m" << std::endl
-
-#define SUCCESS(x) std::cerr << "\033[32m"                                             \
-	                         << "[ SUCCESS @ " << __func__ << ":" << __LINE__ << " ] " \
-	                         << x << "\033[0m" << std::endl
+#include "log.h"

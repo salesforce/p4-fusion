@@ -51,4 +51,5 @@ public:
 	std::string GetIncludeBinaries() const { return GetParameter("--includeBinaries"); };
 	std::string GetMaxChanges() const { return GetParameter("--maxChanges"); };
 	std::string GetFlushRate() const { return GetParameter("--flushRate"); };
+	std::string GetNoColor() const { return GetParameter("--noColor"); };
 };
