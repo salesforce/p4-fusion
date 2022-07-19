@@ -6,7 +6,7 @@
  */
 #include "p4_api.h"
 
-#include <signal.h>
+#include <csignal>
 
 #include "utils/std_helpers.h"
 
@@ -146,7 +146,7 @@ bool P4API::InitializeLibraries()
 
 	// We disable the default signaler to stop it from deleting memory from the wrong heap
 	// https://www.perforce.com/manuals/p4api/Content/P4API/chapter.clientprogramming.signaler.html
-	signal(SIGINT, SIG_DFL);
+	std::signal(SIGINT, SIG_DFL);
 	signaler.Disable();
 
 	SUCCESS("Initialized P4Libraries successfully");
