@@ -10,7 +10,7 @@
 #include <mutex>
 #include <sstream>
 #include <typeinfo>
-#include <signal.h>
+#include <csignal>
 
 #include "common.h"
 
@@ -76,7 +76,8 @@ int Main(int argc, char** argv)
 		return 1;
 	}
 	// Set the signal here because it gets reset after P4API library is initialized
-	signal(SIGINT, SignalHandler);
+	std::signal(SIGINT, SignalHandler);
+	std::signal(SIGTERM, SignalHandler);
 
 	P4API::P4PORT = Arguments::GetSingleton()->GetPort();
 	P4API::P4USER = Arguments::GetSingleton()->GetUsername();
@@ -343,7 +344,7 @@ void SignalHandler(sig_atomic_t s)
 
 	ThreadPool::GetSingleton()->ShutDown();
 
-	std::exit(1);
+	std::exit(s);
 }
 
 int main(int argc, char** argv)
