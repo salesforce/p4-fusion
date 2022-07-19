@@ -30,8 +30,6 @@ void SignalHandler(sig_atomic_t s);
 
 int Main(int argc, char** argv)
 {
-	PRINT("Running p4-fusion from: " << argv[0]);
-
 	Timer programTimer;
 
 	Arguments::GetSingleton()->RequiredParameter("--path", "P4 depot path to convert to a Git repo");
@@ -48,13 +46,20 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameter("--fsyncEnable", "false", "Enable fsync() while writing objects to disk to ensure they get written to permanent storage immediately instead of being cached. This is to mitigate data loss in events of hardware failure.");
 	Arguments::GetSingleton()->OptionalParameter("--includeBinaries", "false", "Do not discard binary files while downloading changelists.");
 	Arguments::GetSingleton()->OptionalParameter("--flushRate", "1000", "Rate at which profiling data is flushed on the disk.");
+	Arguments::GetSingleton()->OptionalParameter("--noColor", "false", "Disable colored output.");
+
+	PRINT("p4-fusion " P4_FUSION_VERSION);
 
 	Arguments::GetSingleton()->Initialize(argc, argv);
 	if (!Arguments::GetSingleton()->IsValid())
 	{
-		PRINT("p4-fusion " P4_FUSION_VERSION);
 		PRINT("Usage:" + Arguments::GetSingleton()->Help());
-		return 1;
+		return 0;
+	}
+
+	if (Arguments::GetSingleton()->GetNoColor() != "false")
+	{
+		Log::DisableColoredOutput();
 	}
 
 	const std::string depotPath = Arguments::GetSingleton()->GetDepotPath();
@@ -63,6 +68,8 @@ int Main(int argc, char** argv)
 	const bool includeBinaries = Arguments::GetSingleton()->GetIncludeBinaries() != "false";
 	const int maxChanges = std::atoi(Arguments::GetSingleton()->GetMaxChanges().c_str());
 	const int flushRate = std::atoi(Arguments::GetSingleton()->GetFlushRate().c_str());
+
+	PRINT("Running p4-fusion from: " << argv[0]);
 
 	if (!P4API::InitializeLibraries())
 	{

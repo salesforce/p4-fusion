@@ -83,7 +83,7 @@ These execution times are expected to scale as expected with larger depots (mill
   * Clone this repository or [get a release distribution](https://github.com/salesforce/p4-fusion/releases).
   * Get the Helix Core C++ API binaries from the [official Perforce website](https://www.perforce.com/downloads/helix-core-c/c-api).
     * Tested versions: 2021.1, 2021.2, 2022.1
-    * We recommend always picking the newest binaries that compiles with p4-fusion.
+    * We recommend always picking the newest API versions that compile with p4-fusion.
   * Extract the contents in `./vendor/helix-core-api/linux/` or `./vendor/helix-core-api/mac/` based on your OS.
 
 > For CentOS, you can try `yum install git make cmake gcc-c++ libarchive` to set up the compilation toolchain. Installing `libarchive` is only required to fix a bug that stops CMake from starting properly.
