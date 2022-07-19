@@ -28,50 +28,51 @@ These execution times are expected to scale as expected with larger depots (mill
 ## Usage
 
 ```shell
-❯ ./build/p4-fusion/p4-fusion
-[ PRINT @ Main:24 ] Running p4-fusion from: ./build/p4-fusion/p4-fusion
-[ PRINT @ Main:43 ] Usage:
-[Required] --port
-        Specify which P4PORT to use.
-
-[Required] --path
-        P4 depot path to convert to a Git repo
-
-[Required] --lookAhead
-        How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?
-
-[Required] --src
-        Local relative source path with P4 code. Git repo will be created at this path. This path should be empty before running p4-fusion.
-
-[Required] --client
+[ PRINT @ Main:56 ] Usage:
+--client [Required]
         Name/path of the client workspace specification.
 
-[Required] --user
-        Specify which P4USER to use. Please ensure that the user is logged in.
+--flushRate [Optional, Default is 1000]
+        Rate at which profiling data is flushed on the disk.
 
-[Optional, Default is false] --includeBinaries
-        Do not discard binary files while downloading changelists.
-
-[Optional, Default is false] --fsyncEnable
+--fsyncEnable [Optional, Default is false]
         Enable fsync() while writing objects to disk to ensure they get written to permanent storage immediately instead of being cached. This is to mitigate data loss in events of hardware failure.
 
-[Optional, Default is 10] --retries
-        Specify how many times a command should be retried before the process exits in a failure.
+--includeBinaries [Optional, Default is false]
+        Do not discard binary files while downloading changelists.
 
-[Optional, Default is 16] --networkThreads
-        Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.
+--lookAhead [Required]
+        How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?
 
-[Optional, Default is -1] --maxChanges
+--maxChanges [Optional, Default is -1]
         Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.
 
-[Optional, Default is 1] --printBatch
+--networkThreads [Optional, Default is 16]
+        Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.
+
+--noColor [Optional, Default is false]
+        Disable colored output.
+
+--path [Required]
+        P4 depot path to convert to a Git repo
+
+--port [Required]
+        Specify which P4PORT to use.
+
+--printBatch [Optional, Default is 1]
         Specify the p4 print batch size.
 
-[Optional, Default is 100] --refresh
+--refresh [Optional, Default is 100]
         Specify how many times a connection should be reused before it is refreshed.
 
-[Optional, Default is 1000] --flushRate
-        Rate at which profiling data is flushed on the disk.
+--retries [Optional, Default is 10]
+        Specify how many times a command should be retried before the process exits in a failure.
+
+--src [Required]
+        Relative path where the git repository should be created. This path should be empty before running p4-fusion for the first time in a directory.
+
+--user [Required]
+        Specify which P4USER to use. Please ensure that the user is logged in.
 ```
 
 ## Build
