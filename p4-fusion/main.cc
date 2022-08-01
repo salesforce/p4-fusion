@@ -99,7 +99,7 @@ int Main(int argc, char** argv)
 		return 1;
 	}
 
-	if (!p4.IsFileUnderClientSpec(depotPath))
+	if (!p4.IsDepotPathUnderClientSpec(depotPath))
 	{
 		ERR("The depot path specified is not under the " << P4API::ClientSpec.client << " client spec. Consider changing the client spec so that it does. Exiting.");
 		return 1;
