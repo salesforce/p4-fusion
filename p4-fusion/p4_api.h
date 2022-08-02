@@ -55,6 +55,7 @@ public:
 
 	bool IsDepotPathValid(const std::string& depotPath);
 	bool IsFileUnderDepotPath(const std::string& fileRevision, const std::string& depotPath);
+	bool IsDepotPathUnderClientSpec(const std::string& depotPath);
 	bool IsFileUnderClientSpec(const std::string& fileRevision);
 	bool IsDeleted(const std::string& action);
 	bool IsBinary(const std::string& fileType);

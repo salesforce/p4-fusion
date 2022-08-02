@@ -98,6 +98,14 @@ bool P4API::IsFileUnderDepotPath(const std::string& fileRevision, const std::str
 	return STDHelpers::Contains(fileRevision, depotPath.substr(0, depotPath.size() - 3)); // -3 to remove the trailing "..."
 }
 
+bool P4API::IsDepotPathUnderClientSpec(const std::string& depotPath)
+{
+	MapApi depotMap;
+	depotMap.Insert(StrBuf(depotPath.c_str()), MapType::MapInclude);
+
+	return MapApi::Join(&m_ClientMapping, &depotMap) != nullptr;
+}
+
 bool P4API::IsFileUnderClientSpec(const std::string& fileRevision)
 {
 	StrBuf to;
