@@ -7,6 +7,7 @@
 #pragma once
 
 #include "common.h"
+#include "git2/object.h"
 
 struct FileData
 {
@@ -15,6 +16,7 @@ struct FileData
 	std::string action;
 	std::string type;
 	std::vector<char> contents;
+	git_oid blob = {};
 	bool shouldCommit = false;
 
 	void Clear()

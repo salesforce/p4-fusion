@@ -158,9 +158,9 @@ int Main(int argc, char** argv)
 	PRINT("Profiling: " << profiling);
 	PRINT("Profiling Flush Rate: " << flushRate);
 
-	GitAPI git(fsyncEnable);
+	GitAPI::MakeSingleton(fsyncEnable);
 
-	if (!git.InitializeRepository(srcPath))
+	if (!GitAPI::GetSingleton()->InitializeRepository(srcPath))
 	{
 		ERR("Could not initialize Git repository. Exiting.");
 		return 1;
@@ -173,15 +173,15 @@ int Main(int argc, char** argv)
 	MTR_META_THREAD_SORT_INDEX(0);
 
 	std::string resumeFromCL;
-	if (git.IsHEADExists())
+	if (GitAPI::GetSingleton()->IsHEADExists())
 	{
-		if (!git.IsRepositoryClonedFrom(depotPath))
+		if (!GitAPI::GetSingleton()->IsRepositoryClonedFrom(depotPath))
 		{
 			ERR("Git repository at " << srcPath << " was not initially cloned with depotPath = " << depotPath << ". Exiting.");
 			return 1;
 		}
 
-		resumeFromCL = git.DetectLatestCL();
+		resumeFromCL = GitAPI::GetSingleton()->DetectLatestCL();
 		WARN("Detected last CL committed as CL " << resumeFromCL);
 	}
 
@@ -235,7 +235,7 @@ int Main(int argc, char** argv)
 
 	PRINT("Last CL to start downloading is CL " << changes.at(lastDownloadedCL).number);
 
-	git.CreateIndex();
+	GitAPI::GetSingleton()->CreateIndex();
 	for (size_t i = 0; i < changes.size(); i++)
 	{
 		// See if the threadpool encountered any exceptions
@@ -262,11 +262,11 @@ int Main(int argc, char** argv)
 			{
 				if (p4.IsDeleted(file.action))
 				{
-					git.RemoveFileFromIndex(depotPath, file.depotFile);
+					GitAPI::GetSingleton()->RemoveFileFromIndex(depotPath, file.depotFile);
 				}
 				else
 				{
-					git.AddFileToIndex(depotPath, file.depotFile, file.contents, p4.IsExecutable(file.type));
+					GitAPI::GetSingleton()->AddFileToIndex(depotPath, file.depotFile, file.blob, p4.IsExecutable(file.type));
 				}
 
 				// No use for keeping the contents in memory once it has been added
@@ -281,7 +281,7 @@ int Main(int argc, char** argv)
 			fullName = users.at(cl.user).fullName;
 			email = users.at(cl.user).email;
 		}
-		std::string commitSHA = git.Commit(depotPath,
+		std::string commitSHA = GitAPI::GetSingleton()->Commit(depotPath,
 		    cl.number,
 		    fullName,
 		    email,
@@ -313,7 +313,7 @@ int Main(int argc, char** argv)
 		// Deallocate this CL's metadata from memory
 		cl.Clear();
 	}
-	git.CloseIndex();
+	GitAPI::GetSingleton()->CloseIndex();
 
 	SUCCESS("Completed conversion of " << changes.size() << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes, taking " << commitTimer.GetTimeS() / 60.0f << " to commit CLs");
 

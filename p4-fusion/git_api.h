@@ -17,10 +17,15 @@ struct git_repository;
 
 class GitAPI
 {
+	static GitAPI* singleton;
+
 	git_repository* m_Repo = nullptr;
 	git_index* m_Index = nullptr;
 
 public:
+	static void MakeSingleton(bool fsyncEnable);
+	static GitAPI* GetSingleton();
+
 	GitAPI(bool fsyncEnable);
 	~GitAPI();
 
@@ -34,7 +39,7 @@ public:
 	git_oid CreateBlob(const std::vector<char>& data);
 
 	void CreateIndex();
-	void AddFileToIndex(const std::string& depotPath, const std::string& depotFile, const std::vector<char>& contents, const bool plusx);
+	void AddFileToIndex(const std::string& depotPath, const std::string& depotFile, const git_oid& oid, const bool plusx);
 	void RemoveFileFromIndex(const std::string& depotPath, const std::string& depotFile);
 	std::string Commit(
 	    const std::string& depotPath,

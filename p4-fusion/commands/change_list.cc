@@ -10,7 +10,7 @@
 #include "describe_result.h"
 #include "print_result.h"
 #include "utils/std_helpers.h"
-
+#include "git_api.h"
 #include "thread_pool.h"
 
 ChangeList::ChangeList(const std::string& clNumber, const std::string& clDescription, const std::string& userID, const int64_t& clTimestamp)
@@ -108,7 +108,7 @@ void ChangeList::Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles
 
 		    for (int i = 0; i < printBatchFiles->size(); i++)
 		    {
-			    printBatchFileData->at(i)->contents = std::move(printData.GetPrintData().at(i).contents);
+			    printBatchFileData->at(i)->blob = GitAPI::GetSingleton()->CreateBlob(printData.GetPrintData().at(i).contents);
 		    }
 
 		    (*filesDownloaded) += printBatchFiles->size();

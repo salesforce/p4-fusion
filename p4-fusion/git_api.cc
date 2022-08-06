@@ -26,6 +26,19 @@
 		}                                                                      \
 	} while (false)
 
+GitAPI* GitAPI::singleton = nullptr;
+
+void GitAPI::MakeSingleton(bool fsyncEnable)
+{
+	static GitAPI object(fsyncEnable);
+	singleton = &object;
+}
+
+GitAPI* GitAPI::GetSingleton()
+{
+	return singleton;
+}
+
 GitAPI::GitAPI(bool fsyncEnable)
 {
 	git_libgit2_init();
@@ -138,11 +151,13 @@ void GitAPI::CreateIndex()
 	}
 }
 
-void GitAPI::AddFileToIndex(const std::string& depotPath, const std::string& depotFile, const std::vector<char>& contents, const bool plusx)
+void GitAPI::AddFileToIndex(const std::string& depotPath, const std::string& depotFile, const git_oid& oid, const bool plusx)
 {
-	git_index_entry entry;
-	memset(&entry, 0, sizeof(entry));
+	MTR_SCOPE("Git", __func__);
+
+	git_index_entry entry = {};
 	entry.mode = GIT_FILEMODE_BLOB;
+	entry.id = oid;
 	if (plusx)
 	{
 		entry.mode = GIT_FILEMODE_BLOB_EXECUTABLE; // 0100755
@@ -153,12 +168,13 @@ void GitAPI::AddFileToIndex(const std::string& depotPath, const std::string& dep
 	STDHelpers::Erase(gitFilePath, depotPathTrunc);
 
 	entry.path = gitFilePath.c_str();
-
-	GIT2(git_index_add_from_buffer(m_Index, &entry, contents.data(), contents.size()));
+	GIT2(git_index_add(m_Index, &entry));
 }
 
 void GitAPI::RemoveFileFromIndex(const std::string& depotPath, const std::string& depotFile)
 {
+	MTR_SCOPE("Git", __func__);
+
 	std::string depotPathTrunc = depotPath.substr(0, depotPath.size() - 3); // -3 to remove trailing ...
 	std::string gitFilePath = depotFile;
 	STDHelpers::Erase(gitFilePath, depotPathTrunc);
