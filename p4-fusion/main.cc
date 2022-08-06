@@ -214,11 +214,18 @@ int Main(int argc, char** argv)
 		// Start gathering changed files with `p4 describe`
 		cl.PrepareDownload();
 
+		lastDownloadedCL = currentCL;
+	}
+
+	// This is intentionally put in a separate loop.
+	// We want to submit `p4 describe` commands before sending any of the `p4 print` commands.
+	// Gives ~15% perf boost.
+	for (size_t currentCL = 0; currentCL <= lastDownloadedCL; currentCL++)
+	{
+		ChangeList& cl = changes.at(currentCL);
+
 		// Start running `p4 print` on changed files when the describe is finished
 		cl.StartDownload(depotPath, printBatch, includeBinaries);
-		startupDownloadsCount++;
-
-		lastDownloadedCL = currentCL;
 	}
 
 	SUCCESS("Queued first " << startupDownloadsCount << " CLs up until CL " << changes.at(lastDownloadedCL).number << " for downloading");
@@ -245,7 +252,7 @@ int Main(int argc, char** argv)
 		}
 		catch (const std::exception& e)
 		{
-			// Threadpool encountered an exception, this is unrecoverable
+			// This is unrecoverable
 			ERR("Threadpool encountered an exception: " << e.what());
 			ThreadPool::GetSingleton()->ShutDown();
 			std::exit(1);
