@@ -140,8 +140,9 @@ void GitAPI::CreateIndex()
 
 void GitAPI::AddFileToIndex(const std::string& depotPath, const std::string& depotFile, const std::vector<char>& contents, const bool plusx)
 {
-	git_index_entry entry;
-	memset(&entry, 0, sizeof(entry));
+	MTR_SCOPE("Git", __func__);
+
+	git_index_entry entry = {};
 	entry.mode = GIT_FILEMODE_BLOB;
 	if (plusx)
 	{
@@ -159,6 +160,8 @@ void GitAPI::AddFileToIndex(const std::string& depotPath, const std::string& dep
 
 void GitAPI::RemoveFileFromIndex(const std::string& depotPath, const std::string& depotFile)
 {
+	MTR_SCOPE("Git", __func__);
+
 	std::string depotPathTrunc = depotPath.substr(0, depotPath.size() - 3); // -3 to remove trailing ...
 	std::string gitFilePath = depotFile;
 	STDHelpers::Erase(gitFilePath, depotPathTrunc);
