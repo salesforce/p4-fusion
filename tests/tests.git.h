@@ -17,7 +17,7 @@ int TestGitAPI()
 
 	TEST(git.InitializeRepository("/tmp/test-repo"), true);
 	git.CreateIndex();
-	git.AddFileToIndex("//a/b/c/...", "//a/b/c/foo.txt", { 'x', 'y', 'z' }, false);
+	git.AddFileToIndex("//a/b/c/...", "//a/b/c/foo.txt", git.CreateBlob({ 'x', 'y', 'z' }), false);
 	git.Commit(
 	    "//a/b/c/...",
 	    "12345678",
