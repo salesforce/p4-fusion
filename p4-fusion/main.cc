@@ -24,7 +24,7 @@
 #include "p4/p4libs.h"
 #include "minitrace.h"
 
-#define P4_FUSION_VERSION "v1.10.0"
+#define P4_FUSION_VERSION "v1.11.0"
 
 void SignalHandler(sig_atomic_t s);
 
@@ -57,7 +57,8 @@ int Main(int argc, char** argv)
 		return 0;
 	}
 
-	if (Arguments::GetSingleton()->GetNoColor() != "false")
+	bool noColor = Arguments::GetSingleton()->GetNoColor() != "false";
+	if (noColor)
 	{
 		Log::DisableColoredOutput();
 	}
@@ -157,6 +158,7 @@ int Main(int argc, char** argv)
 	PRINT("Include Binaries: " << includeBinaries);
 	PRINT("Profiling: " << profiling);
 	PRINT("Profiling Flush Rate: " << flushRate);
+	PRINT("No Colored Output: " << noColor);
 
 	GitAPI git(fsyncEnable);
 
