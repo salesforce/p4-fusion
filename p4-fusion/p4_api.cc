@@ -227,6 +227,11 @@ ClientResult P4API::Client()
 	return Run<ClientResult>("client", { "-o" });
 }
 
+TestResult P4API::TestConnection(const int retries)
+{
+	return RunEx<TestResult>("changes", { "-m", "1", "//..." }, retries);
+}
+
 ChangesResult P4API::ShortChanges(const std::string& path)
 {
 	return Run<ChangesResult>("changes", {

@@ -82,6 +82,18 @@ int Main(int argc, char** argv)
 
 	P4API::P4PORT = Arguments::GetSingleton()->GetPort();
 	P4API::P4USER = Arguments::GetSingleton()->GetUsername();
+
+	const Error& serviceConnectionResult = P4API().TestConnection(5).GetError();
+	bool serverAvailable = serviceConnectionResult.IsError() == 0;
+	if (serverAvailable)
+	{
+		SUCCESS("Perforce server is available");
+	}
+	else
+	{
+		ERR("Error occurred while connecting to " << P4API::P4PORT);
+		return 1;
+	}
 	P4API::P4CLIENT = Arguments::GetSingleton()->GetClient();
 	P4API::ClientSpec = P4API().Client().GetClientSpec();
 
@@ -358,9 +370,11 @@ void SignalHandler(sig_atomic_t s)
 
 int main(int argc, char** argv)
 {
+	int exitCode = 0;
+
 	try
 	{
-		Main(argc, argv);
+		exitCode = Main(argc, argv);
 	}
 	catch (const std::exception& e)
 	{
@@ -368,5 +382,5 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	return 0;
+	return exitCode;
 }

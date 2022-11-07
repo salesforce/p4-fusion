@@ -21,6 +21,7 @@
 #include "commands/users_result.h"
 #include "commands/info_result.h"
 #include "commands/client_result.h"
+#include "commands/test_result.h"
 
 class P4API
 {
@@ -35,6 +36,8 @@ class P4API
 
 	template <class T>
 	T Run(const char* command, const std::vector<std::string>& stringArguments);
+	template <class T>
+	T RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries);
 
 public:
 	static std::string P4PORT;
@@ -63,6 +66,7 @@ public:
 
 	void AddClientSpecView(const std::vector<std::string>& viewStrings);
 
+	TestResult TestConnection(const int retries);
 	ChangesResult ShortChanges(const std::string& path);
 	ChangesResult Changes(const std::string& path);
 	ChangesResult Changes(const std::string& path, const std::string& from, int32_t maxCount);
@@ -84,7 +88,7 @@ public:
 };
 
 template <class T>
-inline T P4API::Run(const char* command, const std::vector<std::string>& stringArguments)
+inline T P4API::RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries)
 {
 	std::string argsString;
 	for (const std::string& stringArg : stringArguments)
@@ -103,7 +107,7 @@ inline T P4API::Run(const char* command, const std::vector<std::string>& stringA
 	m_ClientAPI.SetArgv(argsCharArray.size(), argsCharArray.data());
 	m_ClientAPI.Run(command, &clientUser);
 
-	int retries = CommandRetries;
+	int retries = commandRetries;
 	while (m_ClientAPI.Dropped() || clientUser.GetError().IsError())
 	{
 		if (retries == 0)
@@ -166,4 +170,10 @@ inline T P4API::Run(const char* command, const std::vector<std::string>& stringA
 	}
 
 	return clientUser;
+}
+
+template <class T>
+inline T P4API::Run(const char* command, const std::vector<std::string>& stringArguments)
+{
+	return RunEx<T>(command, stringArguments, CommandRetries);
 }
