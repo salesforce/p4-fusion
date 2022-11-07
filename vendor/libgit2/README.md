@@ -3,9 +3,10 @@ libgit2 - the Git linkable library
 
 | Build Status | |
 | ------------ | - |
-| Build Status | |
-| ------------ | - |
-| **v1.1 branch** CI builds | [![CI Build](https://github.com/libgit2/libgit2/workflows/CI%20Build/badge.svg?branch=maint%2Fv1.1&event=push)](https://github.com/libgit2/libgit2/actions?query=workflow%3A%22CI+Build%22+event%3Apush+branch%3Amaint%2Fv1.1) |
+| **main** branch CI builds | [![CI Build](https://github.com/libgit2/libgit2/workflows/CI%20Build/badge.svg?event=push)](https://github.com/libgit2/libgit2/actions?query=workflow%3A%22CI+Build%22+event%3Apush) |
+| **v1.4 branch** CI builds | [![CI Build](https://github.com/libgit2/libgit2/workflows/CI%20Build/badge.svg?branch=maint%2Fv1.4&event=push)](https://github.com/libgit2/libgit2/actions?query=workflow%3A%22CI+Build%22+event%3Apush+branch%3Amaint%2Fv1.4) |
+| **v1.3 branch** CI builds | [![CI Build](https://github.com/libgit2/libgit2/workflows/CI%20Build/badge.svg?branch=maint%2Fv1.3&event=push)](https://github.com/libgit2/libgit2/actions?query=workflow%3A%22CI+Build%22+event%3Apush+branch%3Amaint%2Fv1.3) |
+| **Nightly** builds | [![Nightly Build](https://github.com/libgit2/libgit2/workflows/Nightly%20Build/badge.svg)](https://github.com/libgit2/libgit2/actions?query=workflow%3A%22Nightly+Build%22) [![Coverity Scan Status](https://scan.coverity.com/projects/639/badge.svg)](https://scan.coverity.com/projects/639) |
 
 `libgit2` is a portable, pure C implementation of the Git core methods
 provided as a linkable library with a solid API, allowing to build Git
@@ -32,6 +33,7 @@ Additionally, the example code has been released to the public domain (see the
 Table of Contents
 =================
 
+* [Using libgit2](#using-libgit2)
 * [Quick Start](#quick-start)
 * [Getting Help](#getting-help)
 * [What It Can Do](#what-it-can-do)
@@ -50,6 +52,28 @@ Table of Contents
 * [Language Bindings](#language-bindings)
 * [How Can I Contribute?](#how-can-i-contribute)
 * [License](#license)
+
+Using libgit2
+=============
+
+Most of these instructions assume that you're writing an application
+in C and want to use libgit2 directly.  If you're _not_ using C,
+and you're writing in a different language or platform like .NET,
+Node.js, or Ruby, then there is probably a
+"[language binding](#language-bindings)" that you can use to take care
+of the messy tasks of calling into native code.
+
+But if you _do_ want to use libgit2 directly - because you're building
+an application in C - then you may be able use an existing binary.
+There are packages for the
+[vcpkg](https://github.com/Microsoft/vcpkg) and
+[conan](https://conan.io/center/libgit2)
+package managers.  And libgit2 is available in 
+[Homebrew](https://formulae.brew.sh/formula/libgit2) and most Linux
+distributions.
+
+However, these versions _may_ be outdated and we recommend using the
+latest version if possible.  Thankfully libgit2 is not hard to compile.
 
 Quick Start
 ===========
@@ -80,7 +104,8 @@ Getting Help
 
 **Chat with us**
 
-- via IRC: join [#libgit2](https://webchat.freenode.net/#libgit2) on Freenode
+- via IRC: join [#libgit2](https://web.libera.chat/#libgit2) on
+  [libera](https://libera.chat).
 - via Slack: visit [slack.libgit2.org](http://slack.libgit2.org/) to sign up,
   then join us in `#libgit2`
 
@@ -200,6 +225,8 @@ On most systems you can build the library using the following commands
 
 Alternatively you can point the CMake GUI tool to the CMakeLists.txt file and generate platform specific build project or IDE workspace.
 
+If you're not familiar with CMake, [a more detailed explanation](https://preshing.com/20170511/how-to-build-a-cmake-based-project/) may be helpful.
+
 Running Tests
 -------------
 
@@ -209,18 +236,18 @@ Once built, you can run the tests from the `build` directory with the command
 
 Alternatively you can run the test suite directly using,
 
-	$ ./libgit2_clar
+	$ ./libgit2_tests
 
 Invoking the test suite directly is useful because it allows you to execute
 individual tests, or groups of tests using the `-s` flag.  For example, to
 run the index tests:
 
-    $ ./libgit2_clar -sindex
+    $ ./libgit2_tests -sindex
 
 To run a single test named `index::racy::diff`, which corresponds to the test
-function [`test_index_racy__diff`](https://github.com/libgit2/libgit2/blob/master/tests/index/racy.c#L23):
+function [`test_index_racy__diff`](https://github.com/libgit2/libgit2/blob/main/tests/index/racy.c#L23):
 
-    $ ./libgit2_clar -sindex::racy::diff
+    $ ./libgit2_tests -sindex::racy::diff
 
 The test suite will print a `.` for every passing test, and an `F` for any
 failing test.  An `S` indicates that a test was skipped because it is not
@@ -228,7 +255,7 @@ applicable to your platform or is particularly expensive.
 
 **Note:** There should be _no_ failing tests when you build an unmodified
 source tree from a [release](https://github.com/libgit2/libgit2/releases),
-or from the [master branch](https://github.com/libgit2/libgit2/tree/master).
+or from the [main branch](https://github.com/libgit2/libgit2/tree/main).
 Please contact us or [open an issue](https://github.com/libgit2/libgit2/issues)
 if you see test failures.
 
@@ -251,8 +278,8 @@ The following CMake variables are declared:
 - `CMAKE_INSTALL_LIBDIR`: Where to install libraries to.
 - `CMAKE_INSTALL_INCLUDEDIR`: Where to install headers to.
 - `BUILD_SHARED_LIBS`: Build libgit2 as a Shared Library (defaults to ON)
-- `BUILD_CLAR`: Build [Clar](https://github.com/vmg/clar)-based test suite (defaults to ON)
-- `THREADSAFE`: Build libgit2 with threading support (defaults to ON)
+- `BUILD_TESTS`: Build the unit and integration test suites (defaults to ON)
+- `USE_THREADS`: Build libgit2 with threading support (defaults to ON)
 
 To list all build options and their current value, you can do the
 following:
@@ -274,6 +301,8 @@ compiler and linker. These flags are rarely used but can be useful for
 - `CMAKE_FIND_ROOT_PATH`: Override the search path for libraries
 - `ZLIB_LIBRARY`, `OPENSSL_SSL_LIBRARY` AND `OPENSSL_CRYPTO_LIBRARY`:
 Tell CMake where to find those specific libraries
+- `LINK_WITH_STATIC_LIBRARIES`: Link only with static versions of
+system libraries
 
 MacOS X
 -------
@@ -331,6 +360,7 @@ Here are the bindings to libgit2 that are currently available:
     * dlibgit <https://github.com/s-ludwig/dlibgit>
 * Delphi
     * GitForDelphi <https://github.com/libgit2/GitForDelphi>
+    * libgit2-delphi <https://github.com/todaysoftware/libgit2-delphi>
 * Erlang
     * Geef <https://github.com/carlosmn/geef>
 * Go
@@ -343,6 +373,7 @@ Here are the bindings to libgit2 that are currently available:
     * hgit2 <https://github.com/jwiegley/gitlib>
 * Java
     * Jagged <https://github.com/ethomson/jagged>
+    * Git24j <https://github.com/git24j/git24j>
 * Javascript / WebAssembly ( browser and nodejs )
     * WASM-git <https://github.com/petersalomonsen/wasm-git>
 * Julia
@@ -363,11 +394,10 @@ Here are the bindings to libgit2 that are currently available:
     * Git-Raw <https://github.com/jacquesg/p5-Git-Raw>
 * PHP
     * php-git <https://github.com/libgit2/php-git>
-* PowerShell
-    * PSGit <https://github.com/PoshCode/PSGit>
 * Python
     * pygit2 <https://github.com/libgit2/pygit2>
 * R
+    * gert <https://docs.ropensci.org/gert>
     * git2r <https://github.com/ropensci/git2r>
 * Ruby
     * Rugged <https://github.com/libgit2/rugged>

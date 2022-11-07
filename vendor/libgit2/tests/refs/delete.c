@@ -29,11 +29,11 @@ void test_refs_delete__packed_loose(void)
 {
 	/* deleting a ref which is both packed and loose should remove both tracks in the filesystem */
 	git_reference *looked_up_ref, *another_looked_up_ref;
-	git_buf temp_path = GIT_BUF_INIT;
+	git_str temp_path = GIT_STR_INIT;
 
 	/* Ensure the loose reference exists on the file system */
-	cl_git_pass(git_buf_joinpath(&temp_path, git_repository_path(g_repo), packed_test_head_name));
-	cl_assert(git_path_exists(temp_path.ptr));
+	cl_git_pass(git_str_joinpath(&temp_path, git_repository_path(g_repo), packed_test_head_name));
+	cl_assert(git_fs_path_exists(temp_path.ptr));
 
 	/* Lookup the reference */
 	cl_git_pass(git_reference_lookup(&looked_up_ref, g_repo, packed_test_head_name));
@@ -49,10 +49,10 @@ void test_refs_delete__packed_loose(void)
 	cl_git_fail(git_reference_lookup(&another_looked_up_ref, g_repo, packed_test_head_name));
 
 	/* Ensure the loose reference doesn't exist any longer on the file system */
-	cl_assert(!git_path_exists(temp_path.ptr));
+	cl_assert(!git_fs_path_exists(temp_path.ptr));
 
 	git_reference_free(another_looked_up_ref);
-	git_buf_dispose(&temp_path);
+	git_str_dispose(&temp_path);
 }
 
 void test_refs_delete__packed_only(void)

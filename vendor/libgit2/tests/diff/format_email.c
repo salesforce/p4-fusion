@@ -1,7 +1,6 @@
 #include "clar.h"
 #include "clar_libgit2.h"
 
-#include "buffer.h"
 #include "commit.h"
 #include "diff.h"
 #include "diff_generate.h"
@@ -18,6 +17,7 @@ void test_diff_format_email__cleanup(void)
 	cl_git_sandbox_cleanup();
 }
 
+#ifndef GIT_DEPRECATE_HARD
 static void assert_email_match(
 	const char *expected,
 	const char *oidstr,
@@ -40,20 +40,22 @@ static void assert_email_match(
 	cl_git_pass(git_diff__commit(&diff, repo, commit, NULL));
 	cl_git_pass(git_diff_format_email(&buf, diff, opts));
 
-	cl_assert_equal_s(expected, git_buf_cstr(&buf));
-	git_buf_clear(&buf);
+	cl_assert_equal_s(expected, buf.ptr);
+	git_buf_dispose(&buf);
 
 	cl_git_pass(git_diff_commit_as_email(
 		&buf, repo, commit, 1, 1, opts->flags, NULL));
-	cl_assert_equal_s(expected, git_buf_cstr(&buf));
+	cl_assert_equal_s(expected, buf.ptr);
 
 	git_diff_free(diff);
 	git_commit_free(commit);
 	git_buf_dispose(&buf);
 }
+#endif
 
 void test_diff_format_email__simple(void)
 {
+#ifndef GIT_DEPRECATE_HARD
 	git_diff_format_email_options opts = GIT_DIFF_FORMAT_EMAIL_OPTIONS_INIT;
 	const char *email =
 	"From 9264b96c6d104d0e07ae33d3007b6a48246c6f92 Mon Sep 17 00:00:00 2001\n" \
@@ -96,10 +98,12 @@ void test_diff_format_email__simple(void)
 
 	assert_email_match(
 		email, "9264b96c6d104d0e07ae33d3007b6a48246c6f92", &opts);
+#endif
 }
 
 void test_diff_format_email__with_message(void)
 {
+#ifndef GIT_DEPRECATE_HARD
 	git_diff_format_email_options opts = GIT_DIFF_FORMAT_EMAIL_OPTIONS_INIT;
 	const char *email = "From 627e7e12d87e07a83fad5b6bfa25e86ead4a5270 Mon Sep 17 00:00:00 2001\n" \
 	"From: Patrick Steinhardt <ps@pks.im>\n" \
@@ -136,11 +140,13 @@ void test_diff_format_email__with_message(void)
 
 	assert_email_match(
 		email, "627e7e12d87e07a83fad5b6bfa25e86ead4a5270", &opts);
+#endif
 }
 
 
 void test_diff_format_email__multiple(void)
 {
+#ifndef GIT_DEPRECATE_HARD
 	git_oid oid;
 	git_commit *commit = NULL;
 	git_diff *diff = NULL;
@@ -251,15 +257,17 @@ void test_diff_format_email__multiple(void)
 	cl_git_pass(git_diff__commit(&diff, repo, commit, NULL));
 	cl_git_pass(git_diff_format_email(&buf, diff, &opts));
 
-	cl_assert_equal_s(email, git_buf_cstr(&buf));
+	cl_assert_equal_s(email, buf.ptr);
 
 	git_diff_free(diff);
 	git_commit_free(commit);
 	git_buf_dispose(&buf);
+#endif
 }
 
 void test_diff_format_email__exclude_marker(void)
 {
+#ifndef GIT_DEPRECATE_HARD
 	git_diff_format_email_options opts = GIT_DIFF_FORMAT_EMAIL_OPTIONS_INIT;
 	const char *email =
 	"From 9264b96c6d104d0e07ae33d3007b6a48246c6f92 Mon Sep 17 00:00:00 2001\n" \
@@ -304,10 +312,12 @@ void test_diff_format_email__exclude_marker(void)
 
 	assert_email_match(
 		email, "9264b96c6d104d0e07ae33d3007b6a48246c6f92", &opts);
+#endif
 }
 
 void test_diff_format_email__invalid_no(void)
 {
+#ifndef GIT_DEPRECATE_HARD
 	git_oid oid;
 	git_commit *commit = NULL;
 	git_diff *diff = NULL;
@@ -327,15 +337,16 @@ void test_diff_format_email__invalid_no(void)
 	cl_git_pass(git_diff__commit(&diff, repo, commit, NULL));
 	cl_git_fail(git_diff_format_email(&buf, diff, &opts));
 	cl_git_fail(git_diff_commit_as_email(&buf, repo, commit, 2, 1, 0, NULL));
-	cl_git_fail(git_diff_commit_as_email(&buf, repo, commit, 0, 0, 0, NULL));
 
 	git_diff_free(diff);
 	git_commit_free(commit);
 	git_buf_dispose(&buf);
+#endif
 }
 
 void test_diff_format_email__mode_change(void)
 {
+#ifndef GIT_DEPRECATE_HARD
 	git_diff_format_email_options opts = GIT_DIFF_FORMAT_EMAIL_OPTIONS_INIT;
 	const char *email =
 	"From 7ade76dd34bba4733cf9878079f9fd4a456a9189 Mon Sep 17 00:00:00 2001\n" \
@@ -357,10 +368,12 @@ void test_diff_format_email__mode_change(void)
 
 	assert_email_match(
 		email, "7ade76dd34bba4733cf9878079f9fd4a456a9189", &opts);
+#endif
 }
 
 void test_diff_format_email__rename_add_remove(void)
 {
+#ifndef GIT_DEPRECATE_HARD
 	git_diff_format_email_options opts = GIT_DIFF_FORMAT_EMAIL_OPTIONS_INIT;
 	const char *email =
 	"From 6e05acc5a5dab507d91a0a0cc0fb05a3dd98892d Mon Sep 17 00:00:00 2001\n" \
@@ -427,10 +440,12 @@ void test_diff_format_email__rename_add_remove(void)
 
 	assert_email_match(
 		email, "6e05acc5a5dab507d91a0a0cc0fb05a3dd98892d", &opts);
+#endif
 }
 
 void test_diff_format_email__multiline_summary(void)
 {
+#ifndef GIT_DEPRECATE_HARD
 	git_diff_format_email_options opts = GIT_DIFF_FORMAT_EMAIL_OPTIONS_INIT;
 	const char *email =
 	"From 9264b96c6d104d0e07ae33d3007b6a48246c6f92 Mon Sep 17 00:00:00 2001\n" \
@@ -475,10 +490,12 @@ void test_diff_format_email__multiline_summary(void)
 
 	assert_email_match(
 		email, "9264b96c6d104d0e07ae33d3007b6a48246c6f92", &opts);
+#endif
 }
 
 void test_diff_format_email__binary(void)
 {
+#ifndef GIT_DEPRECATE_HARD
 	git_diff_format_email_options opts = GIT_DIFF_FORMAT_EMAIL_OPTIONS_INIT;
 	const char *email =
 	"From 8d7523f6fcb2404257889abe0d96f093d9f524f9 Mon Sep 17 00:00:00 2001\n" \
@@ -501,5 +518,6 @@ void test_diff_format_email__binary(void)
 
 	assert_email_match(
 		email, "8d7523f6fcb2404257889abe0d96f093d9f524f9", &opts);
+#endif
 }
 

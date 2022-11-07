@@ -11,6 +11,7 @@
 
 #include "repository.h"
 
+#include "buf.h"
 #include "commit.h"
 #include "hash.h"
 #include "tree.h"
@@ -67,7 +68,7 @@ int git_object__from_raw(
 	size_t object_size;
 	int error;
 
-	assert(object_out);
+	GIT_ASSERT_ARG(object_out);
 	*object_out = NULL;
 
 	/* Validate type match */
@@ -91,7 +92,7 @@ int git_object__from_raw(
 
 	/* Parse raw object data */
 	def = &git_objects_table[type];
-	assert(def->free && def->parse_raw);
+	GIT_ASSERT(def->free && def->parse_raw);
 
 	if ((error = def->parse_raw(object, data, size)) < 0) {
 		def->free(object);
@@ -115,7 +116,7 @@ int git_object__from_odb_object(
 	git_object_def *def;
 	git_object *object = NULL;
 
-	assert(object_out);
+	GIT_ASSERT_ARG(object_out);
 	*object_out = NULL;
 
 	/* Validate type match */
@@ -141,14 +142,19 @@ int git_object__from_odb_object(
 
 	/* Parse raw object data */
 	def = &git_objects_table[odb_obj->cached.type];
-	assert(def->free && def->parse);
+	GIT_ASSERT(def->free && def->parse);
 
-	if ((error = def->parse(object, odb_obj)) < 0)
+	if ((error = def->parse(object, odb_obj)) < 0) {
+		/*
+		 * parse returns EINVALID on invalid data; downgrade
+		 * that to a normal -1 error code.
+		 */
 		def->free(object);
-	else
-		*object_out = git_cache_store_parsed(&repo->objects, object);
+		return -1;
+	}
 
-	return error;
+	*object_out = git_cache_store_parsed(&repo->objects, object);
+	return 0;
 }
 
 void git_object__free(void *obj)
@@ -174,7 +180,9 @@ int git_object_lookup_prefix(
 	git_odb_object *odb_obj = NULL;
 	int error = 0;
 
-	assert(repo && object_out && id);
+	GIT_ASSERT_ARG(repo);
+	GIT_ASSERT_ARG(object_out);
+	GIT_ASSERT_ARG(id);
 
 	if (len < GIT_OID_MINPREFIXLEN) {
 		git_error_set(GIT_ERROR_OBJECT, "ambiguous lookup - OID prefix is too short");
@@ -211,7 +219,7 @@ int git_object_lookup_prefix(
 			} else if (cached->flags == GIT_CACHE_STORE_RAW) {
 				odb_obj = (git_odb_object *)cached;
 			} else {
-				assert(!"Wrong caching type in the global object cache");
+				GIT_ASSERT(!"Wrong caching type in the global object cache");
 			}
 		} else {
 			/* Object was not found in the cache, let's explore the backends.
@@ -263,19 +271,19 @@ void git_object_free(git_object *object)
 
 const git_oid *git_object_id(const git_object *obj)
 {
-	assert(obj);
+	GIT_ASSERT_ARG_WITH_RETVAL(obj, NULL);
 	return &obj->cached.oid;
 }
 
 git_object_t git_object_type(const git_object *obj)
 {
-	assert(obj);
+	GIT_ASSERT_ARG_WITH_RETVAL(obj, GIT_OBJECT_INVALID);
 	return obj->cached.type;
 }
 
 git_repository *git_object_owner(const git_object *obj)
 {
-	assert(obj);
+	GIT_ASSERT_ARG_WITH_RETVAL(obj, NULL);
 	return obj->repo;
 }
 
@@ -396,9 +404,10 @@ int git_object_peel(
 	git_object *source, *deref = NULL;
 	int error;
 
-	assert(object && peeled);
+	GIT_ASSERT_ARG(object);
+	GIT_ASSERT_ARG(peeled);
 
-	assert(target_type == GIT_OBJECT_TAG ||
+	GIT_ASSERT_ARG(target_type == GIT_OBJECT_TAG ||
 		target_type == GIT_OBJECT_COMMIT ||
 		target_type == GIT_OBJECT_TREE ||
 		target_type == GIT_OBJECT_BLOB ||
@@ -461,7 +470,9 @@ int git_object_lookup_bypath(
 	git_tree *tree = NULL;
 	git_tree_entry *entry = NULL;
 
-	assert(out && treeish && path);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(treeish);
+	GIT_ASSERT_ARG(path);
 
 	if ((error = git_object_peel((git_object**)&tree, treeish, GIT_OBJECT_TREE)) < 0 ||
 		 (error = git_tree_entry_bypath(&entry, tree, path)) < 0)
@@ -486,16 +497,16 @@ cleanup:
 	return error;
 }
 
-int git_object_short_id(git_buf *out, const git_object *obj)
+static int git_object__short_id(git_str *out, const git_object *obj)
 {
 	git_repository *repo;
 	int len = GIT_ABBREV_DEFAULT, error;
 	git_oid id = {{0}};
 	git_odb *odb;
 
-	assert(out && obj);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(obj);
 
-	git_buf_sanitize(out);
 	repo = git_object_owner(obj);
 
 	if ((error = git_repository__configmap_lookup(&len, repo, GIT_CONFIGMAP_ABBREV)) < 0)
@@ -518,7 +529,7 @@ int git_object_short_id(git_buf *out, const git_object *obj)
 		len++;
 	}
 
-	if (!error && !(error = git_buf_grow(out, len + 1))) {
+	if (!error && !(error = git_str_grow(out, len + 1))) {
 		git_oid_tostr(out->ptr, len + 1, &id);
 		out->size = len;
 	}
@@ -526,6 +537,11 @@ int git_object_short_id(git_buf *out, const git_object *obj)
 	git_odb_free(odb);
 
 	return error;
+}
+
+int git_object_short_id(git_buf *out, const git_object *obj)
+{
+	GIT_BUF_WRAP_PRIVATE(out, git_object__short_id, obj);
 }
 
 bool git_object__is_valid(
@@ -550,4 +566,36 @@ bool git_object__is_valid(
 	}
 
 	return true;
+}
+
+int git_object_rawcontent_is_valid(
+	int *valid,
+	const char *buf,
+	size_t len,
+	git_object_t type)
+{
+	git_object *obj = NULL;
+	int error;
+
+	GIT_ASSERT_ARG(valid);
+	GIT_ASSERT_ARG(buf);
+
+	/* Blobs are always valid; don't bother parsing. */
+	if (type == GIT_OBJECT_BLOB) {
+		*valid = 1;
+		return 0;
+	}
+
+	error = git_object__from_raw(&obj, buf, len, type);
+	git_object_free(obj);
+
+	if (error == 0) {
+		*valid = 1;
+		return 0;
+	} else if (error == GIT_EINVALID) {
+		*valid = 0;
+		return 0;
+	}
+
+	return error;
 }

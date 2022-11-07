@@ -10,7 +10,6 @@
 #include "http_parser.h"
 #include "vector.h"
 #include "trace.h"
-#include "global.h"
 #include "httpclient.h"
 #include "http.h"
 #include "auth.h"
@@ -85,8 +84,8 @@ typedef struct {
 	git_http_response *response;
 
 	/* Temporary buffers to avoid extra mallocs */
-	git_buf parse_header_name;
-	git_buf parse_header_value;
+	git_str parse_header_name;
+	git_str parse_header_value;
 
 	/* Parser state */
 	int error;
@@ -121,8 +120,8 @@ struct git_http_client {
 	         request_chunked : 1;
 
 	/* Temporary buffers to avoid extra mallocs */
-	git_buf request_msg;
-	git_buf read_buf;
+	git_str request_msg;
+	git_str read_buf;
 
 	/* A subset of information from the request */
 	size_t request_body_len,
@@ -146,7 +145,8 @@ bool git_http_response_is_redirect(git_http_response *response)
 
 void git_http_response_dispose(git_http_response *response)
 {
-	assert(response);
+	if (!response)
+		return;
 
 	git__free(response->content_type);
 	git__free(response->location);
@@ -160,8 +160,8 @@ static int on_header_complete(http_parser *parser)
 	git_http_client *client = ctx->client;
 	git_http_response *response = ctx->response;
 
-	git_buf *name = &ctx->parse_header_name;
-	git_buf *value = &ctx->parse_header_value;
+	git_str *name = &ctx->parse_header_name;
+	git_str *value = &ctx->parse_header_value;
 
 	if (!strcasecmp("Content-Type", name->ptr)) {
 		if (response->content_type) {
@@ -193,7 +193,7 @@ static int on_header_complete(http_parser *parser)
 	} else if (!strcasecmp("Transfer-Encoding", name->ptr) &&
 	           !strcasecmp("chunked", value->ptr)) {
 			ctx->response->chunked = 1;
-	} else if (!strcasecmp("Proxy-Authenticate", git_buf_cstr(name))) {
+	} else if (!strcasecmp("Proxy-Authenticate", git_str_cstr(name))) {
 		char *dup = git__strndup(value->ptr, value->size);
 		GIT_ERROR_CHECK_ALLOC(dup);
 
@@ -232,15 +232,15 @@ static int on_header_field(http_parser *parser, const char *str, size_t len)
 		if (on_header_complete(parser) < 0)
 			return ctx->parse_status = PARSE_STATUS_ERROR;
 
-		git_buf_clear(&ctx->parse_header_name);
-		git_buf_clear(&ctx->parse_header_value);
+		git_str_clear(&ctx->parse_header_name);
+		git_str_clear(&ctx->parse_header_value);
 		/* Fall through */
 
 	case PARSE_HEADER_NONE:
 	case PARSE_HEADER_NAME:
 		ctx->parse_header_state = PARSE_HEADER_NAME;
 
-		if (git_buf_put(&ctx->parse_header_name, str, len) < 0)
+		if (git_str_put(&ctx->parse_header_name, str, len) < 0)
 			return ctx->parse_status = PARSE_STATUS_ERROR;
 
 		break;
@@ -263,7 +263,7 @@ static int on_header_value(http_parser *parser, const char *str, size_t len)
 	case PARSE_HEADER_VALUE:
 		ctx->parse_header_state = PARSE_HEADER_VALUE;
 
-		if (git_buf_put(&ctx->parse_header_value, str, len) < 0)
+		if (git_str_put(&ctx->parse_header_value, str, len) < 0)
 			return ctx->parse_status = PARSE_STATUS_ERROR;
 
 		break;
@@ -400,7 +400,7 @@ static int on_body(http_parser *parser, const char *buf, size_t len)
 		return 0;
 	}
 
-	assert(ctx->output_size >= ctx->output_written);
+	GIT_ASSERT(ctx->output_size >= ctx->output_written);
 
 	max_len = min(ctx->output_size - ctx->output_written, len);
 	max_len = min(max_len, INT_MAX);
@@ -548,7 +548,7 @@ static void free_auth_context(git_http_server *server)
 }
 
 static int apply_credentials(
-	git_buf *buf,
+	git_str *buf,
 	git_http_server *server,
 	const char *header_name,
 	git_credential *credentials)
@@ -556,7 +556,7 @@ static int apply_credentials(
 	git_http_auth_context *auth = server->auth_context;
 	git_vector *challenges = &server->auth_challenges;
 	const char *challenge;
-	git_buf token = GIT_BUF_INIT;
+	git_str token = GIT_STR_INIT;
 	int error = 0;
 
 	/* We've started a new request without creds; free the context. */
@@ -597,20 +597,20 @@ static int apply_credentials(
 			free_auth_context(server);
 	} else if (!token.size) {
 		git_error_set(GIT_ERROR_HTTP, "failed to respond to authentication challenge");
-		error = -1;
+		error = GIT_EAUTH;
 		goto done;
 	}
 
 	if (token.size > 0)
-		error = git_buf_printf(buf, "%s: %s\r\n", header_name, token.ptr);
+		error = git_str_printf(buf, "%s: %s\r\n", header_name, token.ptr);
 
 done:
-	git_buf_dispose(&token);
+	git_str_dispose(&token);
 	return error;
 }
 
 GIT_INLINE(int) apply_server_credentials(
-	git_buf *buf,
+	git_str *buf,
 	git_http_client *client,
 	git_http_request *request)
 {
@@ -621,7 +621,7 @@ GIT_INLINE(int) apply_server_credentials(
 }
 
 GIT_INLINE(int) apply_proxy_credentials(
-	git_buf *buf,
+	git_str *buf,
 	git_http_client *client,
 	git_http_request *request)
 {
@@ -631,31 +631,54 @@ GIT_INLINE(int) apply_proxy_credentials(
 	                         request->proxy_credentials);
 }
 
+static int puts_host_and_port(git_str *buf, git_net_url *url, bool force_port)
+{
+	bool ipv6 = git_net_url_is_ipv6(url);
+
+	if (ipv6)
+		git_str_putc(buf, '[');
+
+	git_str_puts(buf, url->host);
+
+	if (ipv6)
+		git_str_putc(buf, ']');
+
+	if (force_port || !git_net_url_is_default_port(url)) {
+		git_str_putc(buf, ':');
+		git_str_puts(buf, url->port);
+	}
+
+	return git_str_oom(buf) ? -1 : 0;
+}
+
 static int generate_connect_request(
 	git_http_client *client,
 	git_http_request *request)
 {
-	git_buf *buf;
+	git_str *buf;
 	int error;
 
-	git_buf_clear(&client->request_msg);
+	git_str_clear(&client->request_msg);
 	buf = &client->request_msg;
 
-	git_buf_printf(buf, "CONNECT %s:%s HTTP/1.1\r\n",
-	               client->server.url.host, client->server.url.port);
+	git_str_puts(buf, "CONNECT ");
+	puts_host_and_port(buf, &client->server.url, true);
+	git_str_puts(buf, " HTTP/1.1\r\n");
 
-	git_buf_puts(buf, "User-Agent: ");
+	git_str_puts(buf, "User-Agent: ");
 	git_http__user_agent(buf);
-	git_buf_puts(buf, "\r\n");
+	git_str_puts(buf, "\r\n");
 
-	git_buf_printf(buf, "Host: %s\r\n", client->proxy.url.host);
+	git_str_puts(buf, "Host: ");
+	puts_host_and_port(buf, &client->server.url, true);
+	git_str_puts(buf, "\r\n");
 
 	if ((error = apply_proxy_credentials(buf, client, request) < 0))
 		return -1;
 
-	git_buf_puts(buf, "\r\n");
+	git_str_puts(buf, "\r\n");
 
-	return git_buf_oom(buf) ? -1 : 0;
+	return git_str_oom(buf) ? -1 : 0;
 }
 
 static bool use_connect_proxy(git_http_client *client)
@@ -667,55 +690,53 @@ static int generate_request(
 	git_http_client *client,
 	git_http_request *request)
 {
-	git_buf *buf;
+	git_str *buf;
 	size_t i;
 	int error;
 
-	assert(client && request);
+	GIT_ASSERT_ARG(client);
+	GIT_ASSERT_ARG(request);
 
-	git_buf_clear(&client->request_msg);
+	git_str_clear(&client->request_msg);
 	buf = &client->request_msg;
 
 	/* GET|POST path HTTP/1.1 */
-	git_buf_puts(buf, name_for_method(request->method));
-	git_buf_putc(buf, ' ');
+	git_str_puts(buf, name_for_method(request->method));
+	git_str_putc(buf, ' ');
 
 	if (request->proxy && strcmp(request->url->scheme, "https"))
 		git_net_url_fmt(buf, request->url);
 	else
 		git_net_url_fmt_path(buf, request->url);
 
-	git_buf_puts(buf, " HTTP/1.1\r\n");
+	git_str_puts(buf, " HTTP/1.1\r\n");
 
-	git_buf_puts(buf, "User-Agent: ");
+	git_str_puts(buf, "User-Agent: ");
 	git_http__user_agent(buf);
-	git_buf_puts(buf, "\r\n");
+	git_str_puts(buf, "\r\n");
 
-	git_buf_printf(buf, "Host: %s", request->url->host);
-
-	if (!git_net_url_is_default_port(request->url))
-		git_buf_printf(buf, ":%s", request->url->port);
-
-	git_buf_puts(buf, "\r\n");
+	git_str_puts(buf, "Host: ");
+	puts_host_and_port(buf, request->url, false);
+	git_str_puts(buf, "\r\n");
 
 	if (request->accept)
-		git_buf_printf(buf, "Accept: %s\r\n", request->accept);
+		git_str_printf(buf, "Accept: %s\r\n", request->accept);
 	else
-		git_buf_puts(buf, "Accept: */*\r\n");
+		git_str_puts(buf, "Accept: */*\r\n");
 
 	if (request->content_type)
-		git_buf_printf(buf, "Content-Type: %s\r\n",
+		git_str_printf(buf, "Content-Type: %s\r\n",
 			request->content_type);
 
 	if (request->chunked)
-		git_buf_puts(buf, "Transfer-Encoding: chunked\r\n");
+		git_str_puts(buf, "Transfer-Encoding: chunked\r\n");
 
 	if (request->content_length > 0)
-		git_buf_printf(buf, "Content-Length: %"PRIuZ "\r\n",
+		git_str_printf(buf, "Content-Length: %"PRIuZ "\r\n",
 			request->content_length);
 
 	if (request->expect_continue)
-		git_buf_printf(buf, "Expect: 100-continue\r\n");
+		git_str_printf(buf, "Expect: 100-continue\r\n");
 
 	if ((error = apply_server_credentials(buf, client, request)) < 0 ||
 	    (!use_connect_proxy(client) &&
@@ -727,13 +748,13 @@ static int generate_request(
 			const char *hdr = request->custom_headers->strings[i];
 
 			if (hdr)
-				git_buf_printf(buf, "%s\r\n", hdr);
+				git_str_printf(buf, "%s\r\n", hdr);
 		}
 	}
 
-	git_buf_puts(buf, "\r\n");
+	git_str_puts(buf, "\r\n");
 
-	if (git_buf_oom(buf))
+	if (git_str_oom(buf))
 		return -1;
 
 	return 0;
@@ -849,7 +870,10 @@ static int setup_hosts(
 {
 	int ret, diff = 0;
 
-	assert(client && request && request->url);
+	GIT_ASSERT_ARG(client);
+	GIT_ASSERT_ARG(request);
+
+	GIT_ASSERT(request->url);
 
 	if ((ret = server_setup_from_url(&client->server, request->url)) < 0)
 		return ret;
@@ -904,7 +928,7 @@ static int proxy_connect(
 	int error;
 
 	if (!client->proxy_connected || !client->keepalive) {
-		git_trace(GIT_TRACE_DEBUG, "Connecting to proxy %s:%s",
+		git_trace(GIT_TRACE_DEBUG, "Connecting to proxy %s port %s",
 			  client->proxy.url.host, client->proxy.url.port);
 
 		if ((error = server_create_stream(&client->proxy)) < 0 ||
@@ -929,7 +953,7 @@ static int proxy_connect(
 	    (error = git_http_client_skip_body(client)) < 0)
 		goto done;
 
-	assert(client->state == DONE);
+	GIT_ASSERT(client->state == DONE);
 
 	if (response.status == GIT_HTTP_STATUS_PROXY_AUTHENTICATION_REQUIRED) {
 		save_early_response(client, &response);
@@ -1024,7 +1048,7 @@ static int http_client_connect(
 			goto on_error;
 	}
 
-	git_trace(GIT_TRACE_DEBUG, "Connecting to remote %s:%s",
+	git_trace(GIT_TRACE_DEBUG, "Connecting to remote %s port %s",
 	          client->server.url.host, client->server.url.port);
 
 	if ((error = server_connect(client)) < 0)
@@ -1053,7 +1077,7 @@ GIT_INLINE(int) client_read(git_http_client *client)
 		client->proxy.stream : client->server.stream;
 
 	/*
-	 * We use a git_buf for convenience, but statically allocate it and
+	 * We use a git_str for convenience, but statically allocate it and
 	 * don't resize.  Limit our consumption to INT_MAX since calling
 	 * functions use an int return type to return number of bytes read.
 	 */
@@ -1143,7 +1167,7 @@ GIT_INLINE(int) client_read_and_parse(git_http_client *client)
 		 * final byte when paused in a callback.  Consume that byte.
 		 * https://github.com/nodejs/http-parser/issues/97
 		 */
-		assert(client->read_buf.size > parsed_len);
+		GIT_ASSERT(client->read_buf.size > parsed_len);
 
 		http_parser_pause(parser, 0);
 
@@ -1174,7 +1198,7 @@ GIT_INLINE(int) client_read_and_parse(git_http_client *client)
 		return -1;
 	}
 
-	git_buf_consume_bytes(&client->read_buf, parsed_len);
+	git_str_consume_bytes(&client->read_buf, parsed_len);
 
 	return (int)parsed_len;
 }
@@ -1211,7 +1235,7 @@ static void complete_response_body(git_http_client *client)
 	}
 
 done:
-	git_buf_clear(&client->read_buf);
+	git_str_clear(&client->read_buf);
 }
 
 int git_http_client_send_request(
@@ -1221,7 +1245,8 @@ int git_http_client_send_request(
 	git_http_response response = {0};
 	int error = -1;
 
-	assert(client && request);
+	GIT_ASSERT_ARG(client);
+	GIT_ASSERT_ARG(request);
 
 	/* If the client did not finish reading, clean up the stream. */
 	if (client->state == READING_BODY)
@@ -1232,12 +1257,12 @@ int git_http_client_send_request(
 		return 0;
 
 	if (git_trace_level() >= GIT_TRACE_DEBUG) {
-		git_buf url = GIT_BUF_INIT;
+		git_str url = GIT_STR_INIT;
 		git_net_url_fmt(&url, request->url);
 		git_trace(GIT_TRACE_DEBUG, "Sending %s request to %s",
 		          name_for_method(request->method),
 		          url.ptr ? url.ptr : "<invalid>");
-		git_buf_dispose(&url);
+		git_str_dispose(&url);
 	}
 
 	if ((error = http_client_connect(client, request)) < 0 ||
@@ -1289,10 +1314,10 @@ int git_http_client_send_body(
 	size_t buffer_len)
 {
 	git_http_server *server;
-	git_buf hdr = GIT_BUF_INIT;
+	git_str hdr = GIT_STR_INIT;
 	int error;
 
-	assert(client);
+	GIT_ASSERT_ARG(client);
 
 	/* If we're waiting for proxy auth, don't sending more requests. */
 	if (client->state == HAS_EARLY_RESPONSE)
@@ -1309,14 +1334,14 @@ int git_http_client_send_body(
 	server = &client->server;
 
 	if (client->request_body_len) {
-		assert(buffer_len <= client->request_body_remain);
+		GIT_ASSERT(buffer_len <= client->request_body_remain);
 
 		if ((error = stream_write(server, buffer, buffer_len)) < 0)
 			goto done;
 
 		client->request_body_remain -= buffer_len;
 	} else {
-		if ((error = git_buf_printf(&hdr, "%" PRIxZ "\r\n", buffer_len)) < 0 ||
+		if ((error = git_str_printf(&hdr, "%" PRIxZ "\r\n", buffer_len)) < 0 ||
 		    (error = stream_write(server, hdr.ptr, hdr.size)) < 0 ||
 		    (error = stream_write(server, buffer, buffer_len)) < 0 ||
 		    (error = stream_write(server, "\r\n", 2)) < 0)
@@ -1324,7 +1349,7 @@ int git_http_client_send_body(
 	}
 
 done:
-	git_buf_dispose(&hdr);
+	git_str_dispose(&hdr);
 	return error;
 }
 
@@ -1332,7 +1357,8 @@ static int complete_request(git_http_client *client)
 {
 	int error = 0;
 
-	assert(client && client->state == SENDING_BODY);
+	GIT_ASSERT_ARG(client);
+	GIT_ASSERT(client->state == SENDING_BODY);
 
 	if (client->request_body_len && client->request_body_remain) {
 		git_error_set(GIT_ERROR_HTTP, "truncated write");
@@ -1352,7 +1378,8 @@ int git_http_client_read_response(
 	http_parser_context parser_context = {0};
 	int error;
 
-	assert(response && client);
+	GIT_ASSERT_ARG(response);
+	GIT_ASSERT_ARG(client);
 
 	if (client->state == SENDING_BODY) {
 		if ((error = complete_request(client)) < 0)
@@ -1392,11 +1419,11 @@ int git_http_client_read_response(
 			goto done;
 	}
 
-	assert(client->state == READING_BODY || client->state == DONE);
+	GIT_ASSERT(client->state == READING_BODY || client->state == DONE);
 
 done:
-	git_buf_dispose(&parser_context.parse_header_name);
-	git_buf_dispose(&parser_context.parse_header_value);
+	git_str_dispose(&parser_context.parse_header_name);
+	git_str_dispose(&parser_context.parse_header_value);
 
 	return error;
 }
@@ -1445,7 +1472,7 @@ int git_http_client_read_body(
 			break;
 	}
 
-	assert(parser_context.output_written <= INT_MAX);
+	GIT_ASSERT(parser_context.output_written <= INT_MAX);
 	error = (int)parser_context.output_written;
 
 done:
@@ -1499,12 +1526,12 @@ int git_http_client_new(
 {
 	git_http_client *client;
 
-	assert(out);
+	GIT_ASSERT_ARG(out);
 
 	client = git__calloc(1, sizeof(git_http_client));
 	GIT_ERROR_CHECK_ALLOC(client);
 
-	git_buf_init(&client->read_buf, GIT_READ_BUFFER_SIZE);
+	git_str_init(&client->read_buf, GIT_READ_BUFFER_SIZE);
 	GIT_ERROR_CHECK_ALLOC(client->read_buf.ptr);
 
 	if (opts)
@@ -1533,7 +1560,7 @@ static void http_client_close(git_http_client *client)
 	http_server_close(&client->server);
 	http_server_close(&client->proxy);
 
-	git_buf_dispose(&client->request_msg);
+	git_str_dispose(&client->request_msg);
 
 	client->state = 0;
 	client->request_count = 0;
@@ -1547,6 +1574,6 @@ void git_http_client_free(git_http_client *client)
 		return;
 
 	http_client_close(client);
-	git_buf_dispose(&client->read_buf);
+	git_str_dispose(&client->read_buf);
 	git__free(client);
 }

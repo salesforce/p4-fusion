@@ -5,7 +5,7 @@
 #include "../fetchhead/fetchhead_data.h"
 #include "git2/clone.h"
 
-#define LIVE_REPO_URL "git://github.com/libgit2/TestGitRepository"
+#define LIVE_REPO_URL "https://github.com/libgit2/TestGitRepository"
 
 static git_repository *g_repo;
 static git_clone_options g_options;
@@ -52,8 +52,7 @@ static void fetchhead_test_fetch(const char *fetchspec, const char *expected_fet
 {
 	git_remote *remote;
 	git_fetch_options fetch_opts = GIT_FETCH_OPTIONS_INIT;
-	git_buf fetchhead_buf = GIT_BUF_INIT;
-	int equals = 0;
+	git_str fetchhead_buf = GIT_STR_INIT;
 	git_strarray array, *active_refs = NULL;
 
 	cl_git_pass(git_remote_lookup(&remote, g_repo, "origin"));
@@ -70,11 +69,8 @@ static void fetchhead_test_fetch(const char *fetchspec, const char *expected_fet
 
 	cl_git_pass(git_futils_readbuffer(&fetchhead_buf, "./foo/.git/FETCH_HEAD"));
 
-	equals = (strcmp(fetchhead_buf.ptr, expected_fetchhead) == 0);
-
-	git_buf_dispose(&fetchhead_buf);
-
-	cl_assert(equals);
+	cl_assert_equal_s(fetchhead_buf.ptr, expected_fetchhead);
+	git_str_dispose(&fetchhead_buf);
 }
 
 void test_online_fetchhead__wildcard_spec(void)
@@ -157,7 +153,7 @@ void test_online_fetchhead__colon_only_dst_refspec_creates_no_branch(void)
 
 void test_online_fetchhead__creds_get_stripped(void)
 {
-	git_buf buf = GIT_BUF_INIT;
+	git_str buf = GIT_STR_INIT;
 	git_remote *remote;
 
 	cl_git_pass(git_repository_init(&g_repo, "./foo", 0));
@@ -169,5 +165,5 @@ void test_online_fetchhead__creds_get_stripped(void)
 		"49322bb17d3acc9146f98c97d078513228bbf3c0\t\thttps://github.com/libgit2/TestGitRepository\n");
 
 	git_remote_free(remote);
-	git_buf_dispose(&buf);
+	git_str_dispose(&buf);
 }

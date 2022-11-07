@@ -7,7 +7,7 @@
 
 #include "path_w32.h"
 
-#include "path.h"
+#include "fs_path.h"
 #include "utf-conv.h"
 #include "posix.h"
 #include "reparse.h"
@@ -41,7 +41,7 @@ GIT_INLINE(int) path__cwd(wchar_t *path, int size)
 	}
 
 	/* The Win32 APIs may return "\\?\" once you've used it first.
-	 * But it may not.  What a gloriously predictible API!
+	 * But it may not.  What a gloriously predictable API!
 	 */
 	if (wcsncmp(path, PATH__NT_NAMESPACE, PATH__NT_NAMESPACE_LEN))
 		return len;
@@ -57,7 +57,7 @@ static wchar_t *path__skip_server(wchar_t *path)
 	wchar_t *c;
 
 	for (c = path; *c; c++) {
-		if (git_path_is_dirsep(*c))
+		if (git_fs_path_is_dirsep(*c))
 			return c + 1;
 	}
 
@@ -71,9 +71,9 @@ static wchar_t *path__skip_prefix(wchar_t *path)
 
 		if (wcsncmp(path, L"UNC\\", 4) == 0)
 			path = path__skip_server(path + 4);
-		else if (git_path_is_absolute(path))
+		else if (git_fs_path_is_absolute(path))
 			path += PATH__ABSOLUTE_LEN;
-	} else if (git_path_is_absolute(path)) {
+	} else if (git_fs_path_is_absolute(path)) {
 		path += PATH__ABSOLUTE_LEN;
 	} else if (path__is_unc(path)) {
 		path = path__skip_server(path + 2);
@@ -151,6 +151,137 @@ int git_win32_path_canonicalize(git_win32_path path)
 	return (int)(to - path);
 }
 
+static int git_win32_path_join(
+	git_win32_path dest,
+	const wchar_t *one,
+	size_t one_len,
+	const wchar_t *two,
+	size_t two_len)
+{
+	size_t backslash = 0;
+
+	if (one_len && two_len && one[one_len - 1] != L'\\')
+		backslash = 1;
+
+	if (one_len + two_len + backslash > MAX_PATH) {
+		git_error_set(GIT_ERROR_INVALID, "path too long");
+		return -1;
+	}
+
+	memmove(dest, one, one_len * sizeof(wchar_t));
+
+	if (backslash)
+		dest[one_len] = L'\\';
+
+	memcpy(dest + one_len + backslash, two, two_len * sizeof(wchar_t));
+	dest[one_len + backslash + two_len] = L'\0';
+
+	return 0;
+}
+
+struct win32_path_iter {
+	wchar_t *env;
+	const wchar_t *current_dir;
+};
+
+static int win32_path_iter_init(struct win32_path_iter *iter)
+{
+	DWORD len = GetEnvironmentVariableW(L"PATH", NULL, 0);
+
+	if (!len && GetLastError() == ERROR_ENVVAR_NOT_FOUND) {
+		iter->env = NULL;
+		iter->current_dir = NULL;
+		return 0;
+	} else if (!len) {
+		git_error_set(GIT_ERROR_OS, "could not load PATH");
+		return -1;
+	}
+
+	iter->env = git__malloc(len * sizeof(wchar_t));
+	GIT_ERROR_CHECK_ALLOC(iter->env);
+
+	len = GetEnvironmentVariableW(L"PATH", iter->env, len);
+
+	if (len == 0) {
+		git_error_set(GIT_ERROR_OS, "could not load PATH");
+		return -1;
+	}
+
+	iter->current_dir = iter->env;
+	return 0;
+}
+
+static int win32_path_iter_next(
+	const wchar_t **out,
+	size_t *out_len,
+	struct win32_path_iter *iter)
+{
+	const wchar_t *start;
+	wchar_t term;
+	size_t len = 0;
+
+	if (!iter->current_dir || !*iter->current_dir)
+		return GIT_ITEROVER;
+
+	term = (*iter->current_dir == L'"') ? *iter->current_dir++ : L';';
+	start = iter->current_dir;
+
+	while (*iter->current_dir && *iter->current_dir != term) {
+		iter->current_dir++;
+		len++;
+	}
+
+	*out = start;
+	*out_len = len;
+
+	if (term == L'"' && *iter->current_dir)
+		iter->current_dir++;
+
+	while (*iter->current_dir == L';')
+		iter->current_dir++;
+
+	return 0;
+}
+
+static void win32_path_iter_dispose(struct win32_path_iter *iter)
+{
+	if (!iter)
+		return;
+
+	git__free(iter->env);
+	iter->env = NULL;
+	iter->current_dir = NULL;
+}
+
+int git_win32_path_find_executable(git_win32_path fullpath, wchar_t *exe)
+{
+	struct win32_path_iter path_iter;
+	const wchar_t *dir;
+	size_t dir_len, exe_len = wcslen(exe);
+	bool found = false;
+
+	if (win32_path_iter_init(&path_iter) < 0)
+		return -1;
+
+	while (win32_path_iter_next(&dir, &dir_len, &path_iter) != GIT_ITEROVER) {
+		if (git_win32_path_join(fullpath, dir, dir_len, exe, exe_len) < 0)
+			continue;
+
+		if (_waccess(fullpath, 0) == 0) {
+			found = true;
+			break;
+		}
+	}
+
+	win32_path_iter_dispose(&path_iter);
+
+	if (found)
+		return 0;
+
+	fullpath[0] = L'\0';
+	return GIT_ENOTFOUND;
+}
+
 static int win32_path_cwd(wchar_t *out, size_t len)
 {
 	int cwd_len;
@@ -170,7 +301,7 @@ static int win32_path_cwd(wchar_t *out, size_t len)
 		 * '\'s, but we we add a 'UNC' specifier to the path, plus
 		 * a trailing directory separator, plus a NUL.
 		 */
-		if (cwd_len > MAX_PATH - 4) {
+		if (cwd_len > GIT_WIN_PATH_MAX - 4) {
 			errno = ENAMETOOLONG;
 			return -1;
 		}
@@ -187,7 +318,7 @@ static int win32_path_cwd(wchar_t *out, size_t len)
 	 * working directory.  (One character for the directory separator,
 	 * one for the null.
 	 */
-	else if (cwd_len > MAX_PATH - 2) {
+	else if (cwd_len > GIT_WIN_PATH_MAX - 2) {
 		errno = ENAMETOOLONG;
 		return -1;
 	}
@@ -204,14 +335,14 @@ int git_win32_path_from_utf8(git_win32_path out, const char *src)
 	dest += PATH__NT_NAMESPACE_LEN;
 
 	/* See if this is an absolute path (beginning with a drive letter) */
-	if (git_path_is_absolute(src)) {
-		if (git__utf8_to_16(dest, MAX_PATH, src) < 0)
+	if (git_fs_path_is_absolute(src)) {
+		if (git__utf8_to_16(dest, GIT_WIN_PATH_MAX, src) < 0)
 			goto on_error;
 	}
 	/* File-prefixed NT-style paths beginning with \\?\ */
 	else if (path__is_nt_namespace(src)) {
 		/* Skip the NT prefix, the destination already contains it */
-		if (git__utf8_to_16(dest, MAX_PATH, src + PATH__NT_NAMESPACE_LEN) < 0)
+		if (git__utf8_to_16(dest, GIT_WIN_PATH_MAX, src + PATH__NT_NAMESPACE_LEN) < 0)
 			goto on_error;
 	}
 	/* UNC paths */
@@ -220,33 +351,33 @@ int git_win32_path_from_utf8(git_win32_path out, const char *src)
 		dest += 4;
 
 		/* Skip the leading "\\" */
-		if (git__utf8_to_16(dest, MAX_PATH - 2, src + 2) < 0)
+		if (git__utf8_to_16(dest, GIT_WIN_PATH_MAX - 2, src + 2) < 0)
 			goto on_error;
 	}
 	/* Absolute paths omitting the drive letter */
 	else if (path__startswith_slash(src)) {
-		if (path__cwd(dest, MAX_PATH) < 0)
+		if (path__cwd(dest, GIT_WIN_PATH_MAX) < 0)
 			goto on_error;
 
-		if (!git_path_is_absolute(dest)) {
+		if (!git_fs_path_is_absolute(dest)) {
 			errno = ENOENT;
 			goto on_error;
 		}
 
 		/* Skip the drive letter specification ("C:") */
-		if (git__utf8_to_16(dest + 2, MAX_PATH - 2, src) < 0)
+		if (git__utf8_to_16(dest + 2, GIT_WIN_PATH_MAX - 2, src) < 0)
 			goto on_error;
 	}
 	/* Relative paths */
 	else {
 		int cwd_len;
 
-		if ((cwd_len = win32_path_cwd(dest, MAX_PATH)) < 0)
+		if ((cwd_len = win32_path_cwd(dest, GIT_WIN_PATH_MAX)) < 0)
 			goto on_error;
 
 		dest[cwd_len++] = L'\\';
 
-		if (git__utf8_to_16(dest + cwd_len, MAX_PATH - cwd_len, src) < 0)
+		if (git__utf8_to_16(dest + cwd_len, GIT_WIN_PATH_MAX - cwd_len, src) < 0)
 			goto on_error;
 	}
 
@@ -266,14 +397,14 @@ int git_win32_path_relative_from_utf8(git_win32_path out, const char *src)
 	int len;
 
 	/* Handle absolute paths */
-	if (git_path_is_absolute(src) ||
+	if (git_fs_path_is_absolute(src) ||
 	    path__is_nt_namespace(src) ||
 	    path__is_unc(src) ||
 	    path__startswith_slash(src)) {
 		return git_win32_path_from_utf8(out, src);
 	}
 
-	if ((len = git__utf8_to_16(dest, MAX_PATH, src)) < 0)
+	if ((len = git__utf8_to_16(dest, GIT_WIN_PATH_MAX, src)) < 0)
 		return -1;
 
 	for (p = dest; p < (dest + len); p++) {
@@ -305,7 +436,7 @@ int git_win32_path_to_utf8(git_win32_utf8_path dest, const wchar_t *src)
 	if ((len = git__utf16_to_8(out, GIT_WIN_PATH_UTF8, src)) < 0)
 		return len;
 
-	git_path_mkposix(dest);
+	git_fs_path_mkposix(dest);
 
 	return len;
 }
@@ -381,14 +512,14 @@ int git_win32_path_readlink_w(git_win32_path dest, const git_win32_path path)
 
 	switch (reparse_buf->ReparseTag) {
 	case IO_REPARSE_TAG_SYMLINK:
-		target = reparse_buf->SymbolicLinkReparseBuffer.PathBuffer +
-			(reparse_buf->SymbolicLinkReparseBuffer.SubstituteNameOffset / sizeof(WCHAR));
-		target_len = reparse_buf->SymbolicLinkReparseBuffer.SubstituteNameLength / sizeof(WCHAR);
+		target = reparse_buf->ReparseBuffer.SymbolicLink.PathBuffer +
+			(reparse_buf->ReparseBuffer.SymbolicLink.SubstituteNameOffset / sizeof(WCHAR));
+		target_len = reparse_buf->ReparseBuffer.SymbolicLink.SubstituteNameLength / sizeof(WCHAR);
 	break;
 	case IO_REPARSE_TAG_MOUNT_POINT:
-		target = reparse_buf->MountPointReparseBuffer.PathBuffer +
-			(reparse_buf->MountPointReparseBuffer.SubstituteNameOffset / sizeof(WCHAR));
-		target_len = reparse_buf->MountPointReparseBuffer.SubstituteNameLength / sizeof(WCHAR);
+		target = reparse_buf->ReparseBuffer.MountPoint.PathBuffer +
+			(reparse_buf->ReparseBuffer.MountPoint.SubstituteNameOffset / sizeof(WCHAR));
+		target_len = reparse_buf->ReparseBuffer.MountPoint.SubstituteNameLength / sizeof(WCHAR);
 	break;
 	default:
 		errno = EINVAL;
@@ -492,14 +623,12 @@ size_t git_win32_path_remove_namespace(wchar_t *str, size_t len)
 		prefix_len = CONST_STRLEN(unc_prefix);
 	}
 
-	if (remainder) {
-		/*
-		 * Sanity check that the new string isn't longer than the old one.
-		 * (This could only happen due to programmer error introducing a
-		 * prefix longer than the namespace it replaces.)
-		 */
-		assert(len >= remainder_len + prefix_len);
-
+	/*
+	 * Sanity check that the new string isn't longer than the old one.
+	 * (This could only happen due to programmer error introducing a
+	 * prefix longer than the namespace it replaces.)
+	 */
+	if (remainder && len >= remainder_len + prefix_len) {
 		if (prefix)
 			memmove(str, prefix, prefix_len * sizeof(wchar_t));
 

@@ -22,7 +22,7 @@
 int git_reset_default(
 	git_repository *repo,
 	const git_object *target,
-	const git_strarray* pathspecs)
+	const git_strarray *pathspecs)
 {
 	git_object *commit = NULL;
 	git_tree *tree = NULL;
@@ -33,7 +33,7 @@ int git_reset_default(
 	int error;
 	git_index *index = NULL;
 
-	assert(pathspecs != NULL && pathspecs->count > 0);
+	GIT_ASSERT_ARG(pathspecs && pathspecs->count > 0);
 
 	memset(&entry, 0, sizeof(git_index_entry));
 
@@ -62,10 +62,10 @@ int git_reset_default(
 	for (i = 0, max_i = git_diff_num_deltas(diff); i < max_i; ++i) {
 		const git_diff_delta *delta = git_diff_get_delta(diff, i);
 
-		assert(delta->status == GIT_DELTA_ADDED ||
-			delta->status == GIT_DELTA_MODIFIED ||
-			delta->status == GIT_DELTA_CONFLICTED ||
-			delta->status == GIT_DELTA_DELETED);
+		GIT_ASSERT(delta->status == GIT_DELTA_ADDED ||
+		           delta->status == GIT_DELTA_MODIFIED ||
+		           delta->status == GIT_DELTA_CONFLICTED ||
+		           delta->status == GIT_DELTA_DELETED);
 
 		error = git_index_conflict_remove(index, delta->old_file.path);
 		if (error < 0) {
@@ -111,9 +111,10 @@ static int reset(
 	git_tree *tree = NULL;
 	int error = 0;
 	git_checkout_options opts = GIT_CHECKOUT_OPTIONS_INIT;
-	git_buf log_message = GIT_BUF_INIT;
+	git_str log_message = GIT_STR_INIT;
 
-	assert(repo && target);
+	GIT_ASSERT_ARG(repo);
+	GIT_ASSERT_ARG(target);
 
 	if (checkout_opts)
 		opts = *checkout_opts;
@@ -143,7 +144,7 @@ static int reset(
 		goto cleanup;
 	}
 
-	if ((error = git_buf_printf(&log_message, "reset: moving to %s", to)) < 0)
+	if ((error = git_str_printf(&log_message, "reset: moving to %s", to)) < 0)
 		return error;
 
 	if (reset_type == GIT_RESET_HARD) {
@@ -156,7 +157,7 @@ static int reset(
 
 	/* move HEAD to the new target */
 	if ((error = git_reference__update_terminal(repo, GIT_HEAD_FILE,
-		git_object_id(commit), NULL, git_buf_cstr(&log_message))) < 0)
+		git_object_id(commit), NULL, git_str_cstr(&log_message))) < 0)
 		goto cleanup;
 
 	if (reset_type > GIT_RESET_SOFT) {
@@ -176,7 +177,7 @@ cleanup:
 	git_object_free(commit);
 	git_index_free(index);
 	git_tree_free(tree);
-	git_buf_dispose(&log_message);
+	git_str_dispose(&log_message);
 
 	return error;
 }
@@ -187,7 +188,10 @@ int git_reset(
 	git_reset_t reset_type,
 	const git_checkout_options *checkout_opts)
 {
-	return reset(repo, target, git_oid_tostr_s(git_object_id(target)), reset_type, checkout_opts);
+	char to[GIT_OID_HEXSZ + 1];
+
+	git_oid_tostr(to, GIT_OID_HEXSZ + 1, git_object_id(target));
+	return reset(repo, target, to, reset_type, checkout_opts);
 }
 
 int git_reset_from_annotated(

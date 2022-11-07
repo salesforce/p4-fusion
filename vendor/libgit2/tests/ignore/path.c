@@ -257,7 +257,7 @@ void test_ignore_path__skip_gitignore_directory(void)
 {
 	cl_git_rewritefile("attr/.git/info/exclude", "/NewFolder\n/NewFolder/NewFolder");
 	cl_must_pass(p_unlink("attr/.gitignore"));
-	cl_assert(!git_path_exists("attr/.gitignore"));
+	cl_assert(!git_fs_path_exists("attr/.gitignore"));
 	p_mkdir("attr/.gitignore", 0777);
 	cl_git_mkfile("attr/.gitignore/garbage.txt", "new_file\n");
 
@@ -270,7 +270,7 @@ void test_ignore_path__skip_gitignore_directory(void)
 void test_ignore_path__subdirectory_gitignore(void)
 {
 	cl_must_pass(p_unlink("attr/.gitignore"));
-	cl_assert(!git_path_exists("attr/.gitignore"));
+	cl_assert(!git_fs_path_exists("attr/.gitignore"));
 	cl_git_mkfile(
 		"attr/.gitignore",
 		"file1\n");
@@ -574,4 +574,12 @@ void test_ignore_path__negative_prefix_rule(void)
 	assert_is_ignored(true, "fff");
 	assert_is_ignored(true, "ff");
 	assert_is_ignored(false, "f");
+}
+
+void test_ignore_path__negative_more_specific(void)
+{
+	cl_git_rewritefile("attr/.gitignore", "*.txt\n!/dir/test.txt\n");
+	assert_is_ignored(true, "test.txt");
+	assert_is_ignored(false, "dir/test.txt");
+	assert_is_ignored(true, "outer/dir/test.txt");
 }

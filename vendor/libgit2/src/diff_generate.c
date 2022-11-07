@@ -117,6 +117,26 @@ static bool diff_pathspec_match(
 		matched_pathspec, NULL);
 }
 
+static void diff_delta__flag_known_size(git_diff_file *file)
+{
+	/*
+	 * If we don't know the ID, that can only come from the workdir
+	 * iterator, which means we *do* know the file size.  This is a
+	 * leaky abstraction, but alas.  Otherwise, we test against the
+	 * empty blob id.
+	 */
+	if (file->size ||
+	    !(file->flags & GIT_DIFF_FLAG_VALID_ID) ||
+	    git_oid_equal(&file->id, &git_oid__empty_blob_sha1))
+		file->flags |= GIT_DIFF_FLAG_VALID_SIZE;
+}
+
+static void diff_delta__flag_known_sizes(git_diff_delta *delta)
+{
+	diff_delta__flag_known_size(&delta->old_file);
+	diff_delta__flag_known_size(&delta->new_file);
+}
+
 static int diff_delta__from_one(
 	git_diff_generated *diff,
 	git_delta_t status,
@@ -128,7 +148,7 @@ static int diff_delta__from_one(
 	git_diff_delta *delta;
 	const char *matched_pathspec;
 
-	assert((oitem != NULL) ^ (nitem != NULL));
+	GIT_ASSERT_ARG((oitem != NULL) ^ (nitem != NULL));
 
 	if (oitem) {
 		entry = oitem;
@@ -160,7 +180,7 @@ static int diff_delta__from_one(
 	GIT_ERROR_CHECK_ALLOC(delta);
 
 	/* This fn is just for single-sided diffs */
-	assert(status != GIT_DELTA_MODIFIED);
+	GIT_ASSERT(status != GIT_DELTA_MODIFIED);
 	delta->nfiles = 1;
 
 	if (has_old) {
@@ -181,6 +201,8 @@ static int diff_delta__from_one(
 
 	if (has_old || !git_oid_is_zero(&delta->new_file.id))
 		delta->new_file.flags |= GIT_DIFF_FLAG_VALID_ID;
+
+	diff_delta__flag_known_sizes(delta);
 
 	return diff_insert_delta(diff, delta, matched_pathspec);
 }
@@ -243,6 +265,8 @@ static int diff_delta__from_two(
 		if (!git_oid_is_zero(&new_entry->id))
 			delta->new_file.flags |= GIT_DIFF_FLAG_VALID_ID;
 	}
+
+	diff_delta__flag_known_sizes(delta);
 
 	return diff_insert_delta(diff, delta, matched_pathspec);
 }
@@ -408,7 +432,9 @@ static git_diff_generated *diff_generated_alloc(
 	git_diff_generated *diff;
 	git_diff_options dflt = GIT_DIFF_OPTIONS_INIT;
 
-	assert(repo && old_iter && new_iter);
+	GIT_ASSERT_ARG_WITH_RETVAL(repo, NULL);
+	GIT_ASSERT_ARG_WITH_RETVAL(old_iter, NULL);
+	GIT_ASSERT_ARG_WITH_RETVAL(new_iter, NULL);
 
 	if ((diff = git__calloc(1, sizeof(git_diff_generated))) == NULL)
 		return NULL;
@@ -584,18 +610,17 @@ int git_diff__oid_for_entry(
 	const git_oid *update_match)
 {
 	git_diff_generated *diff;
-	git_buf full_path = GIT_BUF_INIT;
+	git_str full_path = GIT_STR_INIT;
 	git_index_entry entry = *src;
 	git_filter_list *fl = NULL;
 	int error = 0;
 
-	assert(d->type == GIT_DIFF_TYPE_GENERATED);
+	GIT_ASSERT(d->type == GIT_DIFF_TYPE_GENERATED);
 	diff = (git_diff_generated *)d;
 
 	memset(out, 0, sizeof(*out));
 
-	if (git_buf_joinpath(&full_path,
-		git_repository_workdir(diff->base.repo), entry.path) < 0)
+	if (git_repository_workdir_path(&full_path, diff->base.repo, entry.path) < 0)
 		return -1;
 
 	if (!mode) {
@@ -604,8 +629,8 @@ int git_diff__oid_for_entry(
 		diff->base.perf.stat_calls++;
 
 		if (p_stat(full_path.ptr, &st) < 0) {
-			error = git_path_set_error(errno, entry.path, "stat");
-			git_buf_dispose(&full_path);
+			error = git_fs_path_set_error(errno, entry.path, "stat");
+			git_str_dispose(&full_path);
 			return error;
 		}
 
@@ -668,7 +693,7 @@ int git_diff__oid_for_entry(
 		}
  	}
 
-	git_buf_dispose(&full_path);
+	git_str_dispose(&full_path);
 	return error;
 }
 
@@ -678,6 +703,8 @@ typedef struct {
 	git_iterator *new_iter;
 	const git_index_entry *oitem;
 	const git_index_entry *nitem;
+	git_strmap *submodule_cache;
+	bool submodule_cache_initialized;
 } diff_in_progress;
 
 #define MODE_BITS_MASK 0000777
@@ -692,6 +719,7 @@ static int maybe_modified_submodule(
 	git_submodule *sub;
 	unsigned int sm_status = 0;
 	git_submodule_ignore_t ign = diff->base.opts.ignore_submodules;
+	git_strmap *submodule_cache = NULL;
 
 	*status = GIT_DELTA_UNMODIFIED;
 
@@ -699,8 +727,23 @@ static int maybe_modified_submodule(
 		ign == GIT_SUBMODULE_IGNORE_ALL)
 		return 0;
 
-	if ((error = git_submodule_lookup(
-			&sub, diff->base.repo, info->nitem->path)) < 0) {
+	if (diff->base.repo->submodule_cache != NULL) {
+		submodule_cache = diff->base.repo->submodule_cache;
+	} else {
+		if (!info->submodule_cache_initialized) {
+			info->submodule_cache_initialized = true;
+			/*
+			 * Try to cache the submodule information to avoid having to parse it for
+			 * every submodule. It is okay if it fails, the cache will still be NULL
+			 * and the submodules will be attempted to be looked up individually.
+			 */
+			git_submodule_cache_init(&info->submodule_cache, diff->base.repo);
+		}
+		submodule_cache = info->submodule_cache;
+	}
+
+	if ((error = git_submodule__lookup_with_cache(
+			&sub, diff->base.repo, info->nitem->path, submodule_cache)) < 0) {
 
 		/* GIT_EEXISTS means dir with .git in it was found - ignore it */
 		if (error == GIT_EEXISTS) {
@@ -1004,10 +1047,10 @@ static int handle_unmatched_new_item(
 
 		/* do not advance into directories that contain a .git file */
 		if (recurse_into_dir && !contains_oitem) {
-			git_buf *full = NULL;
+			git_str *full = NULL;
 			if (git_iterator_current_workdir_path(&full, info->new_iter) < 0)
 				return -1;
-			if (full && git_path_contains(full, DOT_GIT)) {
+			if (full && git_fs_path_contains(full, DOT_GIT)) {
 				/* TODO: warning if not a valid git repository */
 				recurse_into_dir = false;
 			}
@@ -1190,7 +1233,7 @@ int git_diff__from_iterators(
 	const git_diff_options *opts)
 {
 	git_diff_generated *diff;
-	diff_in_progress info;
+	diff_in_progress info = {0};
 	int error = 0;
 
 	*out = NULL;
@@ -1204,8 +1247,9 @@ int git_diff__from_iterators(
 
 	/* make iterators have matching icase behavior */
 	if (DIFF_FLAG_IS_SET(diff, GIT_DIFF_IGNORE_CASE)) {
-		git_iterator_set_ignore_case(old_iter, true);
-		git_iterator_set_ignore_case(new_iter, true);
+		if ((error = git_iterator_set_ignore_case(old_iter, true)) < 0 ||
+		    (error = git_iterator_set_ignore_case(new_iter, true)) < 0)
+			goto cleanup;
 	}
 
 	/* finish initialization */
@@ -1257,6 +1301,8 @@ cleanup:
 		*out = &diff->base;
 	else
 		git_diff_free(&diff->base);
+	if (info.submodule_cache)
+		git_submodule_cache_free(info.submodule_cache);
 
 	return error;
 }
@@ -1302,7 +1348,8 @@ int git_diff_tree_to_tree(
 	char *prefix = NULL;
 	int error = 0;
 
-	assert(out && repo);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
 
 	*out = NULL;
 
@@ -1358,7 +1405,8 @@ int git_diff_tree_to_index(
 	bool index_ignore_case = false;
 	int error = 0;
 
-	assert(out && repo);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
 
 	*out = NULL;
 
@@ -1401,7 +1449,8 @@ int git_diff_index_to_workdir(
 	char *prefix = NULL;
 	int error = 0;
 
-	assert(out && repo);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
 
 	*out = NULL;
 
@@ -1444,7 +1493,8 @@ int git_diff_tree_to_workdir(
 	git_index *index;
 	int error;
 
-	assert(out && repo);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
 
 	*out = NULL;
 
@@ -1477,7 +1527,8 @@ int git_diff_tree_to_workdir_with_index(
 	git_index *index = NULL;
 	int error = 0;
 
-	assert(out && repo);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
 
 	*out = NULL;
 
@@ -1513,7 +1564,9 @@ int git_diff_index_to_index(
 	char *prefix = NULL;
 	int error;
 
-	assert(out && old_index && new_index);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(old_index);
+	GIT_ASSERT_ARG(new_index);
 
 	*out = NULL;
 

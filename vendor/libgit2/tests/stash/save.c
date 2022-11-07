@@ -161,16 +161,16 @@ void test_stash_save__untracked_skips_ignored(void)
 	cl_must_pass(p_mkdir("stash/bundle/vendor", 0777));
 	cl_git_mkfile("stash/bundle/vendor/blah", "contents\n");
 
-	cl_assert(git_path_exists("stash/when")); /* untracked */
-	cl_assert(git_path_exists("stash/just.ignore")); /* ignored */
-	cl_assert(git_path_exists("stash/bundle/vendor/blah")); /* ignored */
+	cl_assert(git_fs_path_exists("stash/when")); /* untracked */
+	cl_assert(git_fs_path_exists("stash/just.ignore")); /* ignored */
+	cl_assert(git_fs_path_exists("stash/bundle/vendor/blah")); /* ignored */
 
 	cl_git_pass(git_stash_save(
 		&stash_tip_oid, repo, signature, NULL, GIT_STASH_INCLUDE_UNTRACKED));
 
-	cl_assert(!git_path_exists("stash/when"));
-	cl_assert(git_path_exists("stash/bundle/vendor/blah"));
-	cl_assert(git_path_exists("stash/just.ignore"));
+	cl_assert(!git_fs_path_exists("stash/when"));
+	cl_assert(git_fs_path_exists("stash/bundle/vendor/blah"));
+	cl_assert(git_fs_path_exists("stash/just.ignore"));
 }
 
 void test_stash_save__can_include_untracked_and_ignored_files(void)
@@ -185,7 +185,7 @@ void test_stash_save__can_include_untracked_and_ignored_files(void)
 	assert_blob_oid("refs/stash^3:when", "b6ed15e81e2593d7bb6265eb4a991d29dc3e628b");
 	assert_blob_oid("refs/stash^3:just.ignore", "78925fb1236b98b37a35e9723033e627f97aa88b");
 
-	cl_assert(!git_path_exists("stash/just.ignore"));
+	cl_assert(!git_fs_path_exists("stash/just.ignore"));
 }
 
 /*
@@ -201,12 +201,12 @@ void test_stash_save__untracked_regression(void)
 	const char *paths[] = {"what", "where", "how", "why"};
 	git_reference *head;
 	git_commit *head_commit;
-	git_buf untracked_dir;
+	git_str untracked_dir;
 
 	const char* workdir = git_repository_workdir(repo);
 
-	git_buf_init(&untracked_dir, 0);
-	git_buf_printf(&untracked_dir, "%sz", workdir);
+	git_str_init(&untracked_dir, 0);
+	git_str_printf(&untracked_dir, "%sz", workdir);
 
 	cl_assert(!p_mkdir(untracked_dir.ptr, 0777));
 
@@ -227,7 +227,7 @@ void test_stash_save__untracked_regression(void)
 
 	git_reference_free(head);
 	git_commit_free(head_commit);
-	git_buf_dispose(&untracked_dir);
+	git_str_dispose(&untracked_dir);
 }
 
 #define MESSAGE "Look Ma! I'm on TV!"
@@ -450,9 +450,9 @@ void test_stash_save__ignored_directory(void)
 
 	cl_git_pass(git_stash_save(&stash_tip_oid, repo, signature, NULL, GIT_STASH_INCLUDE_UNTRACKED | GIT_STASH_INCLUDE_IGNORED));
 
-	cl_assert(!git_path_exists("stash/ignored_directory/sub/some_file"));
-	cl_assert(!git_path_exists("stash/ignored_directory/sub"));
-	cl_assert(!git_path_exists("stash/ignored_directory"));
+	cl_assert(!git_fs_path_exists("stash/ignored_directory/sub/some_file"));
+	cl_assert(!git_fs_path_exists("stash/ignored_directory/sub"));
+	cl_assert(!git_fs_path_exists("stash/ignored_directory"));
 }
 
 void test_stash_save__skip_submodules(void)

@@ -39,21 +39,21 @@ void test_diff_parse__nonpatches_fail_with_notfound(void)
 static void test_parse_invalid_diff(const char *invalid_diff)
 {
 	git_diff *diff;
-	git_buf buf = GIT_BUF_INIT;
+	git_str buf = GIT_STR_INIT;
 
 	/* throw some random (legitimate) diffs in with the given invalid
 	 * one.
 	 */
-	git_buf_puts(&buf, PATCH_ORIGINAL_TO_CHANGE_FIRSTLINE);
-	git_buf_puts(&buf, PATCH_BINARY_DELTA);
-	git_buf_puts(&buf, invalid_diff);
-	git_buf_puts(&buf, PATCH_ORIGINAL_TO_CHANGE_MIDDLE);
-	git_buf_puts(&buf, PATCH_BINARY_LITERAL);
+	git_str_puts(&buf, PATCH_ORIGINAL_TO_CHANGE_FIRSTLINE);
+	git_str_puts(&buf, PATCH_BINARY_DELTA);
+	git_str_puts(&buf, invalid_diff);
+	git_str_puts(&buf, PATCH_ORIGINAL_TO_CHANGE_MIDDLE);
+	git_str_puts(&buf, PATCH_BINARY_LITERAL);
 
 	cl_git_fail_with(GIT_ERROR,
 		git_diff_from_buffer(&diff, buf.ptr, buf.size));
 
-	git_buf_dispose(&buf);
+	git_str_dispose(&buf);
 }
 
 void test_diff_parse__exact_rename(void)
@@ -428,6 +428,32 @@ void test_diff_parse__new_file_with_space(void)
 	cl_assert_equal_s(patch->delta->new_file.path, "sp ace.txt");
 
 	git_patch_free(patch);
+	git_diff_free(diff);
+}
+
+void test_diff_parse__new_file_with_space_and_regenerate_patch(void)
+{
+	const char *content = PATCH_ORIGINAL_NEW_FILE_WITH_SPACE;
+	git_diff *diff = NULL;
+	git_buf buf = GIT_BUF_INIT;
+
+	cl_git_pass(git_diff_from_buffer(&diff, content, strlen(content)));
+	cl_git_pass(git_diff_to_buf(&buf, diff, GIT_DIFF_FORMAT_PATCH));
+
+	git_buf_dispose(&buf);
+	git_diff_free(diff);
+}
+
+void test_diff_parse__delete_file_with_space_and_regenerate_patch(void)
+{
+	const char *content = PATCH_DELETE_FILE_WITH_SPACE;
+	git_diff *diff = NULL;
+	git_buf buf = GIT_BUF_INIT;
+
+	cl_git_pass(git_diff_from_buffer(&diff, content, strlen(content)));
+	cl_git_pass(git_diff_to_buf(&buf, diff, GIT_DIFF_FORMAT_PATCH));
+
+	git_buf_dispose(&buf);
 	git_diff_free(diff);
 }
 

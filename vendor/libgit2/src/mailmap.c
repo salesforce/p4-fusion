@@ -8,13 +8,15 @@
 #include "mailmap.h"
 
 #include "common.h"
-#include "path.h"
+#include "config.h"
+#include "fs_path.h"
 #include "repository.h"
 #include "signature.h"
 #include "git2/config.h"
 #include "git2/revparse.h"
 #include "blob.h"
 #include "parse.h"
+#include "path.h"
 
 #define MM_FILE ".mailmap"
 #define MM_FILE_CONFIG "mailmap.file"
@@ -43,7 +45,8 @@ static int mailmap_entry_cmp(const void *a_raw, const void *b_raw)
 	const git_mailmap_entry *b = (const git_mailmap_entry *)b_raw;
 	int cmp;
 
-	assert(a && b && a->replace_email && b->replace_email);
+	GIT_ASSERT_ARG(a && a->replace_email);
+	GIT_ASSERT_ARG(b && b->replace_email);
 
 	cmp = git__strcmp(a->replace_email, b->replace_email);
 	if (cmp)
@@ -89,21 +92,21 @@ static int advance_until(
 /*
  * Parse a single entry from a mailmap file.
  *
- * The output git_bufs will be non-owning, and should be copied before being
+ * The output git_strs will be non-owning, and should be copied before being
  * persisted.
  */
 static int parse_mailmap_entry(
-	git_buf *real_name, git_buf *real_email,
-	git_buf *replace_name, git_buf *replace_email,
+	git_str *real_name, git_str *real_email,
+	git_str *replace_name, git_str *replace_email,
 	git_parse_ctx *ctx)
 {
 	const char *start;
 	size_t len;
 
-	git_buf_clear(real_name);
-	git_buf_clear(real_email);
-	git_buf_clear(replace_name);
-	git_buf_clear(replace_email);
+	git_str_clear(real_name);
+	git_str_clear(real_email);
+	git_str_clear(replace_name);
+	git_str_clear(replace_email);
 
 	git_parse_advance_ws(ctx);
 	if (is_eol(ctx))
@@ -113,8 +116,8 @@ static int parse_mailmap_entry(
 	if (advance_until(&start, &len, ctx, '<') < 0)
 		return -1;
 
-	git_buf_attach_notowned(real_name, start, len);
-	git_buf_rtrim(real_name);
+	git_str_attach_notowned(real_name, start, len);
+	git_str_rtrim(real_name);
 
 	/*
 	 * If this is the last email in the line, this is the email to replace,
@@ -125,19 +128,19 @@ static int parse_mailmap_entry(
 
 	/* If we aren't at the end of the line, parse a second name and email */
 	if (!is_eol(ctx)) {
-		git_buf_attach_notowned(real_email, start, len);
+		git_str_attach_notowned(real_email, start, len);
 
 		git_parse_advance_ws(ctx);
 		if (advance_until(&start, &len, ctx, '<') < 0)
 			return -1;
-		git_buf_attach_notowned(replace_name, start, len);
-		git_buf_rtrim(replace_name);
+		git_str_attach_notowned(replace_name, start, len);
+		git_str_rtrim(replace_name);
 
 		if (advance_until(&start, &len, ctx, '>') < 0)
 			return -1;
 	}
 
-	git_buf_attach_notowned(replace_email, start, len);
+	git_str_attach_notowned(replace_email, start, len);
 
 	if (!is_eol(ctx))
 		return -1;
@@ -185,7 +188,8 @@ static int mailmap_add_entry_unterminated(
 	git_mailmap_entry *entry = git__calloc(1, sizeof(git_mailmap_entry));
 	GIT_ERROR_CHECK_ALLOC(entry);
 
-	assert(mm && replace_email && *replace_email);
+	GIT_ASSERT_ARG(mm);
+	GIT_ASSERT_ARG(replace_email && *replace_email);
 
 	if (real_name_size > 0) {
 		entry->real_name = git__substrdup(real_name, real_name_size);
@@ -229,10 +233,10 @@ static int mailmap_add_buffer(git_mailmap *mm, const char *buf, size_t len)
 	git_parse_ctx ctx;
 
 	/* Scratch buffers containing the real parsed names & emails */
-	git_buf real_name = GIT_BUF_INIT;
-	git_buf real_email = GIT_BUF_INIT;
-	git_buf replace_name = GIT_BUF_INIT;
-	git_buf replace_email = GIT_BUF_INIT;
+	git_str real_name = GIT_STR_INIT;
+	git_str real_email = GIT_STR_INIT;
+	git_str replace_name = GIT_STR_INIT;
+	git_str replace_email = GIT_STR_INIT;
 
 	/* Buffers may not contain '\0's. */
 	if (memchr(buf, '\0', len) != NULL)
@@ -261,10 +265,10 @@ static int mailmap_add_buffer(git_mailmap *mm, const char *buf, size_t len)
 	}
 
 cleanup:
-	git_buf_dispose(&real_name);
-	git_buf_dispose(&real_email);
-	git_buf_dispose(&replace_name);
-	git_buf_dispose(&replace_email);
+	git_str_dispose(&real_name);
+	git_str_dispose(&real_email);
+	git_str_dispose(&replace_name);
+	git_str_dispose(&replace_email);
 	return error;
 }
 
@@ -287,10 +291,11 @@ static int mailmap_add_blob(
 {
 	git_object *object = NULL;
 	git_blob *blob = NULL;
-	git_buf content = GIT_BUF_INIT;
+	git_str content = GIT_STR_INIT;
 	int error;
 
-	assert(mm && repo);
+	GIT_ASSERT_ARG(mm);
+	GIT_ASSERT_ARG(repo);
 
 	error = git_revparse_single(&object, repo, rev);
 	if (error < 0)
@@ -309,7 +314,7 @@ static int mailmap_add_blob(
 		goto cleanup;
 
 cleanup:
-	git_buf_dispose(&content);
+	git_str_dispose(&content);
 	git_blob_free(blob);
 	git_object_free(object);
 	return error;
@@ -319,11 +324,15 @@ static int mailmap_add_file_ondisk(
 	git_mailmap *mm, const char *path, git_repository *repo)
 {
 	const char *base = repo ? git_repository_workdir(repo) : NULL;
-	git_buf fullpath = GIT_BUF_INIT;
-	git_buf content = GIT_BUF_INIT;
+	git_str fullpath = GIT_STR_INIT;
+	git_str content = GIT_STR_INIT;
 	int error;
 
-	error = git_path_join_unrooted(&fullpath, path, base, NULL);
+	error = git_fs_path_join_unrooted(&fullpath, path, base, NULL);
+	if (error < 0)
+		goto cleanup;
+
+	error = git_path_validate_str_length(repo, &fullpath);
 	if (error < 0)
 		goto cleanup;
 
@@ -336,8 +345,8 @@ static int mailmap_add_file_ondisk(
 		goto cleanup;
 
 cleanup:
-	git_buf_dispose(&fullpath);
-	git_buf_dispose(&content);
+	git_str_dispose(&fullpath);
+	git_str_dispose(&content);
 	return error;
 }
 
@@ -345,12 +354,10 @@ cleanup:
 static void mailmap_add_from_repository(git_mailmap *mm, git_repository *repo)
 {
 	git_config *config = NULL;
-	git_buf rev_buf = GIT_BUF_INIT;
-	git_buf path_buf = GIT_BUF_INIT;
+	git_str rev_buf = GIT_STR_INIT;
+	git_str path_buf = GIT_STR_INIT;
 	const char *rev = NULL;
 	const char *path = NULL;
-
-	assert(mm && repo);
 
 	/* If we're in a bare repo, default blob to 'HEAD:.mailmap' */
 	if (repo->is_bare)
@@ -358,9 +365,9 @@ static void mailmap_add_from_repository(git_mailmap *mm, git_repository *repo)
 
 	/* Try to load 'mailmap.file' and 'mailmap.blob' cfgs from the repo */
 	if (git_repository_config(&config, repo) == 0) {
-		if (git_config_get_string_buf(&rev_buf, config, MM_BLOB_CONFIG) == 0)
+		if (git_config__get_string_buf(&rev_buf, config, MM_BLOB_CONFIG) == 0)
 			rev = rev_buf.ptr;
-		if (git_config_get_path(&path_buf, config, MM_FILE_CONFIG) == 0)
+		if (git_config__get_path(&path_buf, config, MM_FILE_CONFIG) == 0)
 			path = path_buf.ptr;
 	}
 
@@ -382,16 +389,21 @@ static void mailmap_add_from_repository(git_mailmap *mm, git_repository *repo)
 	if (path != NULL)
 		mailmap_add_file_ondisk(mm, path, repo);
 
-	git_buf_dispose(&rev_buf);
-	git_buf_dispose(&path_buf);
+	git_str_dispose(&rev_buf);
+	git_str_dispose(&path_buf);
 	git_config_free(config);
 }
 
 int git_mailmap_from_repository(git_mailmap **out, git_repository *repo)
 {
-	int error = git_mailmap_new(out);
-	if (error < 0)
+	int error;
+
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
+
+	if ((error = git_mailmap_new(out)) < 0)
 		return error;
+
 	mailmap_add_from_repository(*out, repo);
 	return 0;
 }
@@ -408,7 +420,7 @@ const git_mailmap_entry *git_mailmap_entry_lookup(
 	git_mailmap_entry needle = { NULL };
 	needle.replace_email = (char *)email;
 
-	assert(email);
+	GIT_ASSERT_ARG_WITH_RETVAL(email, NULL);
 
 	if (!mm)
 		return NULL;
@@ -431,7 +443,8 @@ const git_mailmap_entry *git_mailmap_entry_lookup(
 		if (git__strcmp(entry->replace_email, email))
 			break; /* it's a different email, so we're done looking */
 
-		assert(entry->replace_name); /* should be specific */
+		 /* should be specific */
+		GIT_ASSERT_WITH_RETVAL(entry->replace_name, NULL);
 		if (!name || !git__strcmp(entry->replace_name, name))
 			return entry;
 	}
@@ -447,7 +460,9 @@ int git_mailmap_resolve(
 	const char *name, const char *email)
 {
 	const git_mailmap_entry *entry = NULL;
-	assert(name && email);
+
+	GIT_ASSERT(name);
+	GIT_ASSERT(email);
 
 	*real_name = name;
 	*real_email = email;

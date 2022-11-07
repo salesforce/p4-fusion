@@ -14,10 +14,10 @@
 #include "git2/mailmap.h"
 #include "git2/sys/commit.h"
 
+#include "buf.h"
 #include "odb.h"
 #include "commit.h"
 #include "signature.h"
-#include "message.h"
 #include "refs.h"
 #include "object.h"
 #include "array.h"
@@ -42,7 +42,7 @@ void git_commit__free(void *_commit)
 }
 
 static int git_commit__create_buffer_internal(
-	git_buf *out,
+	git_str *out,
 	const git_signature *author,
 	const git_signature *committer,
 	const char *message_encoding,
@@ -53,7 +53,8 @@ static int git_commit__create_buffer_internal(
 	size_t i = 0;
 	const git_oid *parent;
 
-	assert(out && tree);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(tree);
 
 	git_oid__writebuf(out, "tree ", tree);
 
@@ -66,17 +67,17 @@ static int git_commit__create_buffer_internal(
 	git_signature__writebuf(out, "committer ", committer);
 
 	if (message_encoding != NULL)
-		git_buf_printf(out, "encoding %s\n", message_encoding);
+		git_str_printf(out, "encoding %s\n", message_encoding);
 
-	git_buf_putc(out, '\n');
+	git_str_putc(out, '\n');
 
-	if (git_buf_puts(out, message) < 0)
+	if (git_str_puts(out, message) < 0)
 		goto on_error;
 
 	return 0;
 
 on_error:
-	git_buf_dispose(out);
+	git_str_dispose(out);
 	return -1;
 }
 
@@ -135,7 +136,7 @@ static int git_commit__create_internal(
 	int error;
 	git_odb *odb;
 	git_reference *ref = NULL;
-	git_buf buf = GIT_BUF_INIT;
+	git_str buf = GIT_STR_INIT;
 	const git_oid *current_id = NULL;
 	git_array_oid_t parents = GIT_ARRAY_INIT;
 
@@ -178,7 +179,7 @@ static int git_commit__create_internal(
 cleanup:
 	git_array_clear(parents);
 	git_reference_free(ref);
-	git_buf_dispose(&buf);
+	git_str_dispose(&buf);
 	return error;
 }
 
@@ -229,7 +230,8 @@ int git_commit_create_v(
 	int error = 0;
 	commit_parent_varargs data;
 
-	assert(tree && git_tree_owner(tree) == repo);
+	GIT_ASSERT_ARG(tree);
+	GIT_ASSERT_ARG(git_tree_owner(tree) == repo);
 
 	data.total = parent_count;
 	va_start(data.args, parent_count);
@@ -306,7 +308,8 @@ int git_commit_create(
 {
 	commit_parent_data data = { parent_count, parents, repo };
 
-	assert(tree && git_tree_owner(tree) == repo);
+	GIT_ASSERT_ARG(tree);
+	GIT_ASSERT_ARG(git_tree_owner(tree) == repo);
 
 	return git_commit__create_internal(
 		id, repo, update_ref, author, committer,
@@ -337,7 +340,8 @@ int git_commit_amend(
 	git_reference *ref;
 	int error;
 
-	assert(id && commit_to_amend);
+	GIT_ASSERT_ARG(id);
+	GIT_ASSERT_ARG(commit_to_amend);
 
 	repo = git_commit_owner(commit_to_amend);
 
@@ -356,7 +360,7 @@ int git_commit_amend(
 		git_oid_cpy(&tree_id, git_tree_id(old_tree));
 		git_tree_free(old_tree);
 	} else {
-		assert(git_tree_owner(tree) == repo);
+		GIT_ASSERT_ARG(git_tree_owner(tree) == repo);
 		git_oid_cpy(&tree_id, git_tree_id(tree));
 	}
 
@@ -391,8 +395,10 @@ static int commit_parse(git_commit *commit, const char *data, size_t size, unsig
 	git_oid parent_id;
 	size_t header_len;
 	git_signature dummy_sig;
+	int error;
 
-	assert(commit && data);
+	GIT_ASSERT_ARG(commit);
+	GIT_ASSERT_ARG(data);
 
 	buffer = buffer_start;
 
@@ -426,14 +432,14 @@ static int commit_parse(git_commit *commit, const char *data, size_t size, unsig
 		commit->author = git__malloc(sizeof(git_signature));
 		GIT_ERROR_CHECK_ALLOC(commit->author);
 
-		if (git_signature__parse(commit->author, &buffer, buffer_end, "author ", '\n') < 0)
-			return -1;
+		if ((error = git_signature__parse(commit->author, &buffer, buffer_end, "author ", '\n')) < 0)
+			return error;
 	}
 
 	/* Some tools create multiple author fields, ignore the extra ones */
 	while (!git__prefixncmp(buffer, buffer_end - buffer, "author ")) {
-		if (git_signature__parse(&dummy_sig, &buffer, buffer_end, "author ", '\n') < 0)
-			return -1;
+		if ((error = git_signature__parse(&dummy_sig, &buffer, buffer_end, "author ", '\n')) < 0)
+			return error;
 
 		git__free(dummy_sig.name);
 		git__free(dummy_sig.email);
@@ -443,8 +449,8 @@ static int commit_parse(git_commit *commit, const char *data, size_t size, unsig
 	commit->committer = git__malloc(sizeof(git_signature));
 	GIT_ERROR_CHECK_ALLOC(commit->committer);
 
-	if (git_signature__parse(commit->committer, &buffer, buffer_end, "committer ", '\n') < 0)
-		return -1;
+	if ((error = git_signature__parse(commit->committer, &buffer, buffer_end, "committer ", '\n')) < 0)
+		return error;
 
 	if (flags & GIT_COMMIT_PARSE_QUICK)
 		return 0;
@@ -488,7 +494,7 @@ static int commit_parse(git_commit *commit, const char *data, size_t size, unsig
 
 bad_buffer:
 	git_error_set(GIT_ERROR_OBJECT, "failed to parse bad commit object");
-	return -1;
+	return GIT_EINVALID;
 }
 
 int git_commit__parse_raw(void *commit, const char *data, size_t size)
@@ -506,28 +512,28 @@ int git_commit__parse(void *_commit, git_odb_object *odb_obj)
 	return git_commit__parse_ext(_commit, odb_obj, 0);
 }
 
-#define GIT_COMMIT_GETTER(_rvalue, _name, _return) \
+#define GIT_COMMIT_GETTER(_rvalue, _name, _return, _invalid) \
 	_rvalue git_commit_##_name(const git_commit *commit) \
 	{\
-		assert(commit); \
+		GIT_ASSERT_ARG_WITH_RETVAL(commit, _invalid); \
 		return _return; \
 	}
 
-GIT_COMMIT_GETTER(const git_signature *, author, commit->author)
-GIT_COMMIT_GETTER(const git_signature *, committer, commit->committer)
-GIT_COMMIT_GETTER(const char *, message_raw, commit->raw_message)
-GIT_COMMIT_GETTER(const char *, message_encoding, commit->message_encoding)
-GIT_COMMIT_GETTER(const char *, raw_header, commit->raw_header)
-GIT_COMMIT_GETTER(git_time_t, time, commit->committer->when.time)
-GIT_COMMIT_GETTER(int, time_offset, commit->committer->when.offset)
-GIT_COMMIT_GETTER(unsigned int, parentcount, (unsigned int)git_array_size(commit->parent_ids))
-GIT_COMMIT_GETTER(const git_oid *, tree_id, &commit->tree_id)
+GIT_COMMIT_GETTER(const git_signature *, author, commit->author, NULL)
+GIT_COMMIT_GETTER(const git_signature *, committer, commit->committer, NULL)
+GIT_COMMIT_GETTER(const char *, message_raw, commit->raw_message, NULL)
+GIT_COMMIT_GETTER(const char *, message_encoding, commit->message_encoding, NULL)
+GIT_COMMIT_GETTER(const char *, raw_header, commit->raw_header, NULL)
+GIT_COMMIT_GETTER(git_time_t, time, commit->committer->when.time, INT64_MIN)
+GIT_COMMIT_GETTER(int, time_offset, commit->committer->when.offset, -1)
+GIT_COMMIT_GETTER(unsigned int, parentcount, (unsigned int)git_array_size(commit->parent_ids), 0)
+GIT_COMMIT_GETTER(const git_oid *, tree_id, &commit->tree_id, NULL)
 
 const char *git_commit_message(const git_commit *commit)
 {
 	const char *message;
 
-	assert(commit);
+	GIT_ASSERT_ARG_WITH_RETVAL(commit, NULL);
 
 	message = commit->raw_message;
 
@@ -540,20 +546,31 @@ const char *git_commit_message(const git_commit *commit)
 
 const char *git_commit_summary(git_commit *commit)
 {
-	git_buf summary = GIT_BUF_INIT;
-	const char *msg, *space;
+	git_str summary = GIT_STR_INIT;
+	const char *msg, *space, *next;
 	bool space_contains_newline = false;
 
-	assert(commit);
+	GIT_ASSERT_ARG_WITH_RETVAL(commit, NULL);
 
 	if (!commit->summary) {
 		for (msg = git_commit_message(commit), space = NULL; *msg; ++msg) {
 			char next_character = msg[0];
 			/* stop processing at the end of the first paragraph */
-			if (next_character == '\n' && (!msg[1] || msg[1] == '\n'))
-				break;
+			if (next_character == '\n') {
+				if (!msg[1])
+					break;
+				if (msg[1] == '\n')
+					break;
+				/* stop processing if next line contains only whitespace */
+				next = msg + 1;
+				while (*next && git__isspace_nonlf(*next)) {
+					++next;
+				}
+				if (!*next || *next == '\n') 
+					break;
+			}
 			/* record the beginning of contiguous whitespace runs */
-			else if (git__isspace(next_character)) {
+			if (git__isspace(next_character)) {
 				if(space == NULL) {
 					space = msg;
 					space_contains_newline = false;
@@ -565,17 +582,17 @@ const char *git_commit_summary(git_commit *commit)
 				/* process any recorded whitespace */
 				if (space) {
 					if(space_contains_newline)
-						git_buf_putc(&summary, ' '); /* if the space contains a newline, collapse to ' ' */
+						git_str_putc(&summary, ' '); /* if the space contains a newline, collapse to ' ' */
 					else
-						git_buf_put(&summary, space, (msg - space)); /* otherwise copy it */
+						git_str_put(&summary, space, (msg - space)); /* otherwise copy it */
 					space = NULL;
 				}
 				/* copy the next character */
-				git_buf_putc(&summary, next_character);
+				git_str_putc(&summary, next_character);
 			}
 		}
 
-		commit->summary = git_buf_detach(&summary);
+		commit->summary = git_str_detach(&summary);
 		if (!commit->summary)
 			commit->summary = git__strdup("");
 	}
@@ -587,7 +604,7 @@ const char *git_commit_body(git_commit *commit)
 {
 	const char *msg, *end;
 
-	assert(commit);
+	GIT_ASSERT_ARG_WITH_RETVAL(commit, NULL);
 
 	if (!commit->body) {
 		/* search for end of summary */
@@ -612,14 +629,14 @@ const char *git_commit_body(git_commit *commit)
 
 int git_commit_tree(git_tree **tree_out, const git_commit *commit)
 {
-	assert(commit);
+	GIT_ASSERT_ARG(commit);
 	return git_tree_lookup(tree_out, commit->object.repo, &commit->tree_id);
 }
 
 const git_oid *git_commit_parent_id(
 	const git_commit *commit, unsigned int n)
 {
-	assert(commit);
+	GIT_ASSERT_ARG_WITH_RETVAL(commit, NULL);
 
 	return git_array_get(commit->parent_ids, n);
 }
@@ -628,7 +645,7 @@ int git_commit_parent(
 	git_commit **parent, const git_commit *commit, unsigned int n)
 {
 	const git_oid *parent_id;
-	assert(commit);
+	GIT_ASSERT_ARG(commit);
 
 	parent_id = git_commit_parent_id(commit, n);
 	if (parent_id == NULL) {
@@ -647,7 +664,8 @@ int git_commit_nth_gen_ancestor(
 	git_commit *current, *parent = NULL;
 	int error;
 
-	assert(ancestor && commit);
+	GIT_ASSERT_ARG(ancestor);
+	GIT_ASSERT_ARG(commit);
 
 	if (git_commit_dup(&current, (git_commit *)commit) < 0)
 		return -1;
@@ -672,11 +690,22 @@ int git_commit_nth_gen_ancestor(
 	return 0;
 }
 
-int git_commit_header_field(git_buf *out, const git_commit *commit, const char *field)
+int git_commit_header_field(
+	git_buf *out,
+	const git_commit *commit,
+	const char *field)
+{
+	GIT_BUF_WRAP_PRIVATE(out, git_commit__header_field, commit, field);
+}
+
+int git_commit__header_field(
+	git_str *out,
+	const git_commit *commit,
+	const char *field)
 {
 	const char *eol, *buf = commit->raw_header;
 
-	git_buf_clear(out);
+	git_str_clear(out);
 
 	while ((eol = strchr(buf, '\n'))) {
 		/* We can skip continuations here */
@@ -700,22 +729,22 @@ int git_commit_header_field(git_buf *out, const git_commit *commit, const char *
 
 		buf++; /* skip the SP */
 
-		git_buf_put(out, buf, eol - buf);
-		if (git_buf_oom(out))
+		git_str_put(out, buf, eol - buf);
+		if (git_str_oom(out))
 			goto oom;
 
 		/* If the next line starts with SP, it's multi-line, we must continue */
 		while (eol[1] == ' ') {
-			git_buf_putc(out, '\n');
+			git_str_putc(out, '\n');
 			buf = eol + 2;
 			eol = strchr(buf, '\n');
 			if (!eol)
 				goto malformed;
 
-			git_buf_put(out, buf, eol - buf);
+			git_str_put(out, buf, eol - buf);
 		}
 
-		if (git_buf_oom(out))
+		if (git_str_oom(out))
 			goto oom;
 
 		return 0;
@@ -732,7 +761,35 @@ oom:
 	return -1;
 }
 
-int git_commit_extract_signature(git_buf *signature, git_buf *signed_data, git_repository *repo, git_oid *commit_id, const char *field)
+int git_commit_extract_signature(
+	git_buf *signature_out,
+	git_buf *signed_data_out,
+	git_repository *repo,
+	git_oid *commit_id,
+	const char *field)
+{
+	git_str signature = GIT_STR_INIT, signed_data = GIT_STR_INIT;
+	int error;
+
+	if ((error = git_buf_tostr(&signature, signature_out)) < 0 ||
+	    (error = git_buf_tostr(&signed_data, signed_data_out)) < 0 ||
+	    (error = git_commit__extract_signature(&signature, &signed_data, repo, commit_id, field)) < 0 ||
+	    (error = git_buf_fromstr(signature_out, &signature)) < 0 ||
+	    (error = git_buf_fromstr(signed_data_out, &signed_data)) < 0)
+		goto done;
+
+done:
+	git_str_dispose(&signature);
+	git_str_dispose(&signed_data);
+	return error;
+}
+
+int git_commit__extract_signature(
+	git_str *signature,
+	git_str *signed_data,
+	git_repository *repo,
+	git_oid *commit_id,
+	const char *field)
 {
 	git_odb_object *obj;
 	git_odb *odb;
@@ -740,8 +797,8 @@ int git_commit_extract_signature(git_buf *signature, git_buf *signed_data, git_r
 	const char *h, *eol;
 	int error;
 
-	git_buf_clear(signature);
-	git_buf_clear(signed_data);
+	git_str_clear(signature);
+	git_str_clear(signed_data);
 
 	if (!field)
 		field = "gpgsig";
@@ -763,7 +820,7 @@ int git_commit_extract_signature(git_buf *signature, git_buf *signed_data, git_r
 	while ((h = strchr(buf, '\n')) && h[1] != '\0') {
 		h++;
 		if (git__prefixcmp(buf, field)) {
-			if (git_buf_put(signed_data, buf, h - buf) < 0)
+			if (git_str_put(signed_data, buf, h - buf) < 0)
 				return -1;
 
 			buf = h;
@@ -782,25 +839,25 @@ int git_commit_extract_signature(git_buf *signature, git_buf *signed_data, git_r
 
 		h++; /* skip the SP */
 
-		git_buf_put(signature, h, eol - h);
-		if (git_buf_oom(signature))
+		git_str_put(signature, h, eol - h);
+		if (git_str_oom(signature))
 			goto oom;
 
 		/* If the next line starts with SP, it's multi-line, we must continue */
 		while (eol[1] == ' ') {
-			git_buf_putc(signature, '\n');
+			git_str_putc(signature, '\n');
 			h = eol + 2;
 			eol = strchr(h, '\n');
 			if (!eol)
 				goto malformed;
 
-			git_buf_put(signature, h, eol - h);
+			git_str_put(signature, h, eol - h);
 		}
 
-		if (git_buf_oom(signature))
+		if (git_str_oom(signature))
 			goto oom;
 
-		error = git_buf_puts(signed_data, eol+1);
+		error = git_str_puts(signed_data, eol+1);
 		git_odb_object_free(obj);
 		return error;
 	}
@@ -820,12 +877,29 @@ oom:
 
 cleanup:
 	git_odb_object_free(obj);
-	git_buf_clear(signature);
-	git_buf_clear(signed_data);
+	git_str_clear(signature);
+	git_str_clear(signed_data);
 	return error;
 }
 
-int git_commit_create_buffer(git_buf *out,
+int git_commit_create_buffer(
+	git_buf *out,
+	git_repository *repo,
+	const git_signature *author,
+	const git_signature *committer,
+	const char *message_encoding,
+	const char *message,
+	const git_tree *tree,
+	size_t parent_count,
+	const git_commit *parents[])
+{
+	GIT_BUF_WRAP_PRIVATE(out, git_commit__create_buffer, repo,
+	                     author, committer, message_encoding, message,
+	                     tree, parent_count, parents);
+}
+
+int git_commit__create_buffer(
+	git_str *out,
 	git_repository *repo,
 	const git_signature *author,
 	const git_signature *committer,
@@ -840,7 +914,8 @@ int git_commit_create_buffer(git_buf *out,
 	git_array_oid_t parents_arr = GIT_ARRAY_INIT;
 	const git_oid *tree_id;
 
-	assert(tree && git_tree_owner(tree) == repo);
+	GIT_ASSERT_ARG(tree);
+	GIT_ASSERT_ARG(git_tree_owner(tree) == repo);
 
 	tree_id = git_tree_id(tree);
 
@@ -859,23 +934,27 @@ int git_commit_create_buffer(git_buf *out,
 /**
  * Append to 'out' properly marking continuations when there's a newline in 'content'
  */
-static void format_header_field(git_buf *out, const char *field, const char *content)
+static int format_header_field(git_str *out, const char *field, const char *content)
 {
 	const char *lf;
 
-	assert(out && field && content);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(field);
+	GIT_ASSERT_ARG(content);
 
-	git_buf_puts(out, field);
-	git_buf_putc(out, ' ');
+	git_str_puts(out, field);
+	git_str_putc(out, ' ');
 
 	while ((lf = strchr(content, '\n')) != NULL) {
-		git_buf_put(out, content, lf - content);
-		git_buf_puts(out, "\n ");
+		git_str_put(out, content, lf - content);
+		git_str_puts(out, "\n ");
 		content = lf + 1;
 	}
 
-	git_buf_puts(out, content);
-	git_buf_putc(out, '\n');
+	git_str_puts(out, content);
+	git_str_putc(out, '\n');
+
+	return git_str_oom(out) ? -1 : 0;
 }
 
 static const git_oid *commit_parent_from_commit(size_t n, void *payload)
@@ -897,15 +976,17 @@ int git_commit_create_with_signature(
 	int error = 0;
 	const char *field;
 	const char *header_end;
-	git_buf commit = GIT_BUF_INIT;
+	git_str commit = GIT_STR_INIT;
 	git_commit *parsed;
 	git_array_oid_t parents = GIT_ARRAY_INIT;
 
 	/* The first step is to verify that all the tree and parents exist */
 	parsed = git__calloc(1, sizeof(git_commit));
 	GIT_ERROR_CHECK_ALLOC(parsed);
-	if ((error = commit_parse(parsed, commit_content, strlen(commit_content), 0)) < 0)
+	if (commit_parse(parsed, commit_content, strlen(commit_content), 0) < 0) {
+		error = -1;
 		goto cleanup;
+	}
 
 	if ((error = validate_tree_and_parents(&parents, repo, &parsed->tree_id, commit_parent_from_commit, parsed, NULL, true)) < 0)
 		goto cleanup;
@@ -922,16 +1003,18 @@ int git_commit_create_with_signature(
 
 	/* The header ends after the first LF */
 	header_end++;
-	git_buf_put(&commit, commit_content, header_end - commit_content);
+	git_str_put(&commit, commit_content, header_end - commit_content);
 
 	if (signature != NULL) {
 		field = signature_field ? signature_field : "gpgsig";
-		format_header_field(&commit, field, signature);
+
+		if ((error = format_header_field(&commit, field, signature)) < 0)
+			goto cleanup;
 	}
 
-	git_buf_puts(&commit, header_end);
+	git_str_puts(&commit, header_end);
 
-	if (git_buf_oom(&commit))
+	if (git_str_oom(&commit))
 		return -1;
 
 	if ((error = git_repository_odb__weakptr(&odb, repo)) < 0)
@@ -942,7 +1025,7 @@ int git_commit_create_with_signature(
 
 cleanup:
 	git_commit__free(parsed);
-	git_buf_dispose(&commit);
+	git_str_dispose(&commit);
 	return error;
 }
 

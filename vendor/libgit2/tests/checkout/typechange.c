@@ -76,12 +76,12 @@ void test_checkout_typechange__cleanup(void)
 
 static void assert_file_exists(const char *path)
 {
-	cl_assert_(git_path_isfile(path), path);
+	cl_assert_(git_fs_path_isfile(path), path);
 }
 
 static void assert_dir_exists(const char *path)
 {
-	cl_assert_(git_path_isdir(path), path);
+	cl_assert_(git_fs_path_isdir(path), path);
 }
 
 static void assert_workdir_matches_tree(
@@ -90,7 +90,7 @@ static void assert_workdir_matches_tree(
 	git_object *obj;
 	git_tree *tree;
 	size_t i, max_i;
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 
 	if (!root)
 		root = git_repository_workdir(repo);
@@ -106,7 +106,7 @@ static void assert_workdir_matches_tree(
 		const git_tree_entry *te = git_tree_entry_byindex(tree, i);
 		cl_assert(te);
 
-		cl_git_pass(git_buf_joinpath(&path, root, git_tree_entry_name(te)));
+		cl_git_pass(git_str_joinpath(&path, root, git_tree_entry_name(te)));
 
 		switch (git_tree_entry_type(te)) {
 		case GIT_OBJECT_COMMIT:
@@ -126,7 +126,7 @@ static void assert_workdir_matches_tree(
 				/* because of cross-platform, don't confirm exec bit yet */
 				break;
 			case GIT_FILEMODE_LINK:
-				cl_assert_(git_path_exists(path.ptr), path.ptr);
+				cl_assert_(git_fs_path_exists(path.ptr), path.ptr);
 				/* because of cross-platform, don't confirm link yet */
 				break;
 			default:
@@ -139,7 +139,7 @@ static void assert_workdir_matches_tree(
 	}
 
 	git_tree_free(tree);
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 }
 
 void test_checkout_typechange__checkout_typechanges_safe(void)
@@ -163,19 +163,19 @@ void test_checkout_typechange__checkout_typechanges_safe(void)
 		git_object_free(obj);
 
 		if (!g_typechange_empty[i]) {
-			cl_assert(git_path_isdir("typechanges"));
-			cl_assert(git_path_exists("typechanges/a"));
-			cl_assert(git_path_exists("typechanges/b"));
-			cl_assert(git_path_exists("typechanges/c"));
-			cl_assert(git_path_exists("typechanges/d"));
-			cl_assert(git_path_exists("typechanges/e"));
+			cl_assert(git_fs_path_isdir("typechanges"));
+			cl_assert(git_fs_path_exists("typechanges/a"));
+			cl_assert(git_fs_path_exists("typechanges/b"));
+			cl_assert(git_fs_path_exists("typechanges/c"));
+			cl_assert(git_fs_path_exists("typechanges/d"));
+			cl_assert(git_fs_path_exists("typechanges/e"));
 		} else {
-			cl_assert(git_path_isdir("typechanges"));
-			cl_assert(!git_path_exists("typechanges/a"));
-			cl_assert(!git_path_exists("typechanges/b"));
-			cl_assert(!git_path_exists("typechanges/c"));
-			cl_assert(!git_path_exists("typechanges/d"));
-			cl_assert(!git_path_exists("typechanges/e"));
+			cl_assert(git_fs_path_isdir("typechanges"));
+			cl_assert(!git_fs_path_exists("typechanges/a"));
+			cl_assert(!git_fs_path_exists("typechanges/b"));
+			cl_assert(!git_fs_path_exists("typechanges/c"));
+			cl_assert(!git_fs_path_exists("typechanges/d"));
+			cl_assert(!git_fs_path_exists("typechanges/e"));
 		}
 	}
 }
@@ -226,31 +226,31 @@ static void force_create_file(const char *file)
 
 static int make_submodule_dirty(git_submodule *sm, const char *name, void *payload)
 {
-	git_buf submodulepath = GIT_BUF_INIT;
-	git_buf dirtypath = GIT_BUF_INIT;
+	git_str submodulepath = GIT_STR_INIT;
+	git_str dirtypath = GIT_STR_INIT;
 	git_repository *submodule_repo;
 
 	GIT_UNUSED(name);
 	GIT_UNUSED(payload);
 
 	/* remove submodule directory in preparation for init and repo_init */
-	cl_git_pass(git_buf_joinpath(
+	cl_git_pass(git_str_joinpath(
 		&submodulepath,
 		git_repository_workdir(g_repo),
 		git_submodule_path(sm)
 	));
-	git_futils_rmdir_r(git_buf_cstr(&submodulepath), NULL, GIT_RMDIR_REMOVE_FILES);
+	git_futils_rmdir_r(git_str_cstr(&submodulepath), NULL, GIT_RMDIR_REMOVE_FILES);
 
 	/* initialize submodule's repository */
 	cl_git_pass(git_submodule_repo_init(&submodule_repo, sm, 0));
 
 	/* create a file in the submodule workdir to make it dirty */
 	cl_git_pass(
-		git_buf_joinpath(&dirtypath, git_repository_workdir(submodule_repo), "dirty"));
-	force_create_file(git_buf_cstr(&dirtypath));
+		git_str_joinpath(&dirtypath, git_repository_workdir(submodule_repo), "dirty"));
+	force_create_file(git_str_cstr(&dirtypath));
 
-	git_buf_dispose(&dirtypath);
-	git_buf_dispose(&submodulepath);
+	git_str_dispose(&dirtypath);
+	git_str_dispose(&submodulepath);
 	git_repository_free(submodule_repo);
 
 	return 0;
@@ -293,12 +293,12 @@ void test_checkout_typechange__checkout_with_conflicts(void)
 			GIT_CHECKOUT_FORCE | GIT_CHECKOUT_REMOVE_UNTRACKED;
 		memset(&cts, 0, sizeof(cts));
 
-		cl_assert(git_path_exists("typechanges/untracked"));
+		cl_assert(git_fs_path_exists("typechanges/untracked"));
 
 		cl_git_pass(git_checkout_tree(g_repo, obj, &opts));
 		cl_assert_equal_i(0, cts.conflicts);
 
-		cl_assert(!git_path_exists("typechanges/untracked"));
+		cl_assert(!git_fs_path_exists("typechanges/untracked"));
 
 		cl_git_pass(
 			git_repository_set_head_detached(g_repo, git_object_id(obj)));

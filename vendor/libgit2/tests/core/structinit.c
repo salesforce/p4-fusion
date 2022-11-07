@@ -1,4 +1,5 @@
 #include "clar_libgit2.h"
+#include <git2/sys/commit_graph.h>
 #include <git2/sys/config.h>
 #include <git2/sys/filter.h>
 #include <git2/sys/odb_backend.h>
@@ -66,7 +67,7 @@ void test_core_structinit__compare(void)
 	 * which is not guaranteed to be initialized to anything sane at all.
 	 *
 	 * Assume most compilers, in a debug build, will clear that memory for
-	 * us or set it to sentinal markers.  Etc.
+	 * us or set it to sentinel markers.  Etc.
 	 */
 #if !defined(DEBUG) && !defined(_DEBUG)
 	clar__skip();
@@ -96,6 +97,13 @@ void test_core_structinit__compare(void)
 	CHECK_MACRO_FUNC_INIT_EQUAL( \
 		git_clone_options, GIT_CLONE_OPTIONS_VERSION, \
 		GIT_CLONE_OPTIONS_INIT, git_clone_options_init);
+
+	/* commit_graph_writer */
+	CHECK_MACRO_FUNC_INIT_EQUAL( \
+		git_commit_graph_writer_options, \
+		GIT_COMMIT_GRAPH_WRITER_OPTIONS_VERSION, \
+		GIT_COMMIT_GRAPH_WRITER_OPTIONS_INIT, \
+		git_commit_graph_writer_options_init);
 
 	/* diff */
 	CHECK_MACRO_FUNC_INIT_EQUAL( \

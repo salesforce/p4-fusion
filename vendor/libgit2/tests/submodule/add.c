@@ -17,20 +17,20 @@ void test_submodule_add__cleanup(void)
 
 static void assert_submodule_url(const char* name, const char *url)
 {
-	git_buf key = GIT_BUF_INIT;
+	git_str key = GIT_STR_INIT;
 
 
-	cl_git_pass(git_buf_printf(&key, "submodule.%s.url", name));
-	assert_config_entry_value(g_repo, git_buf_cstr(&key), url);
+	cl_git_pass(git_str_printf(&key, "submodule.%s.url", name));
+	assert_config_entry_value(g_repo, git_str_cstr(&key), url);
 
-	git_buf_dispose(&key);
+	git_str_dispose(&key);
 }
 
 void test_submodule_add__url_absolute(void)
 {
 	git_submodule *sm;
 	git_repository *repo;
-	git_buf dot_git_content = GIT_BUF_INIT;
+	git_str dot_git_content = GIT_STR_INIT;
 
 	g_repo = setup_fixture_submod2();
 
@@ -46,11 +46,11 @@ void test_submodule_add__url_absolute(void)
 		);
 	git_submodule_free(sm);
 
-	cl_assert(git_path_isfile("submod2/" "sm_libgit2" "/.git"));
+	cl_assert(git_fs_path_isfile("submod2/" "sm_libgit2" "/.git"));
 
-	cl_assert(git_path_isdir("submod2/.git/modules"));
-	cl_assert(git_path_isdir("submod2/.git/modules/" "sm_libgit2"));
-	cl_assert(git_path_isfile("submod2/.git/modules/" "sm_libgit2" "/HEAD"));
+	cl_assert(git_fs_path_isdir("submod2/.git/modules"));
+	cl_assert(git_fs_path_isdir("submod2/.git/modules/" "sm_libgit2"));
+	cl_assert(git_fs_path_isfile("submod2/.git/modules/" "sm_libgit2" "/HEAD"));
 	assert_submodule_url("sm_libgit2", "https://github.com/libgit2/libgit2.git");
 
 	cl_git_pass(git_repository_open(&repo, "submod2/" "sm_libgit2"));
@@ -63,7 +63,7 @@ void test_submodule_add__url_absolute(void)
 	cl_assert_equal_s("gitdir: ../.git/modules/sm_libgit2/", dot_git_content.ptr);
 
 	git_repository_free(repo);
-	git_buf_dispose(&dot_git_content);
+	git_str_dispose(&dot_git_content);
 
 	/* add a submodule not using a gitlink */
 
@@ -72,9 +72,9 @@ void test_submodule_add__url_absolute(void)
 		);
 	git_submodule_free(sm);
 
-	cl_assert(git_path_isdir("submod2/" "sm_libgit2b" "/.git"));
-	cl_assert(git_path_isfile("submod2/" "sm_libgit2b" "/.git/HEAD"));
-	cl_assert(!git_path_exists("submod2/.git/modules/" "sm_libgit2b"));
+	cl_assert(git_fs_path_isdir("submod2/" "sm_libgit2b" "/.git"));
+	cl_assert(git_fs_path_isfile("submod2/" "sm_libgit2b" "/.git/HEAD"));
+	cl_assert(!git_fs_path_exists("submod2/.git/modules/" "sm_libgit2b"));
 	assert_submodule_url("sm_libgit2b", "https://github.com/libgit2/libgit2.git");
 }
 
@@ -151,11 +151,11 @@ void test_submodule_add__path_exists_in_index(void)
 {
 	git_index *index;
 	git_submodule *sm;
-	git_buf filename = GIT_BUF_INIT;
+	git_str filename = GIT_STR_INIT;
 
 	g_repo = cl_git_sandbox_init("testrepo");
 
-	cl_git_pass(git_buf_joinpath(&filename, "subdirectory", "test.txt"));
+	cl_git_pass(git_str_joinpath(&filename, "subdirectory", "test.txt"));
 
 	cl_git_pass(git_repository_index__weakptr(&index, g_repo));
 
@@ -164,14 +164,14 @@ void test_submodule_add__path_exists_in_index(void)
 	cl_git_fail_with(git_submodule_add_setup(&sm, g_repo, "./", "subdirectory", 1), GIT_EEXISTS);
 
 	git_submodule_free(sm);
-	git_buf_dispose(&filename);
+	git_str_dispose(&filename);
 }
 
 void test_submodule_add__file_exists_in_index(void)
 {
 	git_index *index;
 	git_submodule *sm;
-	git_buf name = GIT_BUF_INIT;
+	git_str name = GIT_STR_INIT;
 
 	g_repo = cl_git_sandbox_init("testrepo");
 
@@ -182,7 +182,7 @@ void test_submodule_add__file_exists_in_index(void)
 	cl_git_fail_with(git_submodule_add_setup(&sm, g_repo, "./", "subdirectory", 1), GIT_EEXISTS);
 
 	git_submodule_free(sm);
-	git_buf_dispose(&name);
+	git_str_dispose(&name);
 }
 
 void test_submodule_add__submodule_clone(void)
@@ -227,7 +227,7 @@ void test_submodule_add__submodule_clone_into_nonempty_dir_succeeds(void)
 	cl_git_pass(git_submodule_clone(NULL, sm, NULL));
 	cl_git_pass(git_submodule_add_finalize(sm));
 
-	cl_assert(git_path_exists("empty_standard_repo/sm/foobar"));
+	cl_assert(git_fs_path_exists("empty_standard_repo/sm/foobar"));
 
 	assert_submodule_exists(g_repo, "sm");
 

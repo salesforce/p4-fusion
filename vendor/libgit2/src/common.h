@@ -19,6 +19,8 @@
 # define GIT_INLINE(type) static __inline type
 #elif defined(__GNUC__)
 # define GIT_INLINE(type) static __inline__ type
+#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
+# define GIT_INLINE(type) static inline type
 #else
 # define GIT_INLINE(type) static type
 #endif
@@ -26,6 +28,24 @@
 /** Support for gcc/clang __has_builtin intrinsic */
 #ifndef __has_builtin
 # define __has_builtin(x) 0
+#endif
+
+/**
+ * Declare that a function's return value must be used.
+ *
+ * Used mostly to guard against potential silent bugs at runtime. This is
+ * recommended to be added to functions that:
+ *
+ * - Allocate / reallocate memory. This prevents memory leaks or errors where
+ *   buffers are expected to have grown to a certain size, but could not be
+ *   resized.
+ * - Acquire locks. When a lock cannot be acquired, that will almost certainly
+ *   cause a data race / undefined behavior.
+ */
+#if defined(__GNUC__)
+# define GIT_WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+#else
+# define GIT_WARN_UNUSED_RESULT
 #endif
 
 #include <assert.h>
@@ -63,7 +83,9 @@
 #	include <pthread.h>
 #	include <sched.h>
 # endif
-#define GIT_STDLIB_CALL
+
+#define GIT_LIBGIT2_CALL
+#define GIT_SYSTEM_CALL
 
 #ifdef GIT_USE_STAT_ATIMESPEC
 # define st_atim st_atimespec
@@ -78,9 +100,10 @@
 #include "git2/types.h"
 #include "git2/errors.h"
 #include "errors.h"
-#include "thread-utils.h"
+#include "thread.h"
 #include "integer.h"
 #include "assert_safe.h"
+#include "utf8.h"
 
 /*
  * Include the declarations for deprecated functions; this ensures
@@ -98,12 +121,16 @@
 /**
  * Check a pointer allocation result, returning -1 if it failed.
  */
-#define GIT_ERROR_CHECK_ALLOC(ptr) if (ptr == NULL) { return -1; }
+#define GIT_ERROR_CHECK_ALLOC(ptr) do { \
+	if ((ptr) == NULL) { return -1; } \
+	} while(0)
 
 /**
- * Check a buffer allocation result, returning -1 if it failed.
+ * Check a string buffer allocation result, returning -1 if it failed.
  */
-#define GIT_ERROR_CHECK_ALLOC_BUF(buf) if ((void *)(buf) == NULL || git_buf_oom(buf)) { return -1; }
+#define GIT_ERROR_CHECK_ALLOC_STR(buf) do { \
+	if ((void *)(buf) == NULL || git_str_oom(buf)) { return -1; } \
+	} while(0)
 
 /**
  * Check a return value and propagate result if non-zero.
@@ -178,6 +205,9 @@ GIT_INLINE(void) git__init_structure(void *structure, size_t len, unsigned int v
 	if (GIT_MULTIPLY_SIZET_OVERFLOW(out, nelem, elsize)) { return -1; }
 
 /* NOTE: other git_error functions are in the public errors.h header file */
+
+/* Forward declare git_str */
+typedef struct git_str git_str;
 
 #include "util.h"
 

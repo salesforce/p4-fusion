@@ -49,12 +49,12 @@ int lg2_blame(git_repository *repo, int argc, char *argv[])
 	if (o.F) blameopts.flags |= GIT_BLAME_FIRST_PARENT;
 
 	/**
-	 * The commit range comes in "commitish" form. Use the rev-parse API to
+	 * The commit range comes in "committish" form. Use the rev-parse API to
 	 * nail down the end points.
 	 */
 	if (o.commitspec) {
 		check_lg2(git_revparse(&revspec, repo, o.commitspec), "Couldn't parse commit spec", NULL);
-		if (revspec.flags & GIT_REVPARSE_SINGLE) {
+		if (revspec.flags & GIT_REVSPEC_SINGLE) {
 			git_oid_cpy(&blameopts.newest_commit, git_object_id(revspec.from));
 			git_object_free(revspec.from);
 		} else {
@@ -70,7 +70,7 @@ int lg2_blame(git_repository *repo, int argc, char *argv[])
 
 	/**
 	 * Get the raw data inside the blob for output. We use the
-	 * `commitish:path/to/file.txt` format to find it.
+	 * `committish:path/to/file.txt` format to find it.
 	 */
 	if (git_oid_is_zero(&blameopts.newest_commit))
 		strcpy(spec, "HEAD");

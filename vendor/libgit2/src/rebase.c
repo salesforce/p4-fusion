@@ -7,10 +7,11 @@
 
 #include "common.h"
 
-#include "buffer.h"
+#include "str.h"
 #include "repository.h"
 #include "posix.h"
 #include "filebuf.h"
+#include "commit.h"
 #include "merge.h"
 #include "array.h"
 #include "config.h"
@@ -52,7 +53,7 @@ typedef enum {
 	GIT_REBASE_NONE = 0,
 	GIT_REBASE_APPLY = 1,
 	GIT_REBASE_MERGE = 2,
-	GIT_REBASE_INTERACTIVE = 3,
+	GIT_REBASE_INTERACTIVE = 3
 } git_rebase_t;
 
 struct git_rebase {
@@ -63,10 +64,10 @@ struct git_rebase {
 	git_rebase_t type;
 	char *state_path;
 
-	int head_detached : 1,
-		inmemory : 1,
-		quiet : 1,
-		started : 1;
+	unsigned int head_detached:1,
+	             inmemory:1,
+	             quiet:1,
+	             started:1;
 
 	git_array_t(git_rebase_operation) operations;
 	size_t current;
@@ -90,22 +91,22 @@ static int rebase_state_type(
 	char **path_out,
 	git_repository *repo)
 {
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 	git_rebase_t type = GIT_REBASE_NONE;
 
-	if (git_buf_joinpath(&path, repo->gitdir, REBASE_APPLY_DIR) < 0)
+	if (git_str_joinpath(&path, repo->gitdir, REBASE_APPLY_DIR) < 0)
 		return -1;
 
-	if (git_path_isdir(git_buf_cstr(&path))) {
+	if (git_fs_path_isdir(git_str_cstr(&path))) {
 		type = GIT_REBASE_APPLY;
 		goto done;
 	}
 
-	git_buf_clear(&path);
-	if (git_buf_joinpath(&path, repo->gitdir, REBASE_MERGE_DIR) < 0)
+	git_str_clear(&path);
+	if (git_str_joinpath(&path, repo->gitdir, REBASE_MERGE_DIR) < 0)
 		return -1;
 
-	if (git_path_isdir(git_buf_cstr(&path))) {
+	if (git_fs_path_isdir(git_str_cstr(&path))) {
 		type = GIT_REBASE_MERGE;
 		goto done;
 	}
@@ -114,36 +115,36 @@ done:
 	*type_out = type;
 
 	if (type != GIT_REBASE_NONE && path_out)
-		*path_out = git_buf_detach(&path);
+		*path_out = git_str_detach(&path);
 
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 
 	return 0;
 }
 
 GIT_INLINE(int) rebase_readfile(
-	git_buf *out,
-	git_buf *state_path,
+	git_str *out,
+	git_str *state_path,
 	const char *filename)
 {
 	size_t state_path_len = state_path->size;
 	int error;
 
-	git_buf_clear(out);
+	git_str_clear(out);
 
-	if ((error = git_buf_joinpath(state_path, state_path->ptr, filename)) < 0 ||
+	if ((error = git_str_joinpath(state_path, state_path->ptr, filename)) < 0 ||
 		(error = git_futils_readbuffer(out, state_path->ptr)) < 0)
 		goto done;
 
-	git_buf_rtrim(out);
+	git_str_rtrim(out);
 
 done:
-	git_buf_truncate(state_path, state_path_len);
+	git_str_truncate(state_path, state_path_len);
 	return error;
 }
 
 GIT_INLINE(int) rebase_readint(
-	size_t *out, git_buf *asc_out, git_buf *state_path, const char *filename)
+	size_t *out, git_str *asc_out, git_str *state_path, const char *filename)
 {
 	int32_t num;
 	const char *eol;
@@ -163,7 +164,7 @@ GIT_INLINE(int) rebase_readint(
 }
 
 GIT_INLINE(int) rebase_readoid(
-	git_oid *out, git_buf *str_out, git_buf *state_path, const char *filename)
+	git_oid *out, git_str *str_out, git_str *state_path, const char *filename)
 {
 	int error;
 
@@ -186,8 +187,8 @@ static git_rebase_operation *rebase_operation_alloc(
 {
 	git_rebase_operation *operation;
 
-	assert((type == GIT_REBASE_OPERATION_EXEC) == !id);
-	assert((type == GIT_REBASE_OPERATION_EXEC) == !!exec);
+	GIT_ASSERT_WITH_RETVAL((type == GIT_REBASE_OPERATION_EXEC) == !id, NULL);
+	GIT_ASSERT_WITH_RETVAL((type == GIT_REBASE_OPERATION_EXEC) == !!exec, NULL);
 
 	if ((operation = git_array_alloc(rebase->operations)) == NULL)
 		return NULL;
@@ -201,13 +202,13 @@ static git_rebase_operation *rebase_operation_alloc(
 
 static int rebase_open_merge(git_rebase *rebase)
 {
-	git_buf state_path = GIT_BUF_INIT, buf = GIT_BUF_INIT, cmt = GIT_BUF_INIT;
+	git_str state_path = GIT_STR_INIT, buf = GIT_STR_INIT, cmt = GIT_STR_INIT;
 	git_oid id;
 	git_rebase_operation *operation;
 	size_t i, msgnum = 0, end;
 	int error;
 
-	if ((error = git_buf_puts(&state_path, rebase->state_path)) < 0)
+	if ((error = git_str_puts(&state_path, rebase->state_path)) < 0)
 		goto done;
 
 	/* Read 'msgnum' if it exists (otherwise, let msgnum = 0) */
@@ -234,9 +235,9 @@ static int rebase_open_merge(git_rebase *rebase)
 	GIT_ERROR_CHECK_ARRAY(rebase->operations);
 
 	for (i = 0; i < end; i++) {
-		git_buf_clear(&cmt);
+		git_str_clear(&cmt);
 
-		if ((error = git_buf_printf(&cmt, "cmt.%" PRIuZ, (i+1))) < 0 ||
+		if ((error = git_str_printf(&cmt, "cmt.%" PRIuZ, (i+1))) < 0 ||
 			(error = rebase_readoid(&id, &buf, &state_path, cmt.ptr)) < 0)
 			goto done;
 
@@ -248,12 +249,12 @@ static int rebase_open_merge(git_rebase *rebase)
 	if ((error = rebase_readfile(&buf, &state_path, ONTO_NAME_FILE)) < 0)
 		goto done;
 
-	rebase->onto_name = git_buf_detach(&buf);
+	rebase->onto_name = git_str_detach(&buf);
 
 done:
-	git_buf_dispose(&cmt);
-	git_buf_dispose(&state_path);
-	git_buf_dispose(&buf);
+	git_str_dispose(&cmt);
+	git_str_dispose(&state_path);
+	git_str_dispose(&buf);
 
 	return error;
 }
@@ -296,12 +297,12 @@ int git_rebase_open(
 	const git_rebase_options *given_opts)
 {
 	git_rebase *rebase;
-	git_buf path = GIT_BUF_INIT, orig_head_name = GIT_BUF_INIT,
-		orig_head_id = GIT_BUF_INIT, onto_id = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT, orig_head_name = GIT_STR_INIT,
+		orig_head_id = GIT_STR_INIT, onto_id = GIT_STR_INIT;
 	size_t state_path_len;
 	int error;
 
-	assert(repo);
+	GIT_ASSERT_ARG(repo);
 
 	if ((error = rebase_check_versions(given_opts)) < 0)
 		return error;
@@ -320,54 +321,54 @@ int git_rebase_open(
 		goto done;
 	}
 
-	if ((error = git_buf_puts(&path, rebase->state_path)) < 0)
+	if ((error = git_str_puts(&path, rebase->state_path)) < 0)
 		goto done;
 
-	state_path_len = git_buf_len(&path);
+	state_path_len = git_str_len(&path);
 
-	if ((error = git_buf_joinpath(&path, path.ptr, HEAD_NAME_FILE)) < 0 ||
+	if ((error = git_str_joinpath(&path, path.ptr, HEAD_NAME_FILE)) < 0 ||
 		(error = git_futils_readbuffer(&orig_head_name, path.ptr)) < 0)
 		goto done;
 
-	git_buf_rtrim(&orig_head_name);
+	git_str_rtrim(&orig_head_name);
 
 	if (strcmp(ORIG_DETACHED_HEAD, orig_head_name.ptr) == 0)
 		rebase->head_detached = 1;
 
-	git_buf_truncate(&path, state_path_len);
+	git_str_truncate(&path, state_path_len);
 
-	if ((error = git_buf_joinpath(&path, path.ptr, ORIG_HEAD_FILE)) < 0)
+	if ((error = git_str_joinpath(&path, path.ptr, ORIG_HEAD_FILE)) < 0)
 		goto done;
 
-	if (!git_path_isfile(path.ptr)) {
+	if (!git_fs_path_isfile(path.ptr)) {
 		/* Previous versions of git.git used 'head' here; support that. */
-		git_buf_truncate(&path, state_path_len);
+		git_str_truncate(&path, state_path_len);
 
-		if ((error = git_buf_joinpath(&path, path.ptr, HEAD_FILE)) < 0)
+		if ((error = git_str_joinpath(&path, path.ptr, HEAD_FILE)) < 0)
 			goto done;
 	}
 
 	if ((error = git_futils_readbuffer(&orig_head_id, path.ptr)) < 0)
 		goto done;
 
-	git_buf_rtrim(&orig_head_id);
+	git_str_rtrim(&orig_head_id);
 
 	if ((error = git_oid_fromstr(&rebase->orig_head_id, orig_head_id.ptr)) < 0)
 		goto done;
 
-	git_buf_truncate(&path, state_path_len);
+	git_str_truncate(&path, state_path_len);
 
-	if ((error = git_buf_joinpath(&path, path.ptr, ONTO_FILE)) < 0 ||
+	if ((error = git_str_joinpath(&path, path.ptr, ONTO_FILE)) < 0 ||
 		(error = git_futils_readbuffer(&onto_id, path.ptr)) < 0)
 		goto done;
 
-	git_buf_rtrim(&onto_id);
+	git_str_rtrim(&onto_id);
 
 	if ((error = git_oid_fromstr(&rebase->onto_id, onto_id.ptr)) < 0)
 		goto done;
 
 	if (!rebase->head_detached)
-		rebase->orig_head_name = git_buf_detach(&orig_head_name);
+		rebase->orig_head_name = git_str_detach(&orig_head_name);
 
 	switch (rebase->type) {
 	case GIT_REBASE_INTERACTIVE:
@@ -391,10 +392,10 @@ done:
 	else
 		git_rebase_free(rebase);
 
-	git_buf_dispose(&path);
-	git_buf_dispose(&orig_head_name);
-	git_buf_dispose(&orig_head_id);
-	git_buf_dispose(&onto_id);
+	git_str_dispose(&path);
+	git_str_dispose(&orig_head_name);
+	git_str_dispose(&orig_head_id);
+	git_str_dispose(&onto_id);
 	return error;
 }
 
@@ -403,27 +404,27 @@ static int rebase_cleanup(git_rebase *rebase)
 	if (!rebase || rebase->inmemory)
 		return 0;
 
-	return git_path_isdir(rebase->state_path) ?
+	return git_fs_path_isdir(rebase->state_path) ?
 		git_futils_rmdir_r(rebase->state_path, NULL, GIT_RMDIR_REMOVE_FILES) :
 		0;
 }
 
 static int rebase_setupfile(git_rebase *rebase, const char *filename, int flags, const char *fmt, ...)
 {
-	git_buf path = GIT_BUF_INIT,
-		contents = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT,
+		contents = GIT_STR_INIT;
 	va_list ap;
 	int error;
 
 	va_start(ap, fmt);
-	git_buf_vprintf(&contents, fmt, ap);
+	git_str_vprintf(&contents, fmt, ap);
 	va_end(ap);
 
-	if ((error = git_buf_joinpath(&path, rebase->state_path, filename)) == 0)
+	if ((error = git_str_joinpath(&path, rebase->state_path, filename)) == 0)
 		error = git_futils_writebuffer(&contents, path.ptr, flags, REBASE_FILE_MODE);
 
-	git_buf_dispose(&path);
-	git_buf_dispose(&contents);
+	git_str_dispose(&path);
+	git_str_dispose(&contents);
 
 	return error;
 }
@@ -440,7 +441,7 @@ static const char *rebase_onto_name(const git_annotated_commit *onto)
 
 static int rebase_setupfiles_merge(git_rebase *rebase)
 {
-	git_buf commit_filename = GIT_BUF_INIT;
+	git_str commit_filename = GIT_STR_INIT;
 	char id_str[GIT_OID_HEXSZ];
 	git_rebase_operation *operation;
 	size_t i;
@@ -453,8 +454,8 @@ static int rebase_setupfiles_merge(git_rebase *rebase)
 	for (i = 0; i < git_array_size(rebase->operations); i++) {
 		operation = git_array_get(rebase->operations, i);
 
-		git_buf_clear(&commit_filename);
-		git_buf_printf(&commit_filename, CMT_FILE_FMT, i+1);
+		git_str_clear(&commit_filename);
+		git_str_printf(&commit_filename, CMT_FILE_FMT, i+1);
 
 		git_oid_fmt(id_str, &operation->id);
 
@@ -464,7 +465,7 @@ static int rebase_setupfiles_merge(git_rebase *rebase)
 	}
 
 done:
-	git_buf_dispose(&commit_filename);
+	git_str_dispose(&commit_filename);
 	return error;
 }
 
@@ -626,16 +627,16 @@ static int rebase_init_merge(
 {
 	git_reference *head_ref = NULL;
 	git_commit *onto_commit = NULL;
-	git_buf reflog = GIT_BUF_INIT;
-	git_buf state_path = GIT_BUF_INIT;
+	git_str reflog = GIT_STR_INIT;
+	git_str state_path = GIT_STR_INIT;
 	int error;
 
 	GIT_UNUSED(upstream);
 
-	if ((error = git_buf_joinpath(&state_path, repo->gitdir, REBASE_MERGE_DIR)) < 0)
+	if ((error = git_str_joinpath(&state_path, repo->gitdir, REBASE_MERGE_DIR)) < 0)
 		goto done;
 
-	rebase->state_path = git_buf_detach(&state_path);
+	rebase->state_path = git_str_detach(&state_path);
 	GIT_ERROR_CHECK_ALLOC(rebase->state_path);
 
 	if (branch->ref_name && strcmp(branch->ref_name, "HEAD")) {
@@ -654,7 +655,7 @@ static int rebase_init_merge(
 	git_oid_cpy(&rebase->onto_id, git_annotated_commit_id(onto));
 
 	if ((error = rebase_setupfiles(rebase)) < 0 ||
-		(error = git_buf_printf(&reflog,
+		(error = git_str_printf(&reflog,
 			"rebase: checkout %s", rebase_onto_name(onto))) < 0 ||
 		(error = git_commit_lookup(
 			&onto_commit, repo, git_annotated_commit_id(onto))) < 0 ||
@@ -667,8 +668,8 @@ static int rebase_init_merge(
 done:
 	git_reference_free(head_ref);
 	git_commit_free(onto_commit);
-	git_buf_dispose(&reflog);
-	git_buf_dispose(&state_path);
+	git_str_dispose(&reflog);
+	git_str_dispose(&state_path);
 
 	return error;
 }
@@ -701,7 +702,8 @@ int git_rebase_init(
 	bool inmemory = (given_opts && given_opts->inmemory);
 	int error;
 
-	assert(repo && (upstream || onto));
+	GIT_ASSERT_ARG(repo);
+	GIT_ASSERT_ARG(upstream || onto);
 
 	*out = NULL;
 
@@ -794,7 +796,7 @@ static int rebase_next_merge(
 	git_rebase_operation **out,
 	git_rebase *rebase)
 {
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 	git_commit *current_commit = NULL, *parent_commit = NULL;
 	git_tree *current_tree = NULL, *head_tree = NULL, *parent_tree = NULL;
 	git_index *index = NULL;
@@ -847,7 +849,7 @@ done:
 	git_tree_free(parent_tree);
 	git_commit_free(parent_commit);
 	git_commit_free(current_commit);
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 
 	return error;
 }
@@ -912,7 +914,8 @@ int git_rebase_next(
 {
 	int error;
 
-	assert(out && rebase);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(rebase);
 
 	if ((error = rebase_movenext(rebase)) < 0)
 		return error;
@@ -931,13 +934,63 @@ int git_rebase_inmemory_index(
 	git_index **out,
 	git_rebase *rebase)
 {
-	assert(out && rebase && rebase->index);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(rebase);
+	GIT_ASSERT_ARG(rebase->index);
 
 	GIT_REFCOUNT_INC(rebase->index);
 	*out = rebase->index;
 
 	return 0;
 }
+
+#ifndef GIT_DEPRECATE_HARD
+static int create_signed(
+	git_oid *out,
+	git_rebase *rebase,
+	const git_signature *author,
+	const git_signature *committer,
+	const char *message_encoding,
+	const char *message,
+	git_tree *tree,
+	size_t parent_count,
+	const git_commit **parents)
+{
+	git_str commit_content = GIT_STR_INIT;
+	git_buf commit_signature = { NULL, 0, 0 },
+	        signature_field = { NULL, 0, 0 };
+	int error;
+
+	git_error_clear();
+
+	if ((error = git_commit__create_buffer(&commit_content,
+		rebase->repo, author, committer, message_encoding,
+		message, tree, parent_count, parents)) < 0)
+		goto done;
+
+	error = rebase->options.signing_cb(&commit_signature,
+		&signature_field, commit_content.ptr,
+		rebase->options.payload);
+
+	if (error) {
+		if (error != GIT_PASSTHROUGH)
+			git_error_set_after_callback_function(error, "signing_cb");
+
+		goto done;
+	}
+
+	error = git_commit_create_with_signature(out, rebase->repo,
+		commit_content.ptr,
+		commit_signature.size > 0 ? commit_signature.ptr : NULL,
+		signature_field.size > 0 ? signature_field.ptr : NULL);
+
+done:
+	git_buf_dispose(&commit_signature);
+	git_buf_dispose(&signature_field);
+	git_str_dispose(&commit_content);
+	return error;
+}
+#endif
 
 static int rebase_commit__create(
 	git_commit **out,
@@ -953,10 +1006,6 @@ static int rebase_commit__create(
 	git_commit *current_commit = NULL, *commit = NULL;
 	git_tree *parent_tree = NULL, *tree = NULL;
 	git_oid tree_id, commit_id;
-	git_buf commit_content = GIT_BUF_INIT, commit_signature = GIT_BUF_INIT,
-		signature_field = GIT_BUF_INIT;
-	const char *signature_field_string = NULL,
-		*commit_signature_string = NULL;
 	int error;
 
 	operation = git_array_get(rebase->operations, rebase->current);
@@ -987,37 +1036,32 @@ static int rebase_commit__create(
 		message = git_commit_message(current_commit);
 	}
 
-	if ((error = git_commit_create_buffer(&commit_content, rebase->repo, author, committer,
-			message_encoding, message, tree, 1, (const git_commit **)&parent_commit)) < 0)
-		goto done;
+	git_error_clear();
+	error = GIT_PASSTHROUGH;
 
-	if (rebase->options.signing_cb) {
-		git_error_clear();
-		error = git_error_set_after_callback_function(rebase->options.signing_cb(
-			&commit_signature, &signature_field, git_buf_cstr(&commit_content),
-			rebase->options.payload), "commit signing_cb failed");
-		if (error == GIT_PASSTHROUGH) {
-			git_buf_dispose(&commit_signature);
-			git_buf_dispose(&signature_field);
-			git_error_clear();
-			error = GIT_OK;
-		} else if (error < 0)
-			goto done;
+	if (rebase->options.commit_create_cb) {
+		error = rebase->options.commit_create_cb(&commit_id,
+			author, committer, message_encoding, message,
+			tree, 1, (const git_commit **)&parent_commit,
+			rebase->options.payload);
+
+		git_error_set_after_callback_function(error,
+			"commit_create_cb");
 	}
-
-	if (git_buf_is_allocated(&commit_signature)) {
-		assert(git_buf_contains_nul(&commit_signature));
-		commit_signature_string = git_buf_cstr(&commit_signature);
+#ifndef GIT_DEPRECATE_HARD
+	else if (rebase->options.signing_cb) {
+		error = create_signed(&commit_id, rebase, author,
+			committer, message_encoding, message, tree,
+			1, (const git_commit **)&parent_commit);
 	}
+#endif
 
-	if (git_buf_is_allocated(&signature_field)) {
-		assert(git_buf_contains_nul(&signature_field));
-		signature_field_string = git_buf_cstr(&signature_field);
-	}
+	if (error == GIT_PASSTHROUGH)
+		error = git_commit_create(&commit_id, rebase->repo, NULL,
+			author, committer, message_encoding, message,
+			tree, 1, (const git_commit **)&parent_commit);
 
-	if ((error = git_commit_create_with_signature(&commit_id, rebase->repo,
-			git_buf_cstr(&commit_content), commit_signature_string,
-			signature_field_string)))
+	if (error)
 		goto done;
 
 	if ((error = git_commit_lookup(&commit, rebase->repo, &commit_id)) < 0)
@@ -1029,9 +1073,6 @@ done:
 	if (error < 0)
 		git_commit_free(commit);
 
-	git_buf_dispose(&commit_signature);
-	git_buf_dispose(&signature_field);
-	git_buf_dispose(&commit_content);
 	git_commit_free(current_commit);
 	git_tree_free(parent_tree);
 	git_tree_free(tree);
@@ -1055,7 +1096,7 @@ static int rebase_commit_merge(
 	int error;
 
 	operation = git_array_get(rebase->operations, rebase->current);
-	assert(operation);
+	GIT_ASSERT(operation);
 
 	if ((error = rebase_ensure_not_dirty(rebase->repo, false, true, GIT_EUNMERGED)) < 0 ||
 		(error = git_repository_head(&head, rebase->repo)) < 0 ||
@@ -1095,9 +1136,9 @@ static int rebase_commit_inmemory(
 	git_commit *commit = NULL;
 	int error = 0;
 
-	assert(rebase->index);
-	assert(rebase->last_commit);
-	assert(rebase->current < rebase->operations.size);
+	GIT_ASSERT_ARG(rebase->index);
+	GIT_ASSERT_ARG(rebase->last_commit);
+	GIT_ASSERT_ARG(rebase->current < rebase->operations.size);
 
 	if ((error = rebase_commit__create(&commit, rebase, rebase->index,
 		rebase->last_commit, author, committer, message_encoding, message)) < 0)
@@ -1125,7 +1166,8 @@ int git_rebase_commit(
 {
 	int error;
 
-	assert(rebase && committer);
+	GIT_ASSERT_ARG(rebase);
+	GIT_ASSERT_ARG(committer);
 
 	if (rebase->inmemory)
 		error = rebase_commit_inmemory(
@@ -1145,7 +1187,7 @@ int git_rebase_abort(git_rebase *rebase)
 	git_commit *orig_head_commit = NULL;
 	int error;
 
-	assert(rebase);
+	GIT_ASSERT_ARG(rebase);
 
 	if (rebase->inmemory)
 		return 0;
@@ -1175,13 +1217,13 @@ done:
 	return error;
 }
 
-static int notes_ref_lookup(git_buf *out, git_rebase *rebase)
+static int notes_ref_lookup(git_str *out, git_rebase *rebase)
 {
 	git_config *config = NULL;
 	int do_rewrite, error;
 
 	if (rebase->options.rewrite_notes_ref) {
-		git_buf_attach_notowned(out,
+		git_str_attach_notowned(out,
 			rebase->options.rewrite_notes_ref,
 			strlen(rebase->options.rewrite_notes_ref));
 		return 0;
@@ -1198,7 +1240,7 @@ static int notes_ref_lookup(git_buf *out, git_rebase *rebase)
 	}
 
 	error = do_rewrite ?
-		git_config_get_string_buf(out, config, "notes.rewriteref") :
+		git_config__get_string_buf(out, config, "notes.rewriteref") :
 		GIT_ENOTFOUND;
 
 done:
@@ -1253,7 +1295,7 @@ static int rebase_copy_notes(
 	git_rebase *rebase,
 	const git_signature *committer)
 {
-	git_buf path = GIT_BUF_INIT, rewritten = GIT_BUF_INIT, notes_ref = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT, rewritten = GIT_STR_INIT, notes_ref = GIT_STR_INIT;
 	char *pair_list, *fromstr, *tostr, *end;
 	git_oid from, to;
 	unsigned int linenum = 1;
@@ -1268,7 +1310,7 @@ static int rebase_copy_notes(
 		goto done;
 	}
 
-	if ((error = git_buf_joinpath(&path, rebase->state_path, REWRITTEN_FILE)) < 0 ||
+	if ((error = git_str_joinpath(&path, rebase->state_path, REWRITTEN_FILE)) < 0 ||
 		(error = git_futils_readbuffer(&rewritten, path.ptr)) < 0)
 		goto done;
 
@@ -1308,9 +1350,9 @@ on_error:
 	error = -1;
 
 done:
-	git_buf_dispose(&rewritten);
-	git_buf_dispose(&path);
-	git_buf_dispose(&notes_ref);
+	git_str_dispose(&rewritten);
+	git_str_dispose(&path);
+	git_str_dispose(&notes_ref);
 
 	return error;
 }
@@ -1319,16 +1361,16 @@ static int return_to_orig_head(git_rebase *rebase)
 {
 	git_reference *terminal_ref = NULL, *branch_ref = NULL, *head_ref = NULL;
 	git_commit *terminal_commit = NULL;
-	git_buf branch_msg = GIT_BUF_INIT, head_msg = GIT_BUF_INIT;
+	git_str branch_msg = GIT_STR_INIT, head_msg = GIT_STR_INIT;
 	char onto[GIT_OID_HEXSZ];
 	int error = 0;
 
 	git_oid_fmt(onto, &rebase->onto_id);
 
-	if ((error = git_buf_printf(&branch_msg,
+	if ((error = git_str_printf(&branch_msg,
 			"rebase finished: %s onto %.*s",
 			rebase->orig_head_name, GIT_OID_HEXSZ, onto)) == 0 &&
-		(error = git_buf_printf(&head_msg,
+		(error = git_str_printf(&head_msg,
 			"rebase finished: returning to %s",
 			rebase->orig_head_name)) == 0 &&
 		(error = git_repository_head(&terminal_ref, rebase->repo)) == 0 &&
@@ -1342,8 +1384,8 @@ static int return_to_orig_head(git_rebase *rebase)
 			rebase->repo, GIT_HEAD_FILE, rebase->orig_head_name, 1,
 			head_msg.ptr);
 
-	git_buf_dispose(&head_msg);
-	git_buf_dispose(&branch_msg);
+	git_str_dispose(&head_msg);
+	git_str_dispose(&branch_msg);
 	git_commit_free(terminal_commit);
 	git_reference_free(head_ref);
 	git_reference_free(branch_ref);
@@ -1358,7 +1400,7 @@ int git_rebase_finish(
 {
 	int error = 0;
 
-	assert(rebase);
+	GIT_ASSERT_ARG(rebase);
 
 	if (rebase->inmemory)
 		return 0;
@@ -1373,14 +1415,17 @@ int git_rebase_finish(
 }
 
 const char *git_rebase_orig_head_name(git_rebase *rebase) {
+	GIT_ASSERT_ARG_WITH_RETVAL(rebase, NULL);
 	return rebase->orig_head_name;
 }
 
 const git_oid *git_rebase_orig_head_id(git_rebase *rebase) {
+	GIT_ASSERT_ARG_WITH_RETVAL(rebase, NULL);
 	return &rebase->orig_head_id;
 }
 
 const char *git_rebase_onto_name(git_rebase *rebase) {
+	GIT_ASSERT_ARG_WITH_RETVAL(rebase, NULL);
 	return rebase->onto_name;
 }
 
@@ -1390,21 +1435,21 @@ const git_oid *git_rebase_onto_id(git_rebase *rebase) {
 
 size_t git_rebase_operation_entrycount(git_rebase *rebase)
 {
-	assert(rebase);
+	GIT_ASSERT_ARG_WITH_RETVAL(rebase, 0);
 
 	return git_array_size(rebase->operations);
 }
 
 size_t git_rebase_operation_current(git_rebase *rebase)
 {
-	assert(rebase);
+	GIT_ASSERT_ARG_WITH_RETVAL(rebase, 0);
 
 	return rebase->started ? rebase->current : GIT_REBASE_NO_OPERATION;
 }
 
 git_rebase_operation *git_rebase_operation_byindex(git_rebase *rebase, size_t idx)
 {
-	assert(rebase);
+	GIT_ASSERT_ARG_WITH_RETVAL(rebase, NULL);
 
 	return git_array_get(rebase->operations, idx);
 }

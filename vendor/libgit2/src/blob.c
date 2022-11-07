@@ -12,13 +12,14 @@
 #include "git2/repository.h"
 #include "git2/odb_backend.h"
 
+#include "buf.h"
 #include "filebuf.h"
 #include "filter.h"
-#include "buf_text.h"
 
 const void *git_blob_rawcontent(const git_blob *blob)
 {
-	assert(blob);
+	GIT_ASSERT_ARG_WITH_RETVAL(blob, NULL);
+
 	if (blob->raw)
 		return blob->data.raw.data;
 	else
@@ -27,19 +28,20 @@ const void *git_blob_rawcontent(const git_blob *blob)
 
 git_object_size_t git_blob_rawsize(const git_blob *blob)
 {
-	assert(blob);
+	GIT_ASSERT_ARG(blob);
+
 	if (blob->raw)
 		return blob->data.raw.size;
 	else
 		return (git_object_size_t)git_odb_object_size(blob->data.odb);
 }
 
-int git_blob__getbuf(git_buf *buffer, git_blob *blob)
+int git_blob__getbuf(git_str *buffer, git_blob *blob)
 {
 	git_object_size_t size = git_blob_rawsize(blob);
 
 	GIT_ERROR_CHECK_BLOBSIZE(size);
-	return git_buf_set(buffer, git_blob_rawcontent(blob), (size_t)size);
+	return git_str_set(buffer, git_blob_rawcontent(blob), (size_t)size);
 }
 
 void git_blob__free(void *_blob)
@@ -53,7 +55,9 @@ void git_blob__free(void *_blob)
 int git_blob__parse_raw(void *_blob, const char *data, size_t size)
 {
 	git_blob *blob = (git_blob *) _blob;
-	assert(blob);
+
+	GIT_ASSERT_ARG(blob);
+
 	blob->raw = 1;
 	blob->data.raw.data = data;
 	blob->data.raw.size = size;
@@ -63,7 +67,9 @@ int git_blob__parse_raw(void *_blob, const char *data, size_t size)
 int git_blob__parse(void *_blob, git_odb_object *odb_obj)
 {
 	git_blob *blob = (git_blob *) _blob;
-	assert(blob);
+
+	GIT_ASSERT_ARG(blob);
+
 	git_cached_obj_incref((git_cached_obj *)odb_obj);
 	blob->raw = 0;
 	blob->data.odb = odb_obj;
@@ -77,7 +83,8 @@ int git_blob_create_from_buffer(
 	git_odb *odb;
 	git_odb_stream *stream;
 
-	assert(id && repo);
+	GIT_ASSERT_ARG(id);
+	GIT_ASSERT_ARG(repo);
 
 	if ((error = git_repository_odb__weakptr(&odb, repo)) < 0 ||
 		(error = git_odb_open_wstream(&stream, odb, len, GIT_OBJECT_BLOB)) < 0)
@@ -132,12 +139,13 @@ static int write_file_filtered(
 	git_object_size_t *size,
 	git_odb *odb,
 	const char *full_path,
-	git_filter_list *fl)
+	git_filter_list *fl,
+	git_repository* repo)
 {
 	int error;
-	git_buf tgt = GIT_BUF_INIT;
+	git_str tgt = GIT_STR_INIT;
 
-	error = git_filter_list_apply_to_file(&tgt, fl, NULL, full_path);
+	error = git_filter_list__apply_to_file(&tgt, fl, repo, full_path);
 
 	/* Write the file to disk if it was properly filtered */
 	if (!error) {
@@ -146,7 +154,7 @@ static int write_file_filtered(
 		error = git_odb_write(id, odb, tgt.ptr, tgt.size, GIT_OBJECT_BLOB);
 	}
 
-	git_buf_dispose(&tgt);
+	git_str_dispose(&tgt);
 	return error;
 }
 
@@ -186,22 +194,18 @@ int git_blob__create_from_paths(
 	git_odb *odb = NULL;
 	git_object_size_t size;
 	mode_t mode;
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 
-	assert(hint_path || !try_load_filters);
+	GIT_ASSERT_ARG(hint_path || !try_load_filters);
 
 	if (!content_path) {
-		if (git_repository__ensure_not_bare(repo, "create blob from file") < 0)
-			return GIT_EBAREREPO;
-
-		if (git_buf_joinpath(
-				&path, git_repository_workdir(repo), hint_path) < 0)
+		if (git_repository_workdir_path(&path, repo, hint_path) < 0)
 			return -1;
 
 		content_path = path.ptr;
 	}
 
-	if ((error = git_path_lstat(content_path, &st)) < 0 ||
+	if ((error = git_fs_path_lstat(content_path, &st)) < 0 ||
 		(error = git_repository_odb(&odb, repo)) < 0)
 		goto done;
 
@@ -236,7 +240,7 @@ int git_blob__create_from_paths(
 			error = write_file_stream(id, odb, content_path, size);
 		else {
 			/* We need to apply one or more filters */
-			error = write_file_filtered(id, &size, odb, content_path, fl);
+			error = write_file_filtered(id, &size, odb, content_path, fl, repo);
 
 			git_filter_list_free(fl);
 		}
@@ -258,7 +262,7 @@ int git_blob__create_from_paths(
 
 done:
 	git_odb_free(odb);
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 
 	return error;
 }
@@ -273,24 +277,23 @@ int git_blob_create_from_disk(
 	git_oid *id, git_repository *repo, const char *path)
 {
 	int error;
-	git_buf full_path = GIT_BUF_INIT;
-	const char *workdir, *hintpath;
+	git_str full_path = GIT_STR_INIT;
+	const char *workdir, *hintpath = NULL;
 
-	if ((error = git_path_prettify(&full_path, path, NULL)) < 0) {
-		git_buf_dispose(&full_path);
+	if ((error = git_fs_path_prettify(&full_path, path, NULL)) < 0) {
+		git_str_dispose(&full_path);
 		return error;
 	}
 
-	hintpath = git_buf_cstr(&full_path);
 	workdir  = git_repository_workdir(repo);
 
-	if (workdir && !git__prefixcmp(hintpath, workdir))
-		hintpath += strlen(workdir);
+	if (workdir && !git__prefixcmp(full_path.ptr, workdir))
+		hintpath = full_path.ptr + strlen(workdir);
 
 	error = git_blob__create_from_paths(
-		id, NULL, repo, git_buf_cstr(&full_path), hintpath, 0, true);
+		id, NULL, repo, git_str_cstr(&full_path), hintpath, 0, !!hintpath);
 
-	git_buf_dispose(&full_path);
+	git_str_dispose(&full_path);
 	return error;
 }
 
@@ -328,10 +331,11 @@ static int blob_writestream_write(git_writestream *_stream, const char *buffer, 
 int git_blob_create_from_stream(git_writestream **out, git_repository *repo, const char *hintpath)
 {
 	int error;
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 	blob_writestream *stream;
 
-	assert(out && repo);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
 
 	stream = git__calloc(1, sizeof(blob_writestream));
 	GIT_ERROR_CHECK_ALLOC(stream);
@@ -346,11 +350,11 @@ int git_blob_create_from_stream(git_writestream **out, git_repository *repo, con
 	stream->parent.close = blob_writestream_close;
 	stream->parent.free  = blob_writestream_free;
 
-	if ((error = git_repository_item_path(&path, repo, GIT_REPOSITORY_ITEM_OBJECTS)) < 0
-		|| (error = git_buf_joinpath(&path, path.ptr, "streamed")) < 0)
+	if ((error = git_repository__item_path(&path, repo, GIT_REPOSITORY_ITEM_OBJECTS)) < 0
+		|| (error = git_str_joinpath(&path, path.ptr, "streamed")) < 0)
 		goto cleanup;
 
-	if ((error = git_filebuf_open_withsize(&stream->fbuf, git_buf_cstr(&path), GIT_FILEBUF_TEMPORARY,
+	if ((error = git_filebuf_open_withsize(&stream->fbuf, git_str_cstr(&path), GIT_FILEBUF_TEMPORARY,
 					       0666, 2 * 1024 * 1024)) < 0)
 		goto cleanup;
 
@@ -360,7 +364,7 @@ cleanup:
 	if (error < 0)
 		blob_writestream_free((git_writestream *) stream);
 
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 	return error;
 }
 
@@ -388,16 +392,25 @@ cleanup:
 
 int git_blob_is_binary(const git_blob *blob)
 {
-	git_buf content = GIT_BUF_INIT;
+	git_str content = GIT_STR_INIT;
 	git_object_size_t size;
 
-	assert(blob);
+	GIT_ASSERT_ARG(blob);
 
 	size = git_blob_rawsize(blob);
 
-	git_buf_attach_notowned(&content, git_blob_rawcontent(blob),
+	git_str_attach_notowned(&content, git_blob_rawcontent(blob),
 		(size_t)min(size, GIT_FILTER_BYTES_TO_CHECK_NUL));
-	return git_buf_text_is_binary(&content);
+	return git_str_is_binary(&content);
+}
+
+int git_blob_data_is_binary(const char *str, size_t len)
+{
+	git_str content = GIT_STR_INIT;
+
+	git_str_attach_notowned(&content, str, len);
+
+	return git_str_is_binary(&content);
 }
 
 int git_blob_filter_options_init(
@@ -415,14 +428,14 @@ int git_blob_filter(
 	const char *path,
 	git_blob_filter_options *given_opts)
 {
-	int error = 0;
-	git_filter_list *fl = NULL;
 	git_blob_filter_options opts = GIT_BLOB_FILTER_OPTIONS_INIT;
-	git_filter_flag_t flags = GIT_FILTER_DEFAULT;
+	git_filter_options filter_opts = GIT_FILTER_OPTIONS_INIT;
+	git_filter_list *fl = NULL;
+	int error = 0;
 
-	assert(blob && path && out);
-
-	git_buf_sanitize(out);
+	GIT_ASSERT_ARG(blob);
+	GIT_ASSERT_ARG(path);
+	GIT_ASSERT_ARG(out);
 
 	GIT_ERROR_CHECK_VERSION(
 		given_opts, GIT_BLOB_FILTER_OPTIONS_VERSION, "git_blob_filter_options");
@@ -435,14 +448,25 @@ int git_blob_filter(
 		return 0;
 
 	if ((opts.flags & GIT_BLOB_FILTER_NO_SYSTEM_ATTRIBUTES) != 0)
-		flags |= GIT_FILTER_NO_SYSTEM_ATTRIBUTES;
+		filter_opts.flags |= GIT_FILTER_NO_SYSTEM_ATTRIBUTES;
 
-	if ((opts.flags & GIT_BLOB_FILTER_ATTTRIBUTES_FROM_HEAD) != 0)
-		flags |= GIT_FILTER_ATTRIBUTES_FROM_HEAD;
+	if ((opts.flags & GIT_BLOB_FILTER_ATTRIBUTES_FROM_HEAD) != 0)
+		filter_opts.flags |= GIT_FILTER_ATTRIBUTES_FROM_HEAD;
 
-	if (!(error = git_filter_list_load(
+	if ((opts.flags & GIT_BLOB_FILTER_ATTRIBUTES_FROM_COMMIT) != 0) {
+		filter_opts.flags |= GIT_FILTER_ATTRIBUTES_FROM_COMMIT;
+
+#ifndef GIT_DEPRECATE_HARD
+		if (opts.commit_id)
+			git_oid_cpy(&filter_opts.attr_commit_id, opts.commit_id);
+		else
+#endif
+		git_oid_cpy(&filter_opts.attr_commit_id, &opts.attr_commit_id);
+	}
+
+	if (!(error = git_filter_list_load_ext(
 			&fl, git_blob_owner(blob), blob, path,
-			GIT_FILTER_TO_WORKTREE, flags))) {
+			GIT_FILTER_TO_WORKTREE, &filter_opts))) {
 
 		error = git_filter_list_apply_to_blob(out, fl, blob);
 

@@ -5,16 +5,16 @@
  * a Linking Exception. For full terms see the included COPYING file.
  */
 
-#include "git2.h"
-#include "common.h"
-#include "buffer.h"
-#include "auth.h"
 #include "auth_ntlm.h"
+
+#include "common.h"
+#include "str.h"
+#include "auth.h"
 #include "git2/sys/credential.h"
 
 #ifdef GIT_NTLM
 
-#include "ntlm.h"
+#include "ntlmclient.h"
 
 typedef struct {
 	git_http_auth_context parent;
@@ -29,7 +29,8 @@ static int ntlm_set_challenge(
 {
 	http_auth_ntlm_context *ctx = (http_auth_ntlm_context *)c;
 
-	assert(ctx && challenge);
+	GIT_ASSERT_ARG(ctx);
+	GIT_ASSERT_ARG(challenge);
 
 	git__free(ctx->challenge);
 
@@ -46,7 +47,7 @@ static int ntlm_set_credentials(http_auth_ntlm_context *ctx, git_credential *_cr
 	char *domain = NULL, *domainuser = NULL;
 	int error = 0;
 
-	assert(_cred->credtype == GIT_CREDENTIAL_USERPASS_PLAINTEXT);
+	GIT_ASSERT(_cred->credtype == GIT_CREDENTIAL_USERPASS_PLAINTEXT);
 	cred = (git_credential_userpass_plaintext *)_cred;
 
 	if ((sep = strchr(cred->username, '\\')) != NULL) {
@@ -76,17 +77,20 @@ done:
 }
 
 static int ntlm_next_token(
-	git_buf *buf,
+	git_str *buf,
 	git_http_auth_context *c,
 	git_credential *cred)
 {
 	http_auth_ntlm_context *ctx = (http_auth_ntlm_context *)c;
-	git_buf input_buf = GIT_BUF_INIT;
+	git_str input_buf = GIT_STR_INIT;
 	const unsigned char *msg;
 	size_t challenge_len, msg_len;
-	int error = -1;
+	int error = GIT_EAUTH;
 
-	assert(buf && ctx && ctx->ntlm);
+	GIT_ASSERT_ARG(buf);
+	GIT_ASSERT_ARG(ctx);
+
+	GIT_ASSERT(ctx->ntlm);
 
 	challenge_len = ctx->challenge ? strlen(ctx->challenge) : 0;
 
@@ -125,7 +129,7 @@ static int ntlm_next_token(
 			goto done;
 		}
 
-		if (git_buf_decode_base64(&input_buf,
+		if (git_str_decode_base64(&input_buf,
 		    ctx->challenge + 5, challenge_len - 5) < 0) {
 			git_error_set(GIT_ERROR_NET, "invalid NTLM challenge from server");
 			goto done;
@@ -145,16 +149,16 @@ static int ntlm_next_token(
 		}
 	}
 
-	git_buf_puts(buf, "NTLM ");
-	git_buf_encode_base64(buf, (const char *)msg, msg_len);
+	git_str_puts(buf, "NTLM ");
+	git_str_encode_base64(buf, (const char *)msg, msg_len);
 
-	if (git_buf_oom(buf))
+	if (git_str_oom(buf))
 		goto done;
 
 	error = 0;
 
 done:
-	git_buf_dispose(&input_buf);
+	git_str_dispose(&input_buf);
 	return error;
 }
 
@@ -162,7 +166,7 @@ static int ntlm_is_complete(git_http_auth_context *c)
 {
 	http_auth_ntlm_context *ctx = (http_auth_ntlm_context *)c;
 
-	assert(ctx);
+	GIT_ASSERT_ARG(ctx);
 	return (ctx->complete == true);
 }
 

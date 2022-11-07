@@ -3,7 +3,7 @@
 #include "futils.h"
 #include <ctype.h>
 
-static git_buf path = GIT_BUF_INIT;
+static git_str path = GIT_STR_INIT;
 
 void test_repo_config__initialize(void)
 {
@@ -11,24 +11,23 @@ void test_repo_config__initialize(void)
 	cl_git_pass(cl_rename(
 		"empty_standard_repo/.gitted", "empty_standard_repo/.git"));
 
-	git_buf_clear(&path);
+	git_str_clear(&path);
 
 	cl_must_pass(p_mkdir("alternate", 0777));
-	cl_git_pass(git_path_prettify(&path, "alternate", NULL));
+	cl_git_pass(git_fs_path_prettify(&path, "alternate", NULL));
 }
 
 void test_repo_config__cleanup(void)
 {
 	cl_sandbox_set_search_path_defaults();
 
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 
 	cl_git_pass(
 		git_futils_rmdir_r("alternate", NULL, GIT_RMDIR_REMOVE_FILES));
-	cl_assert(!git_path_isdir("alternate"));
+	cl_assert(!git_fs_path_isdir("alternate"));
 
 	cl_fixture_cleanup("empty_standard_repo");
-
 }
 
 void test_repo_config__can_open_global_when_there_is_no_file(void)
@@ -60,7 +59,7 @@ void test_repo_config__can_open_missing_global_with_separators(void)
 	git_repository *repo;
 	git_config *config, *global;
 
-	cl_git_pass(git_buf_printf(
+	cl_git_pass(git_str_printf(
 		&path, "%c%s", GIT_PATH_LIST_SEPARATOR, "dummy"));
 
 	cl_git_pass(git_libgit2_opts(
@@ -70,7 +69,7 @@ void test_repo_config__can_open_missing_global_with_separators(void)
 	cl_git_pass(git_libgit2_opts(
 		GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_XDG, path.ptr));
 
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 
 	cl_git_pass(git_repository_open(&repo, "empty_standard_repo"));
 	cl_git_pass(git_repository_config(&config, repo));
@@ -101,7 +100,7 @@ void test_repo_config__read_with_no_configs_at_all(void)
 	/* with none */
 
 	cl_must_pass(p_unlink("empty_standard_repo/.git/config"));
-	cl_assert(!git_path_isfile("empty_standard_repo/.git/config"));
+	cl_assert(!git_fs_path_isfile("empty_standard_repo/.git/config"));
 
 	cl_git_pass(git_repository_open(&repo, "empty_standard_repo"));
 	git_repository__configmap_lookup_cache_clear(repo);
@@ -115,7 +114,7 @@ void test_repo_config__read_with_no_configs_at_all(void)
 	cl_sandbox_set_search_path_defaults();
 
 	cl_must_pass(p_mkdir("alternate/1", 0777));
-	cl_git_pass(git_buf_joinpath(&path, path.ptr, "1"));
+	cl_git_pass(git_str_joinpath(&path, path.ptr, "1"));
 	cl_git_rewritefile("alternate/1/gitconfig", "[core]\n\tabbrev = 10\n");
 	cl_git_pass(git_libgit2_opts(
 		GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_SYSTEM, path.ptr));
@@ -177,16 +176,16 @@ void test_repo_config__read_with_no_configs_at_all(void)
 	cl_assert_equal_i(40, val);
 
 	cl_must_pass(p_unlink("empty_standard_repo/.git/config"));
-	cl_assert(!git_path_isfile("empty_standard_repo/.git/config"));
+	cl_assert(!git_fs_path_isfile("empty_standard_repo/.git/config"));
 
 	cl_must_pass(p_unlink("alternate/1/gitconfig"));
-	cl_assert(!git_path_isfile("alternate/1/gitconfig"));
+	cl_assert(!git_fs_path_isfile("alternate/1/gitconfig"));
 
 	cl_must_pass(p_unlink("alternate/2/config"));
-	cl_assert(!git_path_isfile("alternate/2/config"));
+	cl_assert(!git_fs_path_isfile("alternate/2/config"));
 
 	cl_must_pass(p_unlink("alternate/3/.gitconfig"));
-	cl_assert(!git_path_isfile("alternate/3/.gitconfig"));
+	cl_assert(!git_fs_path_isfile("alternate/3/.gitconfig"));
 
 	git_repository__configmap_lookup_cache_clear(repo);
 	val = -1;
@@ -196,8 +195,8 @@ void test_repo_config__read_with_no_configs_at_all(void)
 
 	/* reopen */
 
-	cl_assert(!git_path_isfile("empty_standard_repo/.git/config"));
-	cl_assert(!git_path_isfile("alternate/3/.gitconfig"));
+	cl_assert(!git_fs_path_isfile("empty_standard_repo/.git/config"));
+	cl_assert(!git_fs_path_isfile("alternate/3/.gitconfig"));
 
 	cl_git_pass(git_repository_open(&repo, "empty_standard_repo"));
 	git_repository__configmap_lookup_cache_clear(repo);
@@ -206,6 +205,6 @@ void test_repo_config__read_with_no_configs_at_all(void)
 	cl_assert_equal_i(7, val);
 	git_repository_free(repo);
 
-	cl_assert(!git_path_exists("empty_standard_repo/.git/config"));
-	cl_assert(!git_path_exists("alternate/3/.gitconfig"));
+	cl_assert(!git_fs_path_exists("empty_standard_repo/.git/config"));
+	cl_assert(!git_fs_path_exists("alternate/3/.gitconfig"));
 }

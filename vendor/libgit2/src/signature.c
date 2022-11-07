@@ -23,6 +23,12 @@ void git_signature_free(git_signature *sig)
 	git__free(sig);
 }
 
+static int signature_parse_error(const char *msg)
+{
+	git_error_set(GIT_ERROR_INVALID, "failed to parse signature - %s", msg);
+	return GIT_EINVALID;
+}
+
 static int signature_error(const char *msg)
 {
 	git_error_set(GIT_ERROR_INVALID, "failed to parse signature - %s", msg);
@@ -65,7 +71,8 @@ int git_signature_new(git_signature **sig_out, const char *name, const char *ema
 {
 	git_signature *p = NULL;
 
-	assert(name && email);
+	GIT_ASSERT_ARG(name);
+	GIT_ASSERT_ARG(email);
 
 	*sig_out = NULL;
 
@@ -205,13 +212,13 @@ int git_signature__parse(git_signature *sig, const char **buffer_out,
 
 	if (ender &&
 		(buffer_end = memchr(buffer, ender, buffer_end - buffer)) == NULL)
-		return signature_error("no newline given");
+		return signature_parse_error("no newline given");
 
 	if (header) {
 		const size_t header_len = strlen(header);
 
 		if (buffer + header_len >= buffer_end || memcmp(buffer, header, header_len) != 0)
-			return signature_error("expected prefix doesn't match actual");
+			return signature_parse_error("expected prefix doesn't match actual");
 
 		buffer += header_len;
 	}
@@ -220,7 +227,7 @@ int git_signature__parse(git_signature *sig, const char **buffer_out,
 	email_end = git__memrchr(buffer, '>', buffer_end - buffer);
 
 	if (!email_start || !email_end || email_end <= email_start)
-		return signature_error("malformed e-mail");
+		return signature_parse_error("malformed e-mail");
 
 	email_start += 1;
 	sig->name = extract_trimmed(buffer, email_start - buffer - 1);
@@ -236,7 +243,7 @@ int git_signature__parse(git_signature *sig, const char **buffer_out,
 			git__free(sig->name);
 			git__free(sig->email);
 			sig->name = sig->email = NULL;
-			return signature_error("invalid Unix timestamp");
+			return signature_parse_error("invalid Unix timestamp");
 		}
 
 		/* do we have a timezone? */
@@ -279,7 +286,8 @@ int git_signature_from_buffer(git_signature **out, const char *buf)
 	const char *buf_end;
 	int error;
 
-	assert(out && buf);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(buf);
 
 	*out = NULL;
 
@@ -297,12 +305,10 @@ int git_signature_from_buffer(git_signature **out, const char *buf)
 	return error;
 }
 
-void git_signature__writebuf(git_buf *buf, const char *header, const git_signature *sig)
+void git_signature__writebuf(git_str *buf, const char *header, const git_signature *sig)
 {
 	int offset, hours, mins;
 	char sign;
-
-	assert(buf && sig);
 
 	offset = sig->when.offset;
 	sign = (sig->when.offset < 0 || sig->when.sign == '-') ? '-' : '+';
@@ -313,14 +319,15 @@ void git_signature__writebuf(git_buf *buf, const char *header, const git_signatu
 	hours = offset / 60;
 	mins = offset % 60;
 
-	git_buf_printf(buf, "%s%s <%s> %u %c%02d%02d\n",
+	git_str_printf(buf, "%s%s <%s> %u %c%02d%02d\n",
 			header ? header : "", sig->name, sig->email,
 			(unsigned)sig->when.time, sign, hours, mins);
 }
 
 bool git_signature__equal(const git_signature *one, const git_signature *two)
 {
-	assert(one && two);
+	GIT_ASSERT_ARG(one);
+	GIT_ASSERT_ARG(two);
 
 	return
 		git__strcmp(one->name, two->name) == 0 &&

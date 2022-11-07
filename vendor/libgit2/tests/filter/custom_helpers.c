@@ -1,16 +1,16 @@
 #include "clar_libgit2.h"
 #include "posix.h"
 #include "filter.h"
-#include "buf_text.h"
 #include "git2/sys/filter.h"
+#include "custom_helpers.h"
 
 #define VERY_SECURE_ENCRYPTION(b) ((b) ^ 0xff)
 
 int bitflip_filter_apply(
 	git_filter     *self,
 	void          **payload,
-	git_buf        *to,
-	const git_buf  *from,
+	git_str        *to,
+	const git_str  *from,
 	const git_filter_source *source)
 {
 	const unsigned char *src = (const unsigned char *)from->ptr;
@@ -26,7 +26,7 @@ int bitflip_filter_apply(
 	if (!from->size)
 		return 0;
 
-	cl_git_pass(git_buf_grow(to, from->size));
+	cl_git_pass(git_str_grow(to, from->size));
 
 	dst = (unsigned char *)to->ptr;
 
@@ -36,6 +36,17 @@ int bitflip_filter_apply(
 	to->size = from->size;
 
 	return 0;
+}
+
+static int bitflip_filter_stream(
+	git_writestream **out,
+	git_filter *self,
+	void **payload,
+	const git_filter_source *src,
+	git_writestream *next)
+{
+	return git_filter_buffered_stream_new(out,
+		self, bitflip_filter_apply, NULL, payload, src, next);
 }
 
 static void bitflip_filter_free(git_filter *f)
@@ -51,7 +62,7 @@ git_filter *create_bitflip_filter(void)
 	filter->version = GIT_FILTER_VERSION;
 	filter->attributes = "+bitflip";
 	filter->shutdown = bitflip_filter_free;
-	filter->apply = bitflip_filter_apply;
+	filter->stream = bitflip_filter_stream;
 
 	return filter;
 }
@@ -60,8 +71,8 @@ git_filter *create_bitflip_filter(void)
 int reverse_filter_apply(
 	git_filter     *self,
 	void          **payload,
-	git_buf        *to,
-	const git_buf  *from,
+	git_str        *to,
+	const git_str  *from,
 	const git_filter_source *source)
 {
 	const unsigned char *src = (const unsigned char *)from->ptr;
@@ -77,7 +88,7 @@ int reverse_filter_apply(
 	if (!from->size)
 		return 0;
 
-	cl_git_pass(git_buf_grow(to, from->size));
+	cl_git_pass(git_str_grow(to, from->size));
 
 	dst = (unsigned char *)to->ptr + from->size - 1;
 
@@ -87,6 +98,17 @@ int reverse_filter_apply(
 	to->size = from->size;
 
 	return 0;
+}
+
+static int reverse_filter_stream(
+	git_writestream **out,
+	git_filter *self,
+	void **payload,
+	const git_filter_source *src,
+	git_writestream *next)
+{
+	return git_filter_buffered_stream_new(out,
+		self, reverse_filter_apply, NULL, payload, src, next);
 }
 
 static void reverse_filter_free(git_filter *f)
@@ -102,12 +124,12 @@ git_filter *create_reverse_filter(const char *attrs)
 	filter->version = GIT_FILTER_VERSION;
 	filter->attributes = attrs;
 	filter->shutdown = reverse_filter_free;
-	filter->apply = reverse_filter_apply;
+	filter->stream = reverse_filter_stream;
 
 	return filter;
 }
 
-int erroneous_filter_stream(
+static int erroneous_filter_stream(
 	git_writestream **out,
 	git_filter *self,
 	void **payload,

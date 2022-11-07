@@ -8,7 +8,6 @@
 #define INCLUDE_win32_path_w32_h__
 
 #include "common.h"
-#include "vector.h"
 
 /**
  * Create a Win32 path (in UCS-2 format) from a UTF-8 string.  If the given
@@ -86,5 +85,7 @@ size_t git_win32_path_trim_end(wchar_t *str, size_t len);
  * @return The length of the modified string (<= the input length)
  */
 size_t git_win32_path_remove_namespace(wchar_t *str, size_t len);
+
+int git_win32_path_find_executable(git_win32_path fullpath, wchar_t* exe);
 
 #endif

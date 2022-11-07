@@ -150,7 +150,7 @@ static cl_perf_timer s_timer_run = CL_PERF_TIMER_INIT;
  */
 static cl_perf_timer s_timer_test = CL_PERF_TIMER_INIT;
 
-void _cl_trace_cb__event_handler(
+static void _cl_trace_cb__event_handler(
 	cl_trace_event ev,
 	const char *suite_name,
 	const char *test_name,
@@ -164,7 +164,7 @@ void _cl_trace_cb__event_handler(
 	switch (ev) {
 	case CL_TRACE__SUITE_BEGIN:
 		git_trace(GIT_TRACE_TRACE, "\n\n%s\n%s: Begin Suite", HR, suite_name);
-#if 0 && defined(GIT_MSVC_CRTDBG)
+#if 0 && defined(GIT_WIN32_LEAKCHECK)
 		git_win32__crtdbg_stacktrace__dump(
 			GIT_WIN32__CRTDBG_STACKTRACE__SET_MARK,
 			suite_name);
@@ -172,7 +172,7 @@ void _cl_trace_cb__event_handler(
 		break;
 
 	case CL_TRACE__SUITE_END:
-#if 0 && defined(GIT_MSVC_CRTDBG)
+#if 0 && defined(GIT_WIN32_LEAKCHECK)
 		/* As an example of checkpointing, dump leaks within this suite.
 		 * This may generate false positives for things like the global
 		 * TLS error state and maybe the odb cache since they aren't

@@ -1,6 +1,7 @@
 #include "clar_libgit2.h"
 #include "diff_helpers.h"
 #include "repository.h"
+#include "index.h"
 #include "git2/sys/diff.h"
 #include "../checkout/checkout_helpers.h"
 
@@ -1252,7 +1253,7 @@ void test_diff_workdir__can_diff_empty_file(void)
 	/* empty contents of file */
 
 	cl_git_rewritefile("attr_index/README.txt", "");
-	cl_git_pass(git_path_lstat("attr_index/README.txt", &st));
+	cl_git_pass(git_fs_path_lstat("attr_index/README.txt", &st));
 	cl_assert_equal_i(0, (int)st.st_size);
 
 	cl_git_pass(git_diff_tree_to_workdir(&diff, g_repo, tree, &opts));
@@ -1265,7 +1266,7 @@ void test_diff_workdir__can_diff_empty_file(void)
 	/* remove a file altogether */
 
 	cl_git_pass(p_unlink("attr_index/README.txt"));
-	cl_assert(!git_path_exists("attr_index/README.txt"));
+	cl_assert(!git_fs_path_exists("attr_index/README.txt"));
 
 	cl_git_pass(git_diff_tree_to_workdir(&diff, g_repo, tree, &opts));
 	cl_assert_equal_i(3, (int)git_diff_num_deltas(diff));
@@ -1663,7 +1664,7 @@ void test_diff_workdir__patience_diff(void)
 	cl_git_pass(git_patch_to_buf(&buf, patch));
 
 	cl_assert_equal_s(expected_normal, buf.ptr);
-	git_buf_clear(&buf);
+	git_buf_dispose(&buf);
 	git_patch_free(patch);
 	git_diff_free(diff);
 
@@ -1675,9 +1676,8 @@ void test_diff_workdir__patience_diff(void)
 	cl_git_pass(git_patch_to_buf(&buf, patch));
 
 	cl_assert_equal_s(expected_patience, buf.ptr);
-	git_buf_clear(&buf);
-
 	git_buf_dispose(&buf);
+
 	git_patch_free(patch);
 	git_diff_free(diff);
 }
@@ -1754,13 +1754,13 @@ void test_diff_workdir__with_stale_index(void)
 	git_index_free(idx);
 }
 
-static int touch_file(void *payload, git_buf *path)
+static int touch_file(void *payload, git_str *path)
 {
 	struct stat st;
 	struct p_timeval times[2];
 
 	GIT_UNUSED(payload);
-	if (git_path_isdir(path->ptr))
+	if (git_fs_path_isdir(path->ptr))
 		return 0;
 
 	cl_must_pass(p_stat(path->ptr, &st));
@@ -1804,10 +1804,10 @@ void test_diff_workdir__can_update_index(void)
 
 	/* touch all the files so stat times are different */
 	{
-		git_buf path = GIT_BUF_INIT;
-		cl_git_pass(git_buf_sets(&path, "status"));
-		cl_git_pass(git_path_direach(&path, 0, touch_file, NULL));
-		git_buf_dispose(&path);
+		git_str path = GIT_STR_INIT;
+		cl_git_pass(git_str_sets(&path, "status"));
+		cl_git_pass(git_fs_path_direach(&path, 0, touch_file, NULL));
+		git_str_dispose(&path);
 	}
 
 	opts.flags |= GIT_DIFF_INCLUDE_IGNORED | GIT_DIFF_INCLUDE_UNTRACKED;
@@ -1873,9 +1873,9 @@ void test_diff_workdir__binary_detection(void)
 {
 	git_index *idx;
 	git_diff *diff = NULL;
-	git_buf b = GIT_BUF_INIT;
+	git_str b = GIT_STR_INIT;
 	int i;
-	git_buf data[10] = {
+	git_str data[10] = {
 		{ "1234567890", 0, 10 },         /* 0 - all ascii text control */
 		{ "\xC3\x85\xC3\xBC\xE2\x80\xA0\x48\xC3\xB8\xCF\x80\xCE\xA9", 0, 14 },            /* 1 - UTF-8 multibyte text */
 		{ "\xEF\xBB\xBF\xC3\x9C\xE2\xA4\x92\xC6\x92\x38\xC2\xA3\xE2\x82\xAC", 0, 16 }, /* 2 - UTF-8 with BOM */
@@ -1899,7 +1899,7 @@ void test_diff_workdir__binary_detection(void)
 	 * then we will try with test data in index and ASCII in workdir.
 	 */
 
-	cl_git_pass(git_buf_sets(&b, "empty_standard_repo/0"));
+	cl_git_pass(git_str_sets(&b, "empty_standard_repo/0"));
 	for (i = 0; i < 10; ++i) {
 		b.ptr[b.size - 1] = '0' + i;
 		cl_git_mkfile(b.ptr, "baseline");
@@ -1931,7 +1931,7 @@ void test_diff_workdir__binary_detection(void)
 
 	git_diff_free(diff);
 
-	cl_git_pass(git_buf_sets(&b, "empty_standard_repo/0"));
+	cl_git_pass(git_str_sets(&b, "empty_standard_repo/0"));
 	for (i = 0; i < 10; ++i) {
 		b.ptr[b.size - 1] = '0' + i;
 		cl_git_pass(git_index_add_bypath(idx, &b.ptr[b.size - 1]));
@@ -1959,7 +1959,7 @@ void test_diff_workdir__binary_detection(void)
 	git_diff_free(diff);
 
 	git_index_free(idx);
-	git_buf_dispose(&b);
+	git_str_dispose(&b);
 }
 
 void test_diff_workdir__to_index_conflicted(void) {
@@ -2005,8 +2005,10 @@ void test_diff_workdir__only_writes_index_when_necessary(void)
 	git_diff *diff = NULL;
 	git_reference *head;
 	git_object *head_object;
-	git_oid initial, first, second;
-	git_buf path = GIT_BUF_INIT;
+	unsigned char initial[GIT_HASH_SHA1_SIZE],
+	              first[GIT_HASH_SHA1_SIZE],
+	              second[GIT_HASH_SHA1_SIZE];
+	git_str path = GIT_STR_INIT;
 	struct stat st;
 	struct p_timeval times[2];
 
@@ -2020,7 +2022,7 @@ void test_diff_workdir__only_writes_index_when_necessary(void)
 
 	cl_git_pass(git_reset(g_repo, head_object, GIT_RESET_HARD, NULL));
 
-	git_oid_cpy(&initial, git_index_checksum(index));
+	memcpy(initial, git_index__checksum(index), GIT_HASH_SHA1_SIZE);
 
 	/* update the index timestamp to avoid raciness */
 	cl_must_pass(p_stat("status/.git/index", &st));
@@ -2036,21 +2038,21 @@ void test_diff_workdir__only_writes_index_when_necessary(void)
 	cl_git_pass(git_diff_index_to_workdir(&diff, g_repo, NULL, &opts));
 	git_diff_free(diff);
 
-	git_oid_cpy(&first, git_index_checksum(index));
-	cl_assert(!git_oid_equal(&initial, &first));
+	memcpy(first, git_index__checksum(index), GIT_HASH_SHA1_SIZE);
+	cl_assert(memcmp(initial, first, GIT_HASH_SHA1_SIZE) != 0);
 
 	/* touch all the files so stat times are different */
-	cl_git_pass(git_buf_sets(&path, "status"));
-	cl_git_pass(git_path_direach(&path, 0, touch_file, NULL));
+	cl_git_pass(git_str_sets(&path, "status"));
+	cl_git_pass(git_fs_path_direach(&path, 0, touch_file, NULL));
 
 	cl_git_pass(git_diff_index_to_workdir(&diff, g_repo, NULL, &opts));
 	git_diff_free(diff);
 
 	/* ensure the second diff did update the index */
-	git_oid_cpy(&second, git_index_checksum(index));
-	cl_assert(!git_oid_equal(&first, &second));
+	memcpy(second, git_index__checksum(index), GIT_HASH_SHA1_SIZE);
+	cl_assert(memcmp(first, second, GIT_HASH_SHA1_SIZE) != 0);
 
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 	git_object_free(head_object);
 	git_reference_free(head);
 	git_index_free(index);
@@ -2202,4 +2204,39 @@ void test_diff_workdir__order(void)
 	git_buf_dispose(&patch);
 	git_diff_free(diff);
 	git_tree_free(tree);
+}
+
+void test_diff_workdir__ignore_blank_lines(void)
+{
+	git_diff_options opts = GIT_DIFF_OPTIONS_INIT;
+	git_diff *diff;
+	git_patch *patch;
+	git_buf buf = GIT_BUF_INIT;
+
+	g_repo = cl_git_sandbox_init("rebase");
+	cl_git_rewritefile("rebase/gravy.txt", "GRAVY SOUP.\n\n\nGet eight pounds of coarse lean beef--wash it clean and lay it in your\n\npot, put in the same ingredients as for the shin soup, with the same\nquantity of water, and follow the process directed for that. Strain the\nsoup through a sieve, and serve it up clear, with nothing more than\ntoasted bread in it; two table-spoonsful of mushroom catsup will add a\nfine flavour to the soup!\n");
+
+	/* Perform the diff normally */
+	cl_git_pass(git_diff_index_to_workdir(&diff, g_repo, NULL, &opts));
+	cl_git_pass(git_patch_from_diff(&patch, diff, 0));
+	cl_git_pass(git_patch_to_buf(&buf, patch));
+
+	cl_assert_equal_s("diff --git a/gravy.txt b/gravy.txt\nindex c4e6cca..3c617e6 100644\n--- a/gravy.txt\n+++ b/gravy.txt\n@@ -1,8 +1,10 @@\n GRAVY SOUP.\n \n+\n Get eight pounds of coarse lean beef--wash it clean and lay it in your\n+\n pot, put in the same ingredients as for the shin soup, with the same\n quantity of water, and follow the process directed for that. Strain the\n soup through a sieve, and serve it up clear, with nothing more than\n toasted bread in it; two table-spoonsful of mushroom catsup will add a\n-fine flavour to the soup.\n+fine flavour to the soup!\n", buf.ptr);
+
+	git_buf_dispose(&buf);
+	git_patch_free(patch);
+	git_diff_free(diff);
+
+	/* Perform the diff ignoring blank lines */
+	opts.flags |= GIT_DIFF_IGNORE_BLANK_LINES;
+
+	cl_git_pass(git_diff_index_to_workdir(&diff, g_repo, NULL, &opts));
+	cl_git_pass(git_patch_from_diff(&patch, diff, 0));
+	cl_git_pass(git_patch_to_buf(&buf, patch));
+
+	cl_assert_equal_s("diff --git a/gravy.txt b/gravy.txt\nindex c4e6cca..3c617e6 100644\n--- a/gravy.txt\n+++ b/gravy.txt\n@@ -5,4 +7,4 @@ pot, put in the same ingredients as for the shin soup, with the same\n quantity of water, and follow the process directed for that. Strain the\n soup through a sieve, and serve it up clear, with nothing more than\n toasted bread in it; two table-spoonsful of mushroom catsup will add a\n-fine flavour to the soup.\n+fine flavour to the soup!\n", buf.ptr);
+
+	git_buf_dispose(&buf);
+	git_patch_free(patch);
+	git_diff_free(diff);
 }
