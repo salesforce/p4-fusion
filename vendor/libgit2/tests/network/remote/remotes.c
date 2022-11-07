@@ -1,6 +1,5 @@
 #include "clar_libgit2.h"
 #include "config/config_helpers.h"
-#include "buffer.h"
 #include "refspec.h"
 #include "remote.h"
 
@@ -28,7 +27,7 @@ void test_network_remote_remotes__cleanup(void)
 
 void test_network_remote_remotes__parsing(void)
 {
-	git_buf url = GIT_BUF_INIT;
+	git_str url = GIT_STR_INIT;
 	git_remote *_remote2 = NULL;
 
 	cl_assert_equal_s(git_remote_name(_remote), "test");
@@ -53,26 +52,73 @@ void test_network_remote_remotes__parsing(void)
 	cl_assert_equal_s(url.ptr, "git://github.com/libgit2/pushlibgit2");
 
 	git_remote_free(_remote2);
-	git_buf_dispose(&url);
+	git_str_dispose(&url);
 }
 
+static int remote_ready_callback(git_remote *remote, int direction, void *payload)
+{
+	if (direction == GIT_DIRECTION_PUSH) {
+		const char *url = git_remote_pushurl(remote);
+
+		cl_assert_equal_p(url, NULL);;
+		cl_assert_equal_s(payload, "payload");
+		return git_remote_set_instance_pushurl(remote, "push_url");
+	}
+
+	if (direction == GIT_DIRECTION_FETCH) {
+		const char *url = git_remote_url(remote);
+
+		cl_assert_equal_s(url, "git://github.com/libgit2/libgit2");
+		cl_assert_equal_s(payload, "payload");
+		return git_remote_set_instance_url(remote, "fetch_url");
+	}
+
+	return -1;
+}
+
+void test_network_remote_remotes__remote_ready(void)
+{
+	git_str url = GIT_STR_INIT;
+
+	git_remote_callbacks callbacks = GIT_REMOTE_CALLBACKS_INIT;
+	callbacks.remote_ready = remote_ready_callback;
+	callbacks.payload = "payload";
+
+	cl_assert_equal_s(git_remote_name(_remote), "test");
+	cl_assert_equal_s(git_remote_url(_remote), "git://github.com/libgit2/libgit2");
+	cl_assert(git_remote_pushurl(_remote) == NULL);
+
+	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_FETCH, &callbacks));
+	cl_assert_equal_s(url.ptr, "fetch_url");
+
+	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_PUSH, &callbacks));
+	cl_assert_equal_s(url.ptr, "push_url");
+
+	git_str_dispose(&url);
+}
+
+#ifndef GIT_DEPRECATE_HARD
 static int urlresolve_callback(git_buf *url_resolved, const char *url, int direction, void *payload)
 {
+	int error = -1;
+
 	cl_assert(strcmp(url, "git://github.com/libgit2/libgit2") == 0);
 	cl_assert(strcmp(payload, "payload") == 0);
 	cl_assert(url_resolved->size == 0);
 
 	if (direction == GIT_DIRECTION_PUSH)
-		git_buf_sets(url_resolved, "pushresolve");
+		error = git_buf_set(url_resolved, "pushresolve", strlen("pushresolve") + 1);
 	if (direction == GIT_DIRECTION_FETCH)
-		git_buf_sets(url_resolved, "fetchresolve");
+		error = git_buf_set(url_resolved, "fetchresolve", strlen("fetchresolve") + 1);
 
-	return GIT_OK;
+	return error;
 }
+#endif
 
 void test_network_remote_remotes__urlresolve(void)
 {
-	git_buf url = GIT_BUF_INIT;
+#ifndef GIT_DEPRECATE_HARD
+	git_str url = GIT_STR_INIT;
 
 	git_remote_callbacks callbacks = GIT_REMOTE_CALLBACKS_INIT;
 	callbacks.resolve_url = urlresolve_callback;
@@ -88,9 +134,11 @@ void test_network_remote_remotes__urlresolve(void)
 	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_PUSH, &callbacks));
 	cl_assert_equal_s(url.ptr, "pushresolve");
 
-	git_buf_dispose(&url);
+	git_str_dispose(&url);
+#endif
 }
 
+#ifndef GIT_DEPRECATE_HARD
 static int urlresolve_passthrough_callback(git_buf *url_resolved, const char *url, int direction, void *payload)
 {
 	GIT_UNUSED(url_resolved);
@@ -99,10 +147,12 @@ static int urlresolve_passthrough_callback(git_buf *url_resolved, const char *ur
 	GIT_UNUSED(payload);
 	return GIT_PASSTHROUGH;
 }
+#endif
 
 void test_network_remote_remotes__urlresolve_passthrough(void)
 {
-	git_buf url = GIT_BUF_INIT;
+#ifndef GIT_DEPRECATE_HARD
+	git_str url = GIT_STR_INIT;
 	const char *orig_url = "git://github.com/libgit2/libgit2";
 
 	git_remote_callbacks callbacks = GIT_REMOTE_CALLBACKS_INIT;
@@ -118,7 +168,53 @@ void test_network_remote_remotes__urlresolve_passthrough(void)
 	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_PUSH, &callbacks));
 	cl_assert_equal_s(url.ptr, orig_url);
 
-	git_buf_dispose(&url);
+	git_str_dispose(&url);
+#endif
+}
+
+void test_network_remote_remotes__instance_url(void)
+{
+	git_str url = GIT_STR_INIT;
+	const char *orig_url = "git://github.com/libgit2/libgit2";
+
+	cl_assert_equal_s(git_remote_name(_remote), "test");
+	cl_assert_equal_s(git_remote_url(_remote), orig_url);
+
+	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_FETCH, NULL));
+	cl_assert_equal_s(url.ptr, orig_url);
+	git_str_clear(&url);
+
+	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_PUSH, NULL));
+	cl_assert_equal_s(url.ptr, orig_url);
+	git_str_clear(&url);
+
+	/* Setting the instance url updates the fetch and push URLs */
+	git_remote_set_instance_url(_remote, "https://github.com/new/remote/url");
+	cl_assert_equal_s(git_remote_url(_remote), "https://github.com/new/remote/url");
+	cl_assert_equal_p(git_remote_pushurl(_remote), NULL);
+
+	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_FETCH, NULL));
+	cl_assert_equal_s(url.ptr, "https://github.com/new/remote/url");
+	git_str_clear(&url);
+
+	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_PUSH, NULL));
+	cl_assert_equal_s(url.ptr, "https://github.com/new/remote/url");
+	git_str_clear(&url);
+
+	/* Setting the instance push url updates only the push URL */
+	git_remote_set_instance_pushurl(_remote, "https://github.com/new/push/url");
+	cl_assert_equal_s(git_remote_url(_remote), "https://github.com/new/remote/url");
+	cl_assert_equal_s(git_remote_pushurl(_remote), "https://github.com/new/push/url");
+
+	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_FETCH, NULL));
+	cl_assert_equal_s(url.ptr, "https://github.com/new/remote/url");
+	git_str_clear(&url);
+
+	cl_git_pass(git_remote__urlfordirection(&url, _remote, GIT_DIRECTION_PUSH, NULL));
+	cl_assert_equal_s(url.ptr, "https://github.com/new/push/url");
+	git_str_clear(&url);
+
+	git_str_dispose(&url);
 }
 
 void test_network_remote_remotes__pushurl(void)

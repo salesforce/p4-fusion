@@ -23,7 +23,7 @@ typedef struct {
 } tree_reader;
 
 static int tree_reader_read(
-	git_buf *out,
+	git_str *out,
 	git_oid *out_id,
 	git_filemode_t *out_filemode,
 	git_reader *_reader,
@@ -42,7 +42,7 @@ static int tree_reader_read(
 	blobsize = git_blob_rawsize(blob);
 	GIT_ERROR_CHECK_BLOBSIZE(blobsize);
 
-	if ((error = git_buf_set(out, git_blob_rawcontent(blob), (size_t)blobsize)) < 0)
+	if ((error = git_str_set(out, git_blob_rawcontent(blob), (size_t)blobsize)) < 0)
 		goto done;
 
 	if (out_id)
@@ -61,7 +61,8 @@ int git_reader_for_tree(git_reader **out, git_tree *tree)
 {
 	tree_reader *reader;
 
-	assert(out && tree);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(tree);
 
 	reader = git__calloc(1, sizeof(tree_reader));
 	GIT_ERROR_CHECK_ALLOC(reader);
@@ -82,14 +83,14 @@ typedef struct {
 } workdir_reader;
 
 static int workdir_reader_read(
-	git_buf *out,
+	git_str *out,
 	git_oid *out_id,
 	git_filemode_t *out_filemode,
 	git_reader *_reader,
 	const char *filename)
 {
 	workdir_reader *reader = (workdir_reader *)_reader;
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 	struct stat st;
 	git_filemode_t filemode;
 	git_filter_list *filters = NULL;
@@ -97,8 +98,7 @@ static int workdir_reader_read(
 	git_oid id;
 	int error;
 
-	if ((error = git_buf_joinpath(&path,
-		git_repository_workdir(reader->repo), filename)) < 0)
+	if ((error = git_repository_workdir_path(&path, reader->repo, filename)) < 0)
 		goto done;
 
 	if ((error = p_lstat(path.ptr, &st)) < 0) {
@@ -120,7 +120,7 @@ static int workdir_reader_read(
 		GIT_FILTER_TO_ODB, GIT_FILTER_DEFAULT)) < 0)
 		goto done;
 
-	if ((error = git_filter_list_apply_to_file(out,
+	if ((error = git_filter_list__apply_to_file(out,
 	    filters, reader->repo, path.ptr)) < 0)
 		goto done;
 
@@ -146,7 +146,7 @@ static int workdir_reader_read(
 
 done:
 	git_filter_list_free(filters);
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 	return error;
 }
 
@@ -158,7 +158,8 @@ int git_reader_for_workdir(
 	workdir_reader *reader;
 	int error;
 
-	assert(out && repo);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
 
 	reader = git__calloc(1, sizeof(workdir_reader));
 	GIT_ERROR_CHECK_ALLOC(reader);
@@ -185,7 +186,7 @@ typedef struct {
 } index_reader;
 
 static int index_reader_read(
-	git_buf *out,
+	git_str *out,
 	git_oid *out_id,
 	git_filemode_t *out_filemode,
 	git_reader *_reader,
@@ -223,7 +224,8 @@ int git_reader_for_index(
 	index_reader *reader;
 	int error;
 
-	assert(out && repo);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
 
 	reader = git__calloc(1, sizeof(index_reader));
 	GIT_ERROR_CHECK_ALLOC(reader);
@@ -245,13 +247,15 @@ int git_reader_for_index(
 /* generic */
 
 int git_reader_read(
-	git_buf *out,
+	git_str *out,
 	git_oid *out_id,
 	git_filemode_t *out_filemode,
 	git_reader *reader,
 	const char *filename)
 {
-	assert(out && reader && filename);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(reader);
+	GIT_ASSERT_ARG(filename);
 
 	return reader->read(out, out_id, out_filemode, reader, filename);
 }

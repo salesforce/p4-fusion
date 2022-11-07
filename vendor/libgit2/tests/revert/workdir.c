@@ -1,7 +1,6 @@
 #include "clar.h"
 #include "clar_libgit2.h"
 
-#include "buffer.h"
 #include "futils.h"
 #include "git2/revert.h"
 
@@ -66,7 +65,7 @@ void test_revert_workdir__conflicts(void)
 	git_reference *head_ref;
 	git_commit *head, *commit;
 	git_oid revert_oid;
-	git_buf conflicting_buf = GIT_BUF_INIT, mergemsg_buf = GIT_BUF_INIT;
+	git_str conflicting_buf = GIT_STR_INIT, mergemsg_buf = GIT_STR_INIT;
 
 	struct merge_index_entry merge_index_entries[] = {
 		{ 0100644, "7731926a337c4eaba1e2187d90ebfa0a93659382", 1, "file1.txt" },
@@ -112,7 +111,7 @@ void test_revert_workdir__conflicts(void)
 		"File one\n" \
 		">>>>>>> parent of 72333f4... automergeable changes\n") == 0);
 
-	cl_assert(git_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
+	cl_assert(git_fs_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
 	cl_git_pass(git_futils_readbuffer(&mergemsg_buf,
 		TEST_REPO_PATH "/.git/MERGE_MSG"));
 	cl_assert(strcmp(mergemsg_buf.ptr,
@@ -120,14 +119,14 @@ void test_revert_workdir__conflicts(void)
 		"\n" \
 		"This reverts commit 72333f47d4e83616630ff3b0ffe4c0faebcc3c45.\n"
 		"\n" \
-		"Conflicts:\n" \
-		"\tfile1.txt\n") == 0);
+		"#Conflicts:\n" \
+		"#\tfile1.txt\n") == 0);
 
 	git_commit_free(commit);
 	git_commit_free(head);
 	git_reference_free(head_ref);
-	git_buf_dispose(&mergemsg_buf);
-	git_buf_dispose(&conflicting_buf);
+	git_str_dispose(&mergemsg_buf);
+	git_str_dispose(&conflicting_buf);
 }
 
 /* git reset --hard 39467716290f6df775a91cdb9a4eb39295018145
@@ -308,7 +307,7 @@ void test_revert_workdir__again_after_edit(void)
  */
 void test_revert_workdir__again_after_edit_two(void)
 {
-	git_buf diff_buf = GIT_BUF_INIT;
+	git_str diff_buf = GIT_STR_INIT;
 	git_config *config;
 	git_oid head_commit_oid, revert_commit_oid;
 	git_commit *head_commit, *revert_commit;
@@ -350,7 +349,7 @@ void test_revert_workdir__again_after_edit_two(void)
 	git_commit_free(revert_commit);
 	git_commit_free(head_commit);
 	git_config_free(config);
-	git_buf_dispose(&diff_buf);
+	git_str_dispose(&diff_buf);
 }
 
 /* git reset --hard 72333f47d4e83616630ff3b0ffe4c0faebcc3c45
@@ -499,8 +498,8 @@ void test_revert_workdir__nonmerge_fails_mainline_specified(void)
 
 	opts.mainline = 1;
 	cl_must_fail(git_revert(repo, commit, &opts));
-	cl_assert(!git_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
-	cl_assert(!git_path_exists(TEST_REPO_PATH "/.git/REVERT_HEAD"));
+	cl_assert(!git_fs_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
+	cl_assert(!git_fs_path_exists(TEST_REPO_PATH "/.git/REVERT_HEAD"));
 
 	git_reference_free(head);
 	git_commit_free(commit);
@@ -518,8 +517,8 @@ void test_revert_workdir__merge_fails_without_mainline_specified(void)
 	cl_git_pass(git_reset(repo, (git_object *)head, GIT_RESET_HARD, NULL));
 
 	cl_must_fail(git_revert(repo, head, NULL));
-	cl_assert(!git_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
-	cl_assert(!git_path_exists(TEST_REPO_PATH "/.git/REVERT_HEAD"));
+	cl_assert(!git_fs_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
+	cl_assert(!git_fs_path_exists(TEST_REPO_PATH "/.git/REVERT_HEAD"));
 
 	git_commit_free(head);
 }

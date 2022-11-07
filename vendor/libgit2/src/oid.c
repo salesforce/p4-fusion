@@ -9,9 +9,16 @@
 
 #include "git2/oid.h"
 #include "repository.h"
-#include "global.h"
+#include "threadstate.h"
 #include <string.h>
 #include <limits.h>
+
+const git_oid git_oid__empty_blob_sha1 =
+	{{ 0xe6, 0x9d, 0xe2, 0x9b, 0xb2, 0xd1, 0xd6, 0x43, 0x4b, 0x8b,
+	   0x29, 0xae, 0x77, 0x5a, 0xd8, 0xc2, 0xe4, 0x8c, 0x53, 0x91 }};
+const git_oid git_oid__empty_tree_sha1 =
+	{{ 0x4b, 0x82, 0x5d, 0xc6, 0x42, 0xcb, 0x6e, 0xb9, 0xa0, 0x60,
+	   0xe5, 0x4b, 0xf8, 0xd6, 0x92, 0x88, 0xfb, 0xee, 0x49, 0x04 }};
 
 static char to_hex[] = "0123456789abcdef";
 
@@ -26,7 +33,8 @@ int git_oid_fromstrn(git_oid *out, const char *str, size_t length)
 	size_t p;
 	int v;
 
-	assert(out && str);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(str);
 
 	if (!length)
 		return oid_error_invalid("too short");
@@ -107,7 +115,7 @@ int git_oid_pathfmt(char *str, const git_oid *oid)
 
 char *git_oid_tostr_s(const git_oid *oid)
 {
-	char *str = GIT_GLOBAL->oid_fmt;
+	char *str = GIT_THREADSTATE->oid_fmt;
 	git_oid_nfmt(str, GIT_OID_HEXSZ + 1, oid);
 	return str;
 }
@@ -161,14 +169,14 @@ int git_oid__parse(
 	return 0;
 }
 
-void git_oid__writebuf(git_buf *buf, const char *header, const git_oid *oid)
+void git_oid__writebuf(git_str *buf, const char *header, const git_oid *oid)
 {
 	char hex_oid[GIT_OID_HEXSZ];
 
 	git_oid_fmt(hex_oid, oid);
-	git_buf_puts(buf, header);
-	git_buf_put(buf, hex_oid, GIT_OID_HEXSZ);
-	git_buf_putc(buf, '\n');
+	git_str_puts(buf, header);
+	git_str_put(buf, hex_oid, GIT_OID_HEXSZ);
+	git_str_putc(buf, '\n');
 }
 
 int git_oid_fromraw(git_oid *out, const unsigned char *raw)
@@ -316,7 +324,7 @@ git_oid_shorten *git_oid_shorten_new(size_t min_length)
 {
 	git_oid_shorten *os;
 
-	assert((size_t)((int)min_length) == min_length);
+	GIT_ASSERT_ARG_WITH_RETVAL((size_t)((int)min_length) == min_length, NULL);
 
 	os = git__calloc(1, sizeof(git_oid_shorten));
 	if (os == NULL)

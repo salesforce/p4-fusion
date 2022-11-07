@@ -1,7 +1,6 @@
 #include "clar.h"
 #include "clar_libgit2.h"
 
-#include "buffer.h"
 #include "futils.h"
 #include "git2/cherrypick.h"
 
@@ -72,8 +71,8 @@ void test_cherrypick_workdir__automerge(void)
 		cl_git_pass(git_commit_lookup(&commit, repo, &cherry_oid));
 		cl_git_pass(git_cherrypick(repo, commit, NULL));
 
-		cl_assert(git_path_exists(TEST_REPO_PATH "/.git/CHERRY_PICK_HEAD"));
-		cl_assert(git_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
+		cl_assert(git_fs_path_exists(TEST_REPO_PATH "/.git/CHERRY_PICK_HEAD"));
+		cl_assert(git_fs_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
 
 		cl_git_pass(git_index_write_tree(&cherrypicked_tree_oid, repo_index));
 		cl_git_pass(git_tree_lookup(&cherrypicked_tree, repo, &cherrypicked_tree_oid));
@@ -115,7 +114,7 @@ void test_cherrypick_workdir__empty_result(void)
 
 	/* Create an untracked file that should not conflict */
 	cl_git_mkfile(TEST_REPO_PATH "/file4.txt", "");
-	cl_assert(git_path_exists(TEST_REPO_PATH "/file4.txt"));
+	cl_assert(git_fs_path_exists(TEST_REPO_PATH "/file4.txt"));
 
 	cl_git_pass(git_commit_lookup(&head, repo, &head_oid));
 	cl_git_pass(git_reset(repo, (git_object *)head, GIT_RESET_HARD, NULL));
@@ -140,7 +139,7 @@ void test_cherrypick_workdir__conflicts(void)
 {
 	git_commit *head = NULL, *commit = NULL;
 	git_oid head_oid, cherry_oid;
-	git_buf conflicting_buf = GIT_BUF_INIT, mergemsg_buf = GIT_BUF_INIT;
+	git_str conflicting_buf = GIT_STR_INIT, mergemsg_buf = GIT_STR_INIT;
 
 	struct merge_index_entry merge_index_entries[] = {
 		{ 0100644, "242e7977ba73637822ffb265b46004b9b0e5153b", 0, "file1.txt" },
@@ -161,24 +160,24 @@ void test_cherrypick_workdir__conflicts(void)
 	cl_git_pass(git_commit_lookup(&commit, repo, &cherry_oid));
 	cl_git_pass(git_cherrypick(repo, commit, NULL));
 
-	cl_assert(git_path_exists(TEST_REPO_PATH "/.git/CHERRY_PICK_HEAD"));
-	cl_assert(git_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
+	cl_assert(git_fs_path_exists(TEST_REPO_PATH "/.git/CHERRY_PICK_HEAD"));
+	cl_assert(git_fs_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
 
 	cl_assert(merge_test_index(repo_index, merge_index_entries, 7));
 
 	cl_git_pass(git_futils_readbuffer(&mergemsg_buf,
 		TEST_REPO_PATH "/.git/MERGE_MSG"));
-	cl_assert(strcmp(git_buf_cstr(&mergemsg_buf),
+	cl_assert(strcmp(git_str_cstr(&mergemsg_buf),
 		"Change all files\n" \
 		"\n" \
-		"Conflicts:\n" \
-		"\tfile2.txt\n" \
-		"\tfile3.txt\n") == 0);
+		"#Conflicts:\n" \
+		"#\tfile2.txt\n" \
+		"#\tfile3.txt\n") == 0);
 
 	cl_git_pass(git_futils_readbuffer(&conflicting_buf,
 		TEST_REPO_PATH "/file2.txt"));
 
-	cl_assert(strcmp(git_buf_cstr(&conflicting_buf),
+	cl_assert(strcmp(git_str_cstr(&conflicting_buf),
 		"!File 2\n" \
 		"File 2\n" \
 		"File 2\n" \
@@ -204,7 +203,7 @@ void test_cherrypick_workdir__conflicts(void)
 	cl_git_pass(git_futils_readbuffer(&conflicting_buf,
 		TEST_REPO_PATH "/file3.txt"));
 
-	cl_assert(strcmp(git_buf_cstr(&conflicting_buf),
+	cl_assert(strcmp(git_str_cstr(&conflicting_buf),
 		"!File 3\n" \
 		"File 3\n" \
 		"File 3\n" \
@@ -228,8 +227,8 @@ void test_cherrypick_workdir__conflicts(void)
 
 	git_commit_free(commit);
 	git_commit_free(head);
-	git_buf_dispose(&mergemsg_buf);
-	git_buf_dispose(&conflicting_buf);
+	git_str_dispose(&mergemsg_buf);
+	git_str_dispose(&conflicting_buf);
 }
 
 /* git reset --hard bafbf6912c09505ac60575cd43d3f2aba3bd84d8
@@ -324,7 +323,7 @@ void test_cherrypick_workdir__both_renamed(void)
 {
 	git_commit *head, *commit;
 	git_oid head_oid, cherry_oid;
-	git_buf mergemsg_buf = GIT_BUF_INIT;
+	git_str mergemsg_buf = GIT_STR_INIT;
 	git_cherrypick_options opts = GIT_CHERRYPICK_OPTIONS_INIT;
 
 	struct merge_index_entry merge_index_entries[] = {
@@ -350,15 +349,15 @@ void test_cherrypick_workdir__both_renamed(void)
 
 	cl_git_pass(git_futils_readbuffer(&mergemsg_buf,
 		TEST_REPO_PATH "/.git/MERGE_MSG"));
-	cl_assert(strcmp(git_buf_cstr(&mergemsg_buf),
+	cl_assert(strcmp(git_str_cstr(&mergemsg_buf),
 		"Renamed file3.txt -> file3.txt.renamed\n" \
 		"\n" \
-		"Conflicts:\n" \
-		"\tfile3.txt\n" \
-		"\tfile3.txt.renamed\n" \
-		"\tfile3.txt.renamed_on_branch\n") == 0);
+		"#Conflicts:\n" \
+		"#\tfile3.txt\n" \
+		"#\tfile3.txt.renamed\n" \
+		"#\tfile3.txt.renamed_on_branch\n") == 0);
 
-	git_buf_dispose(&mergemsg_buf);
+	git_str_dispose(&mergemsg_buf);
 	git_commit_free(commit);
 	git_commit_free(head);
 }
@@ -374,8 +373,8 @@ void test_cherrypick_workdir__nonmerge_fails_mainline_specified(void)
 
 	opts.mainline = 1;
 	cl_must_fail(git_cherrypick(repo, commit, &opts));
-	cl_assert(!git_path_exists(TEST_REPO_PATH "/.git/CHERRY_PICK_HEAD"));
-	cl_assert(!git_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
+	cl_assert(!git_fs_path_exists(TEST_REPO_PATH "/.git/CHERRY_PICK_HEAD"));
+	cl_assert(!git_fs_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
 
 	git_reference_free(head);
 	git_commit_free(commit);
@@ -397,8 +396,8 @@ void test_cherrypick_workdir__merge_fails_without_mainline_specified(void)
 	cl_git_pass(git_commit_lookup(&commit, repo, &cherry_oid));
 
 	cl_must_fail(git_cherrypick(repo, commit, NULL));
-	cl_assert(!git_path_exists(TEST_REPO_PATH "/.git/CHERRY_PICK_HEAD"));
-	cl_assert(!git_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
+	cl_assert(!git_fs_path_exists(TEST_REPO_PATH "/.git/CHERRY_PICK_HEAD"));
+	cl_assert(!git_fs_path_exists(TEST_REPO_PATH "/.git/MERGE_MSG"));
 
 	git_commit_free(commit);
 	git_commit_free(head);

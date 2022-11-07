@@ -1,6 +1,6 @@
 #include "clar_libgit2.h"
 #include "posix.h"
-#include "path.h"
+#include "fs_path.h"
 #include "git2/sys/repository.h"
 
 void cl_git_report_failure(
@@ -68,7 +68,7 @@ void cl_git_rmfile(const char *filename)
 
 char *cl_getenv(const char *name)
 {
-	git_buf out = GIT_BUF_INIT;
+	git_str out = GIT_STR_INIT;
 	int error = git__getenv(&out, name);
 
 	cl_assert(error >= 0 || error == GIT_ENOTFOUND);
@@ -83,7 +83,7 @@ char *cl_getenv(const char *name)
 		return dup;
 	}
 
-	return git_buf_detach(&out);
+	return git_str_detach(&out);
 }
 
 bool cl_is_env_set(const char *name)
@@ -275,14 +275,14 @@ const char* cl_git_fixture_url(const char *fixturename)
 
 const char* cl_git_path_url(const char *path)
 {
-	static char url[4096];
+	static char url[4096 + 1];
 
 	const char *in_buf;
-	git_buf path_buf = GIT_BUF_INIT;
-	git_buf url_buf = GIT_BUF_INIT;
+	git_str path_buf = GIT_STR_INIT;
+	git_str url_buf = GIT_STR_INIT;
 
-	cl_git_pass(git_path_prettify_dir(&path_buf, path, NULL));
-	cl_git_pass(git_buf_puts(&url_buf, "file://"));
+	cl_git_pass(git_fs_path_prettify_dir(&path_buf, path, NULL));
+	cl_git_pass(git_str_puts(&url_buf, "file://"));
 
 #ifdef GIT_WIN32
 	/*
@@ -294,28 +294,29 @@ const char* cl_git_path_url(const char *path)
 	 * *nix: file:///usr/home/...
 	 * Windows: file:///C:/Users/...
 	 */
-	cl_git_pass(git_buf_putc(&url_buf, '/'));
+	cl_git_pass(git_str_putc(&url_buf, '/'));
 #endif
 
-	in_buf = git_buf_cstr(&path_buf);
+	in_buf = git_str_cstr(&path_buf);
 
 	/*
 	 * A very hacky Url encoding that only takes care of escaping the spaces
 	 */
 	while (*in_buf) {
 		if (*in_buf == ' ')
-			cl_git_pass(git_buf_puts(&url_buf, "%20"));
+			cl_git_pass(git_str_puts(&url_buf, "%20"));
 		else
-			cl_git_pass(git_buf_putc(&url_buf, *in_buf));
+			cl_git_pass(git_str_putc(&url_buf, *in_buf));
 
 		in_buf++;
 	}
 
-	cl_assert(url_buf.size < 4096);
+	cl_assert(url_buf.size < sizeof(url) - 1);
 
-	strncpy(url, git_buf_cstr(&url_buf), 4096);
-	git_buf_dispose(&url_buf);
-	git_buf_dispose(&path_buf);
+	strncpy(url, git_str_cstr(&url_buf), sizeof(url) - 1);
+	url[sizeof(url) - 1] = '\0';
+	git_str_dispose(&url_buf);
+	git_str_dispose(&path_buf);
 	return url;
 }
 
@@ -323,27 +324,27 @@ const char *cl_git_sandbox_path(int is_dir, ...)
 {
 	const char *path = NULL;
 	static char _temp[GIT_PATH_MAX];
-	git_buf buf = GIT_BUF_INIT;
+	git_str buf = GIT_STR_INIT;
 	va_list arg;
 
-	cl_git_pass(git_buf_sets(&buf, clar_sandbox_path()));
+	cl_git_pass(git_str_sets(&buf, clar_sandbox_path()));
 
 	va_start(arg, is_dir);
 
 	while ((path = va_arg(arg, const char *)) != NULL) {
-		cl_git_pass(git_buf_joinpath(&buf, buf.ptr, path));
+		cl_git_pass(git_str_joinpath(&buf, buf.ptr, path));
 	}
 	va_end(arg);
 
-	cl_git_pass(git_path_prettify(&buf, buf.ptr, NULL));
+	cl_git_pass(git_fs_path_prettify(&buf, buf.ptr, NULL));
 	if (is_dir)
-		git_path_to_dir(&buf);
+		git_fs_path_to_dir(&buf);
 
 	/* make sure we won't truncate */
-	cl_assert(git_buf_len(&buf) < sizeof(_temp));
-	git_buf_copy_cstr(_temp, sizeof(_temp), &buf);
+	cl_assert(git_str_len(&buf) < sizeof(_temp));
+	git_str_copy_cstr(_temp, sizeof(_temp), &buf);
 
-	git_buf_dispose(&buf);
+	git_str_dispose(&buf);
 
 	return _temp;
 }
@@ -353,13 +354,13 @@ typedef struct {
 	size_t filename_len;
 } remove_data;
 
-static int remove_placeholders_recurs(void *_data, git_buf *path)
+static int remove_placeholders_recurs(void *_data, git_str *path)
 {
 	remove_data *data = (remove_data *)_data;
 	size_t pathlen;
 
-	if (git_path_isdir(path->ptr) == true)
-		return git_path_direach(path, 0, remove_placeholders_recurs, data);
+	if (git_fs_path_isdir(path->ptr) == true)
+		return git_fs_path_direach(path, 0, remove_placeholders_recurs, data);
 
 	pathlen = path->size;
 
@@ -379,12 +380,12 @@ int cl_git_remove_placeholders(const char *directory_path, const char *filename)
 {
 	int error;
 	remove_data data;
-	git_buf buffer = GIT_BUF_INIT;
+	git_str buffer = GIT_STR_INIT;
 
-	if (git_path_isdir(directory_path) == false)
+	if (git_fs_path_isdir(directory_path) == false)
 		return -1;
 
-	if (git_buf_sets(&buffer, directory_path) < 0)
+	if (git_str_sets(&buffer, directory_path) < 0)
 		return -1;
 
 	data.filename = filename;
@@ -392,7 +393,7 @@ int cl_git_remove_placeholders(const char *directory_path, const char *filename)
 
 	error = remove_placeholders_recurs(&data, &buffer);
 
-	git_buf_dispose(&buffer);
+	git_str_dispose(&buffer);
 
 	return error;
 }
@@ -547,47 +548,43 @@ void clar__assert_equal_file(
 		(size_t)expected_bytes, (size_t)total_bytes);
 }
 
-static char *_cl_restore_home = NULL;
+static git_buf _cl_restore_home = GIT_BUF_INIT;
 
 void cl_fake_home_cleanup(void *payload)
 {
-	char *restore = _cl_restore_home;
-	_cl_restore_home = NULL;
-
 	GIT_UNUSED(payload);
 
-	if (restore) {
+	if (_cl_restore_home.ptr) {
 		cl_git_pass(git_libgit2_opts(
-			GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_GLOBAL, restore));
-		git__free(restore);
+			GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_GLOBAL, _cl_restore_home.ptr));
+		git_buf_dispose(&_cl_restore_home);
 	}
 }
 
 void cl_fake_home(void)
 {
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 
 	cl_git_pass(git_libgit2_opts(
-		GIT_OPT_GET_SEARCH_PATH, GIT_CONFIG_LEVEL_GLOBAL, &path));
+		GIT_OPT_GET_SEARCH_PATH, GIT_CONFIG_LEVEL_GLOBAL, &_cl_restore_home));
 
-	_cl_restore_home = git_buf_detach(&path);
 	cl_set_cleanup(cl_fake_home_cleanup, NULL);
 
-	if (!git_path_exists("home"))
+	if (!git_fs_path_exists("home"))
 		cl_must_pass(p_mkdir("home", 0777));
-	cl_git_pass(git_path_prettify(&path, "home", NULL));
+	cl_git_pass(git_fs_path_prettify(&path, "home", NULL));
 	cl_git_pass(git_libgit2_opts(
 		GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_GLOBAL, path.ptr));
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 }
 
 void cl_sandbox_set_search_path_defaults(void)
 {
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 
-	git_buf_joinpath(&path, clar_sandbox_path(), "__config");
+	git_str_joinpath(&path, clar_sandbox_path(), "__config");
 
-	if (!git_path_exists(path.ptr))
+	if (!git_fs_path_exists(path.ptr))
 		cl_must_pass(p_mkdir(path.ptr, 0777));
 
 	git_libgit2_opts(
@@ -599,18 +596,23 @@ void cl_sandbox_set_search_path_defaults(void)
 	git_libgit2_opts(
 		GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_PROGRAMDATA, path.ptr);
 
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
+}
+
+void cl_sandbox_disable_ownership_validation(void)
+{
+	git_libgit2_opts(GIT_OPT_SET_OWNER_VALIDATION, 0);
 }
 
 #ifdef GIT_WIN32
 bool cl_sandbox_supports_8dot3(void)
 {
-	git_buf longpath = GIT_BUF_INIT;
+	git_str longpath = GIT_STR_INIT;
 	char *shortname;
 	bool supported;
 
 	cl_git_pass(
-		git_buf_joinpath(&longpath, clar_sandbox_path(), "longer_than_8dot3"));
+		git_str_joinpath(&longpath, clar_sandbox_path(), "longer_than_8dot3"));
 
 	cl_git_write2file(longpath.ptr, "", 0, O_RDWR|O_CREAT, 0666);
 	shortname = git_win32_path_8dot3_name(longpath.ptr);
@@ -618,7 +620,7 @@ bool cl_sandbox_supports_8dot3(void)
 	supported = (shortname != NULL);
 
 	git__free(shortname);
-	git_buf_dispose(&longpath);
+	git_str_dispose(&longpath);
 
 	return supported;
 }

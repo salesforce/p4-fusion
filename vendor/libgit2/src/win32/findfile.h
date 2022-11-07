@@ -10,10 +10,13 @@
 
 #include "common.h"
 
-extern int git_win32__find_system_dirs(git_buf *out, const wchar_t *subpath);
-extern int git_win32__find_global_dirs(git_buf *out);
-extern int git_win32__find_xdg_dirs(git_buf *out);
-extern int git_win32__find_programdata_dirs(git_buf *out);
+/** Sets the mock registry root for Git for Windows for testing. */
+extern int git_win32__set_registry_system_dir(const wchar_t *mock_sysdir);
+
+extern int git_win32__find_system_dirs(git_str *out, const char *subpath);
+extern int git_win32__find_global_dirs(git_str *out);
+extern int git_win32__find_xdg_dirs(git_str *out);
+extern int git_win32__find_programdata_dirs(git_str *out);
 
 #endif
 

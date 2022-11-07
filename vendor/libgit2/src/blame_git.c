@@ -393,7 +393,7 @@ static void fill_origin_blob(git_blame__origin *o, mmfile_t *file)
 	memset(file, 0, sizeof(*file));
 	if (o->blob) {
 		file->ptr = (char*)git_blob_rawcontent(o->blob);
-		file->size = (size_t)git_blob_rawsize(o->blob);
+		file->size = (long)git_blob_rawsize(o->blob);
 	}
 }
 
@@ -429,7 +429,7 @@ static int paths_on_dup(void **old, void *new)
 	return -1;
 }
 
-static git_blame__origin* find_origin(
+static git_blame__origin *find_origin(
 		git_blame *blame,
 		git_commit *parent,
 		git_blame__origin *origin)

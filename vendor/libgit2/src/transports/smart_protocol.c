@@ -64,7 +64,9 @@ int git_smart__store_refs(transport_smart *t, int flushes)
 			continue;
 		}
 
-		gitno_consume(buf, line_end);
+		if (gitno_consume(buf, line_end) < 0)
+			return -1;
+
 		if (pkt->type == GIT_PKT_ERR) {
 			git_error_set(GIT_ERROR_NET, "remote error: %s", ((git_pkt_err *)pkt)->error);
 			git__free(pkt);
@@ -87,7 +89,7 @@ static int append_symref(const char **out, git_vector *symrefs, const char *ptr)
 {
 	int error;
 	const char *end;
-	git_buf buf = GIT_BUF_INIT;
+	git_str buf = GIT_STR_INIT;
 	git_refspec *mapping = NULL;
 
 	ptr += strlen(GIT_CAP_SYMREF);
@@ -99,15 +101,15 @@ static int append_symref(const char **out, git_vector *symrefs, const char *ptr)
 	    !(end = strchr(ptr, '\0')))
 		goto on_invalid;
 
-	if ((error = git_buf_put(&buf, ptr, end - ptr)) < 0)
+	if ((error = git_str_put(&buf, ptr, end - ptr)) < 0)
 		return error;
 
 	/* symref mapping has refspec format */
 	mapping = git__calloc(1, sizeof(git_refspec));
 	GIT_ERROR_CHECK_ALLOC(mapping);
 
-	error = git_refspec__parse(mapping, git_buf_cstr(&buf), true);
-	git_buf_dispose(&buf);
+	error = git_refspec__parse(mapping, git_str_cstr(&buf), true);
+	git_str_dispose(&buf);
 
 	/* if the error isn't OOM, then it's a parse error; let's use a nicer message */
 	if (error < 0) {
@@ -135,7 +137,7 @@ int git_smart__detect_caps(git_pkt_ref *pkt, transport_smart_caps *caps, git_vec
 {
 	const char *ptr;
 
-	/* No refs or capabilites, odd but not a problem */
+	/* No refs or capabilities, odd but not a problem */
 	if (pkt == NULL || pkt->capabilities == NULL)
 		return GIT_ENOTFOUND;
 
@@ -203,6 +205,18 @@ int git_smart__detect_caps(git_pkt_ref *pkt, transport_smart_caps *caps, git_vec
 			continue;
 		}
 
+		if (!git__prefixcmp(ptr, GIT_CAP_WANT_TIP_SHA1)) {
+			caps->common = caps->want_tip_sha1 = 1;
+			ptr += strlen(GIT_CAP_DELETE_REFS);
+			continue;
+		}
+
+		if (!git__prefixcmp(ptr, GIT_CAP_WANT_REACHABLE_SHA1)) {
+			caps->common = caps->want_reachable_sha1 = 1;
+			ptr += strlen(GIT_CAP_DELETE_REFS);
+			continue;
+		}
+
 		/* We don't know this capability, so skip it */
 		ptr = strchr(ptr, ' ');
 	}
@@ -236,7 +250,9 @@ static int recv_pkt(git_pkt **out_pkt, git_pkt_type *out_type, gitno_buffer *buf
 		}
 	} while (error);
 
-	gitno_consume(buf, line_end);
+	if (gitno_consume(buf, line_end) < 0)
+		return -1;
+
 	if (out_type != NULL)
 		*out_type = pkt->type;
 	if (out_pkt != NULL)
@@ -306,7 +322,7 @@ int git_smart__negotiate_fetch(git_transport *transport, git_repository *repo, c
 	transport_smart *t = (transport_smart *)transport;
 	git_revwalk__push_options opts = GIT_REVWALK__PUSH_OPTIONS_INIT;
 	gitno_buffer *buf = &t->buffer;
-	git_buf data = GIT_BUF_INIT;
+	git_str data = GIT_STR_INIT;
 	git_revwalk *walk = NULL;
 	int error = -1;
 	git_pkt_type pkt_type;
@@ -350,7 +366,7 @@ int git_smart__negotiate_fetch(git_transport *transport, git_repository *repo, c
 			}
 
 			git_pkt_buffer_flush(&data);
-			if (git_buf_oom(&data)) {
+			if (git_str_oom(&data)) {
 				error = -1;
 				goto on_error;
 			}
@@ -358,7 +374,7 @@ int git_smart__negotiate_fetch(git_transport *transport, git_repository *repo, c
 			if ((error = git_smart__negotiation_step(&t->parent, data.ptr, data.size)) < 0)
 				goto on_error;
 
-			git_buf_clear(&data);
+			git_str_clear(&data);
 			if (t->caps.multi_ack || t->caps.multi_ack_detailed) {
 				if ((error = store_common(t)) < 0)
 					goto on_error;
@@ -393,7 +409,7 @@ int git_smart__negotiate_fetch(git_transport *transport, git_repository *repo, c
 					goto on_error;
 			}
 
-			if (git_buf_oom(&data)) {
+			if (git_str_oom(&data)) {
 				error = -1;
 				goto on_error;
 			}
@@ -413,7 +429,7 @@ int git_smart__negotiate_fetch(git_transport *transport, git_repository *repo, c
 				goto on_error;
 		}
 
-		if (git_buf_oom(&data)) {
+		if (git_str_oom(&data)) {
 			error = -1;
 			goto on_error;
 		}
@@ -430,7 +446,7 @@ int git_smart__negotiate_fetch(git_transport *transport, git_repository *repo, c
 	if ((error = git_smart__negotiation_step(&t->parent, data.ptr, data.size)) < 0)
 		goto on_error;
 
-	git_buf_dispose(&data);
+	git_str_dispose(&data);
 	git_revwalk_free(walk);
 
 	/* Now let's eat up whatever the server gives us */
@@ -450,7 +466,7 @@ int git_smart__negotiate_fetch(git_transport *transport, git_repository *repo, c
 
 on_error:
 	git_revwalk_free(walk);
-	git_buf_dispose(&data);
+	git_str_dispose(&data);
 	return error;
 }
 
@@ -508,9 +524,7 @@ static int network_packetsize(size_t received, void *payload)
 int git_smart__download_pack(
 	git_transport *transport,
 	git_repository *repo,
-	git_indexer_progress *stats,
-	git_indexer_progress_cb progress_cb,
-	void *progress_payload)
+	git_indexer_progress *stats)
 {
 	transport_smart *t = (transport_smart *)transport;
 	gitno_buffer *buf = &t->buffer;
@@ -518,6 +532,9 @@ int git_smart__download_pack(
 	struct git_odb_writepack *writepack = NULL;
 	int error = 0;
 	struct network_packetsize_payload npp = {0};
+
+	git_indexer_progress_cb progress_cb = t->connect_opts.callbacks.transfer_progress;
+	void *progress_payload = t->connect_opts.callbacks.payload;
 
 	memset(stats, 0, sizeof(git_indexer_progress));
 
@@ -531,7 +548,7 @@ int git_smart__download_pack(
 		/* We might have something in the buffer already from negotiate_fetch */
 		if (t->buffer.offset > 0 && !t->cancelled.val)
 			if (t->packetsize_cb(t->buffer.offset, t->packetsize_payload))
-				git_atomic_set(&t->cancelled, 1);
+				git_atomic32_set(&t->cancelled, 1);
 	}
 
 	if ((error = git_repository_odb__weakptr(&odb, repo)) < 0 ||
@@ -564,7 +581,7 @@ int git_smart__download_pack(
 				git_error_clear();
 				error = GIT_EUSER;
 			} else if (pkt->type == GIT_PKT_PROGRESS) {
-				if (t->progress_cb) {
+				if (t->connect_opts.callbacks.sideband_progress) {
 					git_pkt_progress *p = (git_pkt_progress *) pkt;
 
 					if (p->len > INT_MAX) {
@@ -573,7 +590,7 @@ int git_smart__download_pack(
 						goto done;
 					}
 
-					error = t->progress_cb(p->data, (int)p->len, t->message_cb_payload);
+					error = t->connect_opts.callbacks.sideband_progress(p->data, (int)p->len, t->connect_opts.callbacks.payload);
 				}
 			} else if (pkt->type == GIT_PKT_DATA) {
 				git_pkt_data *p = (git_pkt_data *) pkt;
@@ -622,7 +639,7 @@ done:
 	return error;
 }
 
-static int gen_pktline(git_buf *buf, git_push *push)
+static int gen_pktline(git_str *buf, git_push *push)
 {
 	push_spec *spec;
 	size_t i, len;
@@ -643,24 +660,24 @@ static int gen_pktline(git_buf *buf, git_push *push)
 		git_oid_fmt(old_id, &spec->roid);
 		git_oid_fmt(new_id, &spec->loid);
 
-		git_buf_printf(buf, "%04"PRIxZ"%s %s %s", len, old_id, new_id, spec->refspec.dst);
+		git_str_printf(buf, "%04"PRIxZ"%s %s %s", len, old_id, new_id, spec->refspec.dst);
 
 		if (i == 0) {
-			git_buf_putc(buf, '\0');
+			git_str_putc(buf, '\0');
 			/* Core git always starts their capabilities string with a space */
 			if (push->report_status) {
-				git_buf_putc(buf, ' ');
-				git_buf_printf(buf, GIT_CAP_REPORT_STATUS);
+				git_str_putc(buf, ' ');
+				git_str_printf(buf, GIT_CAP_REPORT_STATUS);
 			}
-			git_buf_putc(buf, ' ');
-			git_buf_printf(buf, GIT_CAP_SIDE_BAND_64K);
+			git_str_putc(buf, ' ');
+			git_str_printf(buf, GIT_CAP_SIDE_BAND_64K);
 		}
 
-		git_buf_putc(buf, '\n');
+		git_str_putc(buf, '\n');
 	}
 
-	git_buf_puts(buf, "0000");
-	return git_buf_oom(buf) ? -1 : 0;
+	git_str_puts(buf, "0000");
+	return git_str_oom(buf) ? -1 : 0;
 }
 
 static int add_push_report_pkt(git_push *push, git_pkt *pkt)
@@ -703,7 +720,7 @@ static int add_push_report_pkt(git_push *push, git_pkt *pkt)
 	return 0;
 }
 
-static int add_push_report_sideband_pkt(git_push *push, git_pkt_data *data_pkt, git_buf *data_pkt_buf)
+static int add_push_report_sideband_pkt(git_push *push, git_pkt_data *data_pkt, git_str *data_pkt_buf)
 {
 	git_pkt *pkt;
 	const char *line, *line_end = NULL;
@@ -714,7 +731,7 @@ static int add_push_report_sideband_pkt(git_push *push, git_pkt_data *data_pkt, 
 	if (reading_from_buf) {
 		/* We had an existing partial packet, so add the new
 		 * packet to the buffer and parse the whole thing */
-		git_buf_put(data_pkt_buf, data_pkt->data, data_pkt->len);
+		git_str_put(data_pkt_buf, data_pkt->data, data_pkt->len);
 		line = data_pkt_buf->ptr;
 		line_len = data_pkt_buf->size;
 	}
@@ -730,7 +747,7 @@ static int add_push_report_sideband_pkt(git_push *push, git_pkt_data *data_pkt, 
 			/* Buffer the data when the inner packet is split
 			 * across multiple sideband packets */
 			if (!reading_from_buf)
-				git_buf_put(data_pkt_buf, line, line_len);
+				git_str_put(data_pkt_buf, line, line_len);
 			error = 0;
 			goto done;
 		}
@@ -753,7 +770,7 @@ static int add_push_report_sideband_pkt(git_push *push, git_pkt_data *data_pkt, 
 
 done:
 	if (reading_from_buf)
-		git_buf_consume(data_pkt_buf, line_end);
+		git_str_consume(data_pkt_buf, line_end);
 	return error;
 }
 
@@ -763,7 +780,7 @@ static int parse_report(transport_smart *transport, git_push *push)
 	const char *line_end = NULL;
 	gitno_buffer *buf = &transport->buffer;
 	int error, recvd;
-	git_buf data_pkt_buf = GIT_BUF_INIT;
+	git_str data_pkt_buf = GIT_STR_INIT;
 
 	for (;;) {
 		if (buf->offset > 0)
@@ -791,7 +808,8 @@ static int parse_report(transport_smart *transport, git_push *push)
 			continue;
 		}
 
-		gitno_consume(buf, line_end);
+		if (gitno_consume(buf, line_end) < 0)
+			return -1;
 
 		error = 0;
 
@@ -806,7 +824,7 @@ static int parse_report(transport_smart *transport, git_push *push)
 				error = -1;
 				break;
 			case GIT_PKT_PROGRESS:
-				if (transport->progress_cb) {
+				if (transport->connect_opts.callbacks.sideband_progress) {
 					git_pkt_progress *p = (git_pkt_progress *) pkt;
 
 					if (p->len > INT_MAX) {
@@ -815,7 +833,7 @@ static int parse_report(transport_smart *transport, git_push *push)
 						goto done;
 					}
 
-					error = transport->progress_cb(p->data, (int)p->len, transport->message_cb_payload);
+					error = transport->connect_opts.callbacks.sideband_progress(p->data, (int)p->len, transport->connect_opts.callbacks.payload);
 				}
 				break;
 			default:
@@ -842,7 +860,7 @@ static int parse_report(transport_smart *transport, git_push *push)
 		}
 	}
 done:
-	git_buf_dispose(&data_pkt_buf);
+	git_str_dispose(&data_pkt_buf);
 	return error;
 }
 
@@ -970,9 +988,10 @@ static int stream_thunk(void *buf, size_t size, void *data)
 
 	if (payload->cb) {
 		double current_time = git__timer();
+		double elapsed = current_time - payload->last_progress_report_time;
 		payload->last_bytes += size;
 
-		if ((current_time - payload->last_progress_report_time) >= MIN_PROGRESS_UPDATE_INTERVAL) {
+		if (elapsed < 0 || elapsed >= MIN_PROGRESS_UPDATE_INTERVAL) {
 			payload->last_progress_report_time = current_time;
 			error = payload->cb(payload->pb->nr_written, payload->pb->nr_objects, payload->last_bytes, payload->cb_payload);
 		}
@@ -981,11 +1000,12 @@ static int stream_thunk(void *buf, size_t size, void *data)
 	return error;
 }
 
-int git_smart__push(git_transport *transport, git_push *push, const git_remote_callbacks *cbs)
+int git_smart__push(git_transport *transport, git_push *push)
 {
 	transport_smart *t = (transport_smart *)transport;
+	git_remote_callbacks *cbs = &t->connect_opts.callbacks;
 	struct push_packbuilder_payload packbuilder_payload = {0};
-	git_buf pktline = GIT_BUF_INIT;
+	git_str pktline = GIT_STR_INIT;
 	int error = 0, need_pack = 0;
 	push_spec *spec;
 	unsigned int i;
@@ -1028,9 +1048,13 @@ int git_smart__push(git_transport *transport, git_push *push, const git_remote_c
 		}
 	}
 
+	/* prepare pack before sending pack header to avoid timeouts */
+	if (need_pack && ((error = git_packbuilder__prepare(push->pb))) < 0)
+		goto done;
+
 	if ((error = git_smart__get_push_stream(t, &packbuilder_payload.stream)) < 0 ||
 		(error = gen_pktline(&pktline, push)) < 0 ||
-		(error = packbuilder_payload.stream->write(packbuilder_payload.stream, git_buf_cstr(&pktline), git_buf_len(&pktline))) < 0)
+		(error = packbuilder_payload.stream->write(packbuilder_payload.stream, git_str_cstr(&pktline), git_str_len(&pktline))) < 0)
 		goto done;
 
 	if (need_pack &&
@@ -1065,6 +1089,6 @@ int git_smart__push(git_transport *transport, git_push *push, const git_remote_c
 	}
 
 done:
-	git_buf_dispose(&pktline);
+	git_str_dispose(&pktline);
 	return error;
 }

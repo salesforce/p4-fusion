@@ -5,8 +5,6 @@
  * a Linking Exception. For full terms see the included COPYING file.
  */
 
-#include "apply.h"
-
 #include "git2/apply.h"
 #include "git2/patch.h"
 #include "git2/filter.h"
@@ -21,6 +19,7 @@
 #include "zstream.h"
 #include "reader.h"
 #include "index.h"
+#include "apply.h"
 
 typedef struct {
 	/* The lines that we allocate ourself are allocated out of the pool.
@@ -266,7 +265,7 @@ done:
 }
 
 static int apply_hunks(
-	git_buf *out,
+	git_str *out,
 	const char *source,
 	size_t source_len,
 	git_patch *patch,
@@ -287,7 +286,7 @@ static int apply_hunks(
 	}
 
 	git_vector_foreach(&image.lines, i, line)
-		git_buf_put(out, line->content, line->content_len);
+		git_str_put(out, line->content, line->content_len);
 
 done:
 	patch_image_free(&image);
@@ -296,24 +295,24 @@ done:
 }
 
 static int apply_binary_delta(
-	git_buf *out,
+	git_str *out,
 	const char *source,
 	size_t source_len,
 	git_diff_binary_file *binary_file)
 {
-	git_buf inflated = GIT_BUF_INIT;
+	git_str inflated = GIT_STR_INIT;
 	int error = 0;
 
 	/* no diff means identical contents */
 	if (binary_file->datalen == 0)
-		return git_buf_put(out, source, source_len);
+		return git_str_put(out, source, source_len);
 
 	error = git_zstream_inflatebuf(&inflated,
 		binary_file->data, binary_file->datalen);
 
 	if (!error && inflated.size != binary_file->inflatedlen) {
 		error = apply_err("inflated delta does not match expected length");
-		git_buf_dispose(out);
+		git_str_dispose(out);
 	}
 
 	if (error < 0)
@@ -331,7 +330,7 @@ static int apply_binary_delta(
 		out->asize = data_len;
 	}
 	else if (binary_file->type == GIT_DIFF_BINARY_LITERAL) {
-		git_buf_swap(out, &inflated);
+		git_str_swap(out, &inflated);
 	}
 	else {
 		error = apply_err("unknown binary delta type");
@@ -339,17 +338,17 @@ static int apply_binary_delta(
 	}
 
 done:
-	git_buf_dispose(&inflated);
+	git_str_dispose(&inflated);
 	return error;
 }
 
 static int apply_binary(
-	git_buf *out,
+	git_str *out,
 	const char *source,
 	size_t source_len,
 	git_patch *patch)
 {
-	git_buf reverse = GIT_BUF_INIT;
+	git_str reverse = GIT_STR_INIT;
 	int error = 0;
 
 	if (!patch->binary.contains_data) {
@@ -379,14 +378,14 @@ static int apply_binary(
 
 done:
 	if (error < 0)
-		git_buf_dispose(out);
+		git_str_dispose(out);
 
-	git_buf_dispose(&reverse);
+	git_str_dispose(&reverse);
 	return error;
 }
 
 int git_apply__patch(
-	git_buf *contents_out,
+	git_str *contents_out,
 	char **filename_out,
 	unsigned int *mode_out,
 	const char *source,
@@ -399,7 +398,11 @@ int git_apply__patch(
 	unsigned int mode = 0;
 	int error = 0;
 
-	assert(contents_out && filename_out && mode_out && (source || !source_len) && patch);
+	GIT_ASSERT_ARG(contents_out);
+	GIT_ASSERT_ARG(filename_out);
+	GIT_ASSERT_ARG(mode_out);
+	GIT_ASSERT_ARG(source || !source_len);
+	GIT_ASSERT_ARG(patch);
 
 	if (given_opts)
 		memcpy(&ctx.opts, given_opts, sizeof(git_apply_options));
@@ -420,13 +423,13 @@ int git_apply__patch(
 	else if (patch->hunks.size)
 		error = apply_hunks(contents_out, source, source_len, patch, &ctx);
 	else
-		error = git_buf_put(contents_out, source, source_len);
+		error = git_str_put(contents_out, source, source_len);
 
 	if (error)
 		goto done;
 
 	if (patch->delta->status == GIT_DELTA_DELETED &&
-		git_buf_len(contents_out) > 0) {
+		git_str_len(contents_out) > 0) {
 		error = apply_err("removal patch leaves file contents");
 		goto done;
 	}
@@ -453,7 +456,7 @@ static int apply_one(
 	const git_apply_options *opts)
 {
 	git_patch *patch = NULL;
-	git_buf pre_contents = GIT_BUF_INIT, post_contents = GIT_BUF_INIT;
+	git_str pre_contents = GIT_STR_INIT, post_contents = GIT_STR_INIT;
 	const git_diff_delta *delta;
 	char *filename = NULL;
 	unsigned int mode;
@@ -576,8 +579,8 @@ static int apply_one(
 		git_strmap_delete(removed_paths, delta->new_file.path);
 
 done:
-	git_buf_dispose(&pre_contents);
-	git_buf_dispose(&post_contents);
+	git_str_dispose(&pre_contents);
+	git_str_dispose(&post_contents);
 	git__free(filename);
 	git_patch_free(patch);
 
@@ -624,7 +627,10 @@ int git_apply_to_tree(
 	size_t i;
 	int error = 0;
 
-	assert(out && repo && preimage && diff);
+	GIT_ASSERT_ARG(out);
+	GIT_ASSERT_ARG(repo);
+	GIT_ASSERT_ARG(preimage);
+	GIT_ASSERT_ARG(diff);
 
 	*out = NULL;
 
@@ -772,6 +778,8 @@ done:
 
 int git_apply_options_init(git_apply_options *opts, unsigned int version)
 {
+	GIT_ASSERT_ARG(opts);
+
 	GIT_INIT_STRUCTURE_FROM_TEMPLATE(
 		opts, version, git_apply_options, GIT_APPLY_OPTIONS_INIT);
 	return 0;
@@ -805,7 +813,8 @@ int git_apply(
 	git_apply_options opts = GIT_APPLY_OPTIONS_INIT;
 	int error = GIT_EINVALID;
 
-	assert(repo && diff);
+	GIT_ASSERT_ARG(repo);
+	GIT_ASSERT_ARG(diff);
 
 	GIT_ERROR_CHECK_VERSION(
 		given_opts, GIT_APPLY_OPTIONS_VERSION, "git_apply_options");
@@ -829,7 +838,7 @@ int git_apply(
 		error = git_reader_for_workdir(&pre_reader, repo, false);
 		break;
 	default:
-		assert(false);
+		GIT_ASSERT(false);
 	}
 
 	if (error < 0)
@@ -869,7 +878,7 @@ int git_apply(
 		error = git_apply__to_workdir(repo, diff, preimage, postimage, location, &opts);
 		break;
 	default:
-		assert(false);
+		GIT_ASSERT(false);
 	}
 
 	if (error < 0)

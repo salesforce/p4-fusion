@@ -14,7 +14,7 @@
 #include "net.h"
 
 #ifdef GIT_OPENSSL
-# include <openssl/ssl.h>
+# include "streams/openssl.h"
 #endif
 
 typedef struct gitno_ssl {
@@ -42,7 +42,7 @@ typedef struct gitno_buffer {
 /* Flags to gitno_connect */
 enum {
 	/* Attempt to create an SSL connection. */
-	GITNO_CONNECT_SSL = 1,
+	GITNO_CONNECT_SSL = 1
 };
 
 /**
@@ -62,7 +62,7 @@ void gitno_buffer_setup_fromstream(git_stream *st, gitno_buffer *buf, char *data
 void gitno_buffer_setup_callback(gitno_buffer *buf, char *data, size_t len, int (*recv)(gitno_buffer *buf), void *cb_data);
 int gitno_recv(gitno_buffer *buf);
 
-void gitno_consume(gitno_buffer *buf, const char *ptr);
+int gitno_consume(gitno_buffer *buf, const char *ptr);
 void gitno_consume_n(gitno_buffer *buf, size_t cons);
 
 #endif

@@ -131,17 +131,8 @@ int main() {
 
 /* compiler specific configuration */
 
-#if UINT_MAX == 0xffffffffu
-typedef unsigned int khint32_t;
-#elif ULONG_MAX == 0xffffffffu
-typedef unsigned long khint32_t;
-#endif
-
-#if ULONG_MAX == ULLONG_MAX
-typedef unsigned long khint64_t;
-#else
-typedef unsigned long long khint64_t;
-#endif
+typedef uint32_t khint32_t;
+typedef uint64_t khint64_t;
 
 #ifndef kh_inline
 #ifdef _MSC_VER
@@ -573,7 +564,7 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
 		code;												\
 	} }
 
-/* More conenient interfaces */
+/* More convenient interfaces */
 
 /*! @function
   @abstract     Instantiate a hash set containing integer keys

@@ -258,7 +258,7 @@ static size_t find_trailer_end(const char *buf, size_t len)
 	return len - ignore_non_trailer(buf, len);
 }
 
-static char *extract_trailer_block(const char *message, size_t* len)
+static char *extract_trailer_block(const char *message, size_t *len)
 {
 	size_t patch_start = find_patch_start(message);
 	size_t trailer_end = find_trailer_end(message, patch_start);
@@ -286,7 +286,7 @@ enum trailer_state {
 	S_VALUE = 4,
 	S_VALUE_NL = 5,
 	S_VALUE_END = 6,
-	S_IGNORE = 7,
+	S_IGNORE = 7
 };
 
 #define NEXT(st) { state = (st); ptr++; continue; }

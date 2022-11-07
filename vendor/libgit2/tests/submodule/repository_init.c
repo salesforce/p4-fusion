@@ -11,7 +11,7 @@ void test_submodule_repository_init__basic(void)
 {
 	git_submodule *sm;
 	git_repository *repo;
-	git_buf dot_git_content = GIT_BUF_INIT;
+	git_str dot_git_content = GIT_STR_INIT;
 
 	g_repo = setup_fixture_submod2();
 
@@ -26,13 +26,13 @@ void test_submodule_repository_init__basic(void)
 	cl_git_pass(git_futils_readbuffer(&dot_git_content, "submod2/" "sm_gitmodules_only" "/.git"));
 	cl_assert_equal_s("gitdir: ../.git/modules/sm_gitmodules_only/", dot_git_content.ptr);
 
-	cl_assert(git_path_isfile("submod2/" "sm_gitmodules_only" "/.git"));
+	cl_assert(git_fs_path_isfile("submod2/" "sm_gitmodules_only" "/.git"));
 
-	cl_assert(git_path_isdir("submod2/.git/modules"));
-	cl_assert(git_path_isdir("submod2/.git/modules/" "sm_gitmodules_only"));
-	cl_assert(git_path_isfile("submod2/.git/modules/" "sm_gitmodules_only" "/HEAD"));
+	cl_assert(git_fs_path_isdir("submod2/.git/modules"));
+	cl_assert(git_fs_path_isdir("submod2/.git/modules/" "sm_gitmodules_only"));
+	cl_assert(git_fs_path_isfile("submod2/.git/modules/" "sm_gitmodules_only" "/HEAD"));
 
 	git_submodule_free(sm);
 	git_repository_free(repo);
-	git_buf_dispose(&dot_git_content);
+	git_str_dispose(&dot_git_content);
 }

@@ -84,7 +84,7 @@ static unsigned int workdir_delta2status(
 
 		if (!git_oid_equal(&idx2wd->old_file.id, &idx2wd->new_file.id)) {
 			/* if OIDs don't match, we might need to calculate them now to
-			 * discern between RENAMED vs RENAMED+MODIFED
+			 * discern between RENAMED vs RENAMED+MODIFIED
 			 */
 			if (git_oid_is_zero(&idx2wd->old_file.id) &&
 				diff->old_src == GIT_ITERATOR_WORKDIR &&
@@ -336,6 +336,9 @@ int git_status_list_new(
 			GIT_DIFF_FIND_RENAMES_FROM_REWRITES |
 			GIT_DIFF_BREAK_REWRITES_FOR_RENAMES_ONLY;
 
+	if (opts != NULL && opts->rename_threshold != 0)
+		findopt.rename_threshold = opts->rename_threshold;
+
 	if (show != GIT_STATUS_SHOW_WORKDIR_ONLY) {
 		if ((error = git_diff_tree_to_index(
 				&status->head2idx, repo, head, index, &diffopt)) < 0)
@@ -391,14 +394,14 @@ done:
 
 size_t git_status_list_entrycount(git_status_list *status)
 {
-	assert(status);
+	GIT_ASSERT_ARG_WITH_RETVAL(status, 0);
 
 	return status->paired.length;
 }
 
 const git_status_entry *git_status_byindex(git_status_list *status, size_t i)
 {
-	assert(status);
+	GIT_ASSERT_ARG_WITH_RETVAL(status, NULL);
 
 	return git_vector_get(&status->paired, i);
 }
@@ -492,7 +495,9 @@ int git_status_file(
 	struct status_file_info sfi = {0};
 	git_index *index;
 
-	assert(status_flags && repo && path);
+	GIT_ASSERT_ARG(status_flags);
+	GIT_ASSERT_ARG(repo);
+	GIT_ASSERT_ARG(path);
 
 	if ((error = git_repository_index__weakptr(&index, repo)) < 0)
 		return error;
@@ -558,7 +563,8 @@ int git_status_init_options(git_status_options *opts, unsigned int version)
 int git_status_list_get_perfdata(
 	git_diff_perfdata *out, const git_status_list *status)
 {
-	assert(out);
+	GIT_ASSERT_ARG(out);
+
 	GIT_ERROR_CHECK_VERSION(out, GIT_DIFF_PERFDATA_VERSION, "git_diff_perfdata");
 
 	out->stat_calls = 0;

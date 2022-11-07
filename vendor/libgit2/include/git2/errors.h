@@ -42,14 +42,14 @@ typedef enum {
 	GIT_ECONFLICT       = -13,	/**< Checkout conflicts prevented operation */
 	GIT_ELOCKED         = -14,	/**< Lock file prevented operation */
 	GIT_EMODIFIED       = -15,	/**< Reference value does not match expected */
-	GIT_EAUTH           = -16,      /**< Authentication error */
-	GIT_ECERTIFICATE    = -17,      /**< Server certificate is invalid */
+	GIT_EAUTH           = -16,	/**< Authentication error */
+	GIT_ECERTIFICATE    = -17,	/**< Server certificate is invalid */
 	GIT_EAPPLIED        = -18,	/**< Patch/merge has already been applied */
-	GIT_EPEEL           = -19,      /**< The requested peel operation is not possible */
-	GIT_EEOF            = -20,      /**< Unexpected EOF */
-	GIT_EINVALID        = -21,      /**< Invalid operation or input */
+	GIT_EPEEL           = -19,	/**< The requested peel operation is not possible */
+	GIT_EEOF            = -20,	/**< Unexpected EOF */
+	GIT_EINVALID        = -21,	/**< Invalid operation or input */
 	GIT_EUNCOMMITTED    = -22,	/**< Uncommitted changes in index prevented operation */
-	GIT_EDIRECTORY      = -23,      /**< The operation is not valid for a directory */
+	GIT_EDIRECTORY      = -23,	/**< The operation is not valid for a directory */
 	GIT_EMERGECONFLICT  = -24,	/**< A merge conflict exists and cannot continue */
 
 	GIT_PASSTHROUGH     = -30,	/**< A user-configured callback refused to act */
@@ -58,6 +58,7 @@ typedef enum {
 	GIT_EMISMATCH       = -33,	/**< Hashsum mismatch in object */
 	GIT_EINDEXDIRTY     = -34,	/**< Unsaved changes in the index would be overwritten */
 	GIT_EAPPLYFAIL      = -35,	/**< Patch application failed */
+	GIT_EOWNER          = -36	/**< The object is not owned by the current user */
 } git_error_code;
 
 /**

@@ -169,8 +169,7 @@ void test_pack_indexer__fix_thin(void)
 	cl_assert_equal_i(stats.indexed_objects, 2);
 	cl_assert_equal_i(stats.local_objects, 1);
 
-	git_oid_fromstr(&should_id, "fefdb2d740a3a6b6c03a0c7d6ce431c6d5810e13");
-	cl_assert_equal_oid(&should_id, git_indexer_hash(idx));
+	cl_assert_equal_s("fefdb2d740a3a6b6c03a0c7d6ce431c6d5810e13", git_indexer_name(idx));
 
 	git_indexer_free(idx);
 	git_odb_free(odb);
@@ -279,21 +278,21 @@ void test_pack_indexer__out_of_order_with_connectivity_checks(void)
 	git_indexer_free(idx);
 }
 
-static int find_tmp_file_recurs(void *opaque, git_buf *path)
+static int find_tmp_file_recurs(void *opaque, git_str *path)
 {
 	int error = 0;
-	git_buf *first_tmp_file = opaque;
+	git_str *first_tmp_file = opaque;
 	struct stat st;
 
 	if ((error = p_lstat_posixly(path->ptr, &st)) < 0)
 		return error;
 
 	if (S_ISDIR(st.st_mode))
-		return git_path_direach(path, 0, find_tmp_file_recurs, opaque);
+		return git_fs_path_direach(path, 0, find_tmp_file_recurs, opaque);
 
 	/* This is the template that's used in git_futils_mktmp. */
-	if (strstr(git_buf_cstr(path), "_git2_") != NULL)
-		return git_buf_sets(first_tmp_file, git_buf_cstr(path));
+	if (strstr(git_str_cstr(path), "_git2_") != NULL)
+		return git_str_sets(first_tmp_file, git_str_cstr(path));
 
 	return 0;
 }
@@ -301,21 +300,21 @@ static int find_tmp_file_recurs(void *opaque, git_buf *path)
 void test_pack_indexer__no_tmp_files(void)
 {
 	git_indexer *idx = NULL;
-	git_buf path = GIT_BUF_INIT;
-	git_buf first_tmp_file = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
+	git_str first_tmp_file = GIT_STR_INIT;
 
 	/* Precondition: there are no temporary files. */
-	cl_git_pass(git_buf_sets(&path, clar_sandbox_path()));
+	cl_git_pass(git_str_sets(&path, clar_sandbox_path()));
 	cl_git_pass(find_tmp_file_recurs(&first_tmp_file, &path));
-	git_buf_dispose(&path);
-	cl_assert(git_buf_len(&first_tmp_file) == 0);
+	git_str_dispose(&path);
+	cl_assert(git_str_len(&first_tmp_file) == 0);
 
 	cl_git_pass(git_indexer_new(&idx, ".", 0, NULL, NULL));
 	git_indexer_free(idx);
 
-	cl_git_pass(git_buf_sets(&path, clar_sandbox_path()));
+	cl_git_pass(git_str_sets(&path, clar_sandbox_path()));
 	cl_git_pass(find_tmp_file_recurs(&first_tmp_file, &path));
-	git_buf_dispose(&path);
-	cl_assert(git_buf_len(&first_tmp_file) == 0);
-	git_buf_dispose(&first_tmp_file);
+	git_str_dispose(&path);
+	cl_assert(git_str_len(&first_tmp_file) == 0);
+	git_str_dispose(&first_tmp_file);
 }

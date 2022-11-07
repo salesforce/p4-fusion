@@ -91,10 +91,10 @@ GIT_BEGIN_DECL
 
 /**
  * The separator used in path list strings (ie like in the PATH
- * environment variable). A semi-colon ";" is used on Windows, and
- * a colon ":" for all other systems.
+ * environment variable). A semi-colon ";" is used on Windows and
+ * AmigaOS, and a colon ":" for all other systems.
  */
-#ifdef GIT_WIN32
+#if defined(GIT_WIN32) || defined(AMIGA)
 #define GIT_PATH_LIST_SEPARATOR ';'
 #else
 #define GIT_PATH_LIST_SEPARATOR ':'
@@ -147,7 +147,7 @@ typedef enum {
    * If set, libgit2 was built with support for sub-second resolution in file
    * modification times.
    */
-	GIT_FEATURE_NSEC	= (1 << 3),
+	GIT_FEATURE_NSEC	= (1 << 3)
 } git_feature_t;
 
 /**
@@ -167,6 +167,9 @@ typedef enum {
  * - GIT_FEATURE_SSH
  *   Libgit2 supports the SSH protocol for network operations. This requires
  *   the libssh2 library to be found when compiling libgit2
+ *
+ * - GIT_FEATURE_NSEC
+ *   Libgit2 supports the sub-second resolution in file modification times.
  */
 GIT_EXTERN(int) git_libgit2_features(void);
 
@@ -207,7 +210,13 @@ typedef enum {
 	GIT_OPT_DISABLE_PACK_KEEP_FILE_CHECKS,
 	GIT_OPT_ENABLE_HTTP_EXPECT_CONTINUE,
 	GIT_OPT_GET_MWINDOW_FILE_LIMIT,
-	GIT_OPT_SET_MWINDOW_FILE_LIMIT
+	GIT_OPT_SET_MWINDOW_FILE_LIMIT,
+	GIT_OPT_SET_ODB_PACKED_PRIORITY,
+	GIT_OPT_SET_ODB_LOOSE_PRIORITY,
+	GIT_OPT_GET_EXTENSIONS,
+	GIT_OPT_SET_EXTENSIONS,
+	GIT_OPT_GET_OWNER_VALIDATION,
+	GIT_OPT_SET_OWNER_VALIDATION
 } git_libgit2_opt_t;
 
 /**
@@ -420,6 +429,38 @@ typedef enum {
  *		> When connecting to a server using NTLM or Negotiate
  *		> authentication, use expect/continue when POSTing data.
  *		> This option is not available on Windows.
+ *
+ *   opts(GIT_OPT_SET_ODB_PACKED_PRIORITY, int priority)
+ *      > Override the default priority of the packed ODB backend which
+ *      > is added when default backends are assigned to a repository
+ *
+ *   opts(GIT_OPT_SET_ODB_LOOSE_PRIORITY, int priority)
+ *      > Override the default priority of the loose ODB backend which
+ *      > is added when default backends are assigned to a repository
+ *
+ *   opts(GIT_OPT_GET_EXTENSIONS, git_strarray *out)
+ *      > Returns the list of git extensions that are supported.  This
+ *      > is the list of built-in extensions supported by libgit2 and
+ *      > custom extensions that have been added with
+ *      > `GIT_OPT_SET_EXTENSIONS`.  Extensions that have been negated
+ *      > will not be returned.  The returned list should be released
+ *      > with `git_strarray_dispose`.
+ *
+ *   opts(GIT_OPT_SET_EXTENSIONS, const char **extensions, size_t len)
+ *      > Set that the given git extensions are supported by the caller.
+ *      > Extensions supported by libgit2 may be negated by prefixing
+ *      > them with a `!`.  For example: setting extensions to
+ *      > { "!noop", "newext" } indicates that the caller does not want
+ *      > to support repositories with the `noop` extension but does want
+ *      > to support repositories with the `newext` extension.
+ *
+ *   opts(GIT_OPT_GET_OWNER_VALIDATION, int *enabled)
+ *      > Gets the owner validation setting for repository
+ *      > directories.
+ *
+ *   opts(GIT_OPT_SET_OWNER_VALIDATION, int enabled)
+ *      > Set that repository directories should be owned by the current
+ *      > user. The default is to validate ownership.
  *
  * @param option Option key
  * @param ... value to set the option

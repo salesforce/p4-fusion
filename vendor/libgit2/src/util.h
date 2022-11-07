@@ -7,22 +7,18 @@
 #ifndef INCLUDE_util_h__
 #define INCLUDE_util_h__
 
-#include "common.h"
-
 #ifndef GIT_WIN32
 # include <ctype.h>
 #endif
 
-#include "git2/buffer.h"
-
-#include "buffer.h"
+#include "str.h"
 #include "common.h"
 #include "strnlen.h"
-#include "thread-utils.h"
+#include "thread.h"
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 #define bitsizeof(x) (CHAR_BIT * sizeof(x))
-#define MSB(x, bits) ((x) & (~0ULL << (bitsizeof(x) - (bits))))
+#define MSB(x, bits) ((x) & (~UINT64_C(0) << (bitsizeof(x) - (bits))))
 #ifndef min
 # define min(a,b) ((a) < (b) ? (a) : (b))
 #endif
@@ -34,14 +30,12 @@
 # define GIT_CONTAINER_OF(ptr, type, member) \
 	__builtin_choose_expr( \
 	    __builtin_offsetof(type, member) == 0 && \
-	    __builtin_types_compatible_p(typeof(&((type *) 0)->member), typeof(ptr)), \
+	    __builtin_types_compatible_p(__typeof__(&((type *) 0)->member), __typeof__(ptr)), \
 		((type *) (ptr)), \
 		(void)0)
 #else
 # define GIT_CONTAINER_OF(ptr, type, member) (type *)(ptr)
 #endif
-
-#define GIT_DATE_RFC2822_SZ  32
 
 /**
  * Return the length of a constant string.
@@ -168,30 +162,41 @@ extern int git__strncasecmp(const char *a, const char *b, size_t sz);
 
 extern int git__strcasesort_cmp(const char *a, const char *b);
 
+/*
+ * Compare some NUL-terminated `a` to a possibly non-NUL terminated
+ * `b` of length `b_len`; like `strncmp` but ensuring that
+ * `strlen(a) == b_len` as well.
+ */
+GIT_INLINE(int) git__strlcmp(const char *a, const char *b, size_t b_len)
+{
+	int cmp = strncmp(a, b, b_len);
+	return cmp ? cmp : (int)a[b_len];
+}
+
 typedef struct {
-	git_atomic refcount;
+	git_atomic32 refcount;
 	void *owner;
 } git_refcount;
 
 typedef void (*git_refcount_freeptr)(void *r);
 
 #define GIT_REFCOUNT_INC(r) { \
-	git_atomic_inc(&(r)->rc.refcount);	\
+	git_atomic32_inc(&(r)->rc.refcount);	\
 }
 
 #define GIT_REFCOUNT_DEC(_r, do_free) { \
 	git_refcount *r = &(_r)->rc; \
-	int val = git_atomic_dec(&r->refcount); \
+	int val = git_atomic32_dec(&r->refcount); \
 	if (val <= 0 && r->owner == NULL) { do_free(_r); } \
 }
 
 #define GIT_REFCOUNT_OWN(r, o) { \
-	(void)git__swap((r)->rc.owner, o); \
+	(void)git_atomic_swap((r)->rc.owner, o); \
 }
 
-#define GIT_REFCOUNT_OWNER(r) git__load((r)->rc.owner)
+#define GIT_REFCOUNT_OWNER(r) git_atomic_load((r)->rc.owner)
 
-#define GIT_REFCOUNT_VAL(r) git_atomic_get((r)->rc.refcount)
+#define GIT_REFCOUNT_VAL(r) git_atomic32_get((r)->rc.refcount)
 
 
 static signed char from_hex[] = {
@@ -288,26 +293,6 @@ GIT_INLINE(bool) git__isxdigit(int c)
 extern int git__parse_bool(int *out, const char *value);
 
 /*
- * Parse a string into a value as a git_time_t.
- *
- * Sample valid input:
- * - "yesterday"
- * - "July 17, 2003"
- * - "2003-7-17 08:23"
- */
-extern int git__date_parse(git_time_t *out, const char *date);
-
-/*
- * Format a git_time as a RFC2822 string
- *
- * @param out buffer to store formatted date; a '\\0' terminator will automatically be added.
- * @param len size of the buffer; should be atleast `GIT_DATE_RFC2822_SZ` in size;
- * @param date the date to be formatted
- * @return 0 if successful; -1 on error
- */
-extern int git__date_rfc2822_fmt(char *out, size_t len, const git_time *date);
-
-/*
  * Unescapes a string in-place.
  *
  * Edge cases behavior:
@@ -315,27 +300,6 @@ extern int git__date_rfc2822_fmt(char *out, size_t len, const git_time *date);
  * - "chan\\" -> "chan\"
  */
 extern size_t git__unescape(char *str);
-
-/*
- * Iterate through an UTF-8 string, yielding one
- * codepoint at a time.
- *
- * @param str current position in the string
- * @param str_len size left in the string; -1 if the string is NULL-terminated
- * @param dst pointer where to store the current codepoint
- * @return length in bytes of the read codepoint; -1 if the codepoint was invalid
- */
-extern int git__utf8_iterate(const uint8_t *str, int str_len, int32_t *dst);
-
-/*
- * Iterate through an UTF-8 string and stops after finding any invalid UTF-8
- * codepoints.
- *
- * @param str string to scan
- * @param str_len size of the string
- * @return length in bytes of the string that contains valid data
- */
-extern size_t git__utf8_valid_buf_length(const uint8_t *str, size_t str_len);
 
 /*
  * Safely zero-out memory, making sure that the compiler
@@ -380,7 +344,7 @@ GIT_INLINE(double) git__timer(void)
    return (double)time * scaling_factor / 1.0E9;
 }
 
-#elif defined(AMIGA)
+#elif defined(__amigaos4__)
 
 #include <proto/timer.h>
 
@@ -397,22 +361,26 @@ GIT_INLINE(double) git__timer(void)
 
 GIT_INLINE(double) git__timer(void)
 {
-	struct timespec tp;
+	struct timeval tv;
 
-	if (clock_gettime(CLOCK_MONOTONIC, &tp) == 0) {
+#ifdef CLOCK_MONOTONIC
+	struct timespec tp;
+	if (clock_gettime(CLOCK_MONOTONIC, &tp) == 0)
 		return (double) tp.tv_sec + (double) tp.tv_nsec / 1.0E9;
-	} else {
-		/* Fall back to using gettimeofday */
-		struct timeval tv;
-		struct timezone tz;
-		gettimeofday(&tv, &tz);
-		return (double)tv.tv_sec + (double)tv.tv_usec / 1.0E6;
-	}
+#endif
+
+	/* Fall back to using gettimeofday */
+	gettimeofday(&tv, NULL);
+	return (double)tv.tv_sec + (double)tv.tv_usec / 1.0E6;
 }
 
 #endif
 
-extern int git__getenv(git_buf *out, const char *name);
+extern int git__getenv(git_str *out, const char *name);
+
+extern int git__online_cpus(void);
+
+GIT_INLINE(int) git__noop(void) { return 0; }
 
 #include "alloc.h"
 

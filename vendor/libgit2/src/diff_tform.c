@@ -13,7 +13,7 @@
 
 #include "diff.h"
 #include "diff_generate.h"
-#include "path.h"
+#include "fs_path.h"
 #include "futils.h"
 #include "config.h"
 
@@ -87,7 +87,7 @@ git_diff_delta *git_diff__merge_like_cgit(
 		a->status == GIT_DELTA_UNREADABLE)
 		return dup;
 
-	assert(b->status != GIT_DELTA_UNMODIFIED);
+	GIT_ASSERT_WITH_RETVAL(b->status != GIT_DELTA_UNMODIFIED, NULL);
 
 	/* A cgit exception is that the diff of a file that is only in the
 	 * index (i.e. not in HEAD nor workdir) is given as empty.
@@ -121,7 +121,8 @@ int git_diff__merge(
 	bool ignore_case, reversed;
 	unsigned int i, j;
 
-	assert(onto && from);
+	GIT_ASSERT_ARG(onto);
+	GIT_ASSERT_ARG(from);
 
 	if (!from->deltas.length)
 		return 0;
@@ -240,7 +241,7 @@ int git_diff_find_similar__calc_similarity(
 
 #define DEFAULT_THRESHOLD 50
 #define DEFAULT_BREAK_REWRITE_THRESHOLD 60
-#define DEFAULT_RENAME_LIMIT 200
+#define DEFAULT_RENAME_LIMIT 1000
 
 static int normalize_find_opts(
 	git_diff *diff,
@@ -374,7 +375,7 @@ static int apply_splits_and_deletes(
 	size_t i;
 	git_diff_delta *delta;
 
-	if (git_vector_init(&onto, expected_size, git_diff_delta__cmp) < 0)
+	if (git_vector_init(&onto, expected_size, diff->deltas._cmp) < 0)
 		return -1;
 
 	/* build new delta list without TO_DELETE and splitting TO_SPLIT */
@@ -443,7 +444,7 @@ typedef struct {
 	git_iterator_t src;
 	git_repository *repo;
 	git_diff_file *file;
-	git_buf data;
+	git_str data;
 	git_odb_object *odb_obj;
 	git_blob *blob;
 } similarity_info;
@@ -457,9 +458,10 @@ static int similarity_init(
 	info->file = similarity_get_file(diff, file_idx);
 	info->odb_obj = NULL;
 	info->blob = NULL;
-	git_buf_init(&info->data, 0);
+	git_str_init(&info->data, 0);
 
-	if (info->file->size > 0 || info->src == GIT_ITERATOR_WORKDIR)
+	if ((info->file->flags & GIT_DIFF_FLAG_VALID_SIZE) ||
+	    info->src == GIT_ITERATOR_WORKDIR)
 		return 0;
 
 	return git_diff_file__resolve_zero_size(
@@ -475,12 +477,12 @@ static int similarity_sig(
 	git_diff_file *file = info->file;
 
 	if (info->src == GIT_ITERATOR_WORKDIR) {
-		if ((error = git_buf_joinpath(
-			&info->data, git_repository_workdir(info->repo), file->path)) < 0)
+		if ((error = git_repository_workdir_path(
+			&info->data, info->repo, file->path)) < 0)
 			return error;
 
 		/* if path is not a regular file, just skip this item */
-		if (!git_path_isfile(info->data.ptr))
+		if (!git_fs_path_isfile(info->data.ptr))
 			return 0;
 
 		/* TODO: apply wd-to-odb filters to file data if necessary */
@@ -528,7 +530,7 @@ static void similarity_unload(similarity_info *info)
 	if (info->blob)
 		git_blob_free(info->blob);
 	else
-		git_buf_dispose(&info->data);
+		git_str_dispose(&info->data);
 }
 
 #define FLAG_SET(opts,flag_name) (((opts)->flags & flag_name) != 0)
@@ -815,7 +817,7 @@ int git_diff_find_similar(
 	diff_find_match *best_match;
 	git_diff_file swap;
 
-	assert(diff);
+	GIT_ASSERT_ARG(diff);
 
 	if ((error = normalize_find_opts(diff, &opts, given_opts)) < 0)
 		return error;
@@ -978,7 +980,7 @@ find_best_matches:
 				src->flags |= GIT_DIFF_FLAG__TO_DELETE;
 				num_rewrites++;
 			} else {
-				assert(delta_is_split(tgt));
+				GIT_ASSERT(delta_is_split(tgt));
 
 				if (best_match->similarity < opts.rename_from_rewrite_threshold)
 					continue;
@@ -988,7 +990,7 @@ find_best_matches:
 				delta_make_rename(tgt, src, best_match->similarity);
 				num_rewrites--;
 
-				assert(src->status == GIT_DELTA_DELETED);
+				GIT_ASSERT(src->status == GIT_DELTA_DELETED);
 				memcpy(&src->old_file, &swap, sizeof(src->old_file));
 				memset(&src->new_file, 0, sizeof(src->new_file));
 				src->new_file.path = src->old_file.path;
@@ -1024,7 +1026,7 @@ find_best_matches:
 
 				num_updates++;
 			} else {
-				assert(delta_is_split(src));
+				GIT_ASSERT(delta_is_split(src));
 
 				if (best_match->similarity < opts.rename_from_rewrite_threshold)
 					continue;
