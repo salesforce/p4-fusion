@@ -27,6 +27,10 @@ void ChangeList::PrepareDownload(const bool includeBranchSource)
 {
 	ChangeList& cl = *this;
 
+	// While not good isolation, for performance, sticking the
+	// branch split into this thread would help.  It's also where
+	// the has-branch required check is stored.
+
 	// Cut and paste fun.
 	if (includeBranchSource)
 	{

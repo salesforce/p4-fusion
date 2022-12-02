@@ -209,7 +209,30 @@ int Main(int argc, char** argv)
 		// TODO ensure the stream is within the branch map views.
     }
 
+	BranchSet branches("HEAD", branchBuilder);
+
 	// FIXME START DEBUGGING TESTS
+	// Note that, for debugging here, lookAhead is being used as a changelist number.
+	const std::vector<FileData> fileLogData = std::move(p4.FileLog(lookAheadStr).GetFileData());
+	for (int i = 0; i < fileLogData.size(); i++)
+	{
+		PRINT("" << i << ": depotFile=" << fileLogData.at(i).depotFile);
+		PRINT("" << i << ": action=" << fileLogData.at(i).action);
+		PRINT("" << i << ": changelist=" << fileLogData.at(i).changelist);
+		PRINT("" << i << ": revision=" << fileLogData.at(i).revision);
+		PRINT("" << i << ": source=" << fileLogData.at(i).sourceDepotFile << fileLogData.at(i).sourceRevision);
+	}
+	std::vector<BranchedFiles> branchGroups = branches.ParseAffectedFiles(fileLogData);
+	for (int i = 0; i < branchGroups.size(); i++)
+	{
+		PRINT("Branch[" << i << "]: " << branchGroups.at(i).targetBranch);
+		if (branchGroups.at(i).hasSource) PRINT("  <- " << branchGroups.at(i).sourceBranch);
+		std::vector<FileRevision>& files = branchGroups.at(i).files;
+		for (int j = 0; j < files.size(); j++)
+		{
+			PRINT("  " << j << " :: [" << files.at(j).target << "] <= [" << files.at(j).source << "]");
+		}
+	}
 
 	return 0;
 	// FIXME END DEBUGGING TESTS

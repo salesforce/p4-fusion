@@ -40,12 +40,13 @@ struct FileData
 
     // Empty if no source file (e.g. not an integration)
     std::string sourceDepotFile;
+    // If set, the sourceRevision will start with a '#'.
     std::string sourceRevision;
     std::string sourceChangelist;
 
 	void SetAction(std::string action);
 	void Clear();
 
-    bool IsDeleted();
-    bool IsIntegrated();  // ... or copied, or moved, or ...
+    bool IsDeleted() const;
+    bool IsIntegrated() const;  // ... or copied, or moved, or ...
 };

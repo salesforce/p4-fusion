@@ -11,6 +11,8 @@
 #include <map>
 #include <stdexcept>
 
+#include "common.h"
+
 std::string createStreamPrefix(const std::string& srcDepotName)
 {
     return "//" + srcDepotName + "/";
@@ -52,7 +54,7 @@ std::array<std::string, 2> splitStreamPath(const std::string& streamPath)
 StreamBranchModel::StreamBranchModel(const std::string streamPath, bool streamPathMarker)
 {
     std::array<std::string, 2> parts = splitStreamPath(streamPath);
-    if (parts[0].size() == 0 || parts[1].size() == 0)
+    if (parts[0].size() <= 0 || parts[1].size() <= 0)
     {
         throw std::invalid_argument("invalid stream path");
     }
@@ -113,10 +115,12 @@ void streamIntegrationMap::addMerge(std::string& sourceBranch, std::string& targ
     {
         const int index = branches.size();
         BranchedFiles bf;
-        bf.files.push_back(rev);
         bf.sourceBranch = sourceBranch;
         bf.targetBranch = targetBranch;
         bf.hasSource = !sourceBranch.empty();
+        branches.push_back(bf);
+        // Add the files to the copy, as a small optimization.
+        branches.at(index).files.push_back(rev);
         branchIndicies.insert(std::make_pair(mapKey, index));
     }
     else
@@ -153,7 +157,7 @@ std::vector<BranchedFiles> StreamBranchModel::GetBranchedFiles(const std::vector
 
                         // Is the source and destination relative paths the same?
                         // (e.g. not a rename)
-                        && sourceParts[2] != targetParts[2]
+                        && sourceParts[2] == targetParts[2]
 
                         // Is the stream covered by this model?
                         && ContainsStreamName(sourceParts[1])

@@ -28,7 +28,7 @@ void FileData::SetAction(std::string fileAction)
 }
 
 
-bool FileData::IsDeleted()
+bool FileData::IsDeleted() const
 {
     switch (actionCategory)
     {
@@ -42,7 +42,7 @@ bool FileData::IsDeleted()
 }
 
 
-bool FileData::IsIntegrated()
+bool FileData::IsIntegrated() const
 {
     switch (actionCategory)
     {

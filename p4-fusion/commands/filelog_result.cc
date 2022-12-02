@@ -12,10 +12,10 @@
 void FileLogResult::OutputStat(StrDict* varList)
 {
     FileData entry;
-    // entry.index = m_FileLogs.size();
     entry.depotFile = varList->GetVar("depotFile")->Text();
     // Only get the first record...
     entry.revision = varList->GetVar("rev0")->Text();
+    std::cout << "Read depot file " << m_FileData.size() << " " << entry.depotFile << "#" << entry.revision << "\n";
     entry.changelist = varList->GetVar("change0")->Text();
     entry.type = varList->GetVar("type0")->Text();
     entry.SetAction(varList->GetVar("action0")->Text());
@@ -39,8 +39,9 @@ void FileLogResult::OutputStat(StrDict* varList)
         if (STDHelpers::Contains(howStr, " from"))
         {
             // copy or integrate or branch or move or archive from a location.
-            entry.sourceDepotFile = varList->GetVar(("erev0," + indexString).c_str())->Text();
-            entry.sourceRevision = varList->GetVar(("file0," + indexString).c_str())->Text();
+            entry.sourceDepotFile = varList->GetVar(("file0," + indexString).c_str())->Text();
+            // already includes the '#' on it.
+            entry.sourceRevision = varList->GetVar(("erev0," + indexString).c_str())->Text();
             break;
         }
 	}

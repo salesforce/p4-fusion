@@ -24,6 +24,7 @@ private:
     std::vector<std::string>& m_clientViewMapping;
     std::vector<std::unique_ptr<BranchModel>> m_branchSpecs;
     std::unique_ptr<AllStreamsBranchModel> m_streamsBranch;
+    bool m_hasMergeableBranch;
     bool m_closed;
 
 public:
@@ -33,6 +34,8 @@ public:
     
     std::vector<std::string>& GetClientViewMapping() const { return m_clientViewMapping; };
     std::vector<std::unique_ptr<BranchModel>> CompleteBranches(const std::string defaultBranchName);
+
+    bool HasMergeableBranch() const { return m_hasMergeableBranch; };
 };
 
 
@@ -44,12 +47,16 @@ struct BranchSet
 private:
     std::vector<std::unique_ptr<BranchModel>> m_branches;
     FileMap m_view;
+    bool m_hasMergeableBranch;
 
 public:
     BranchSet(const std::string defaultBranchName, BranchSetBuilder& builder);
 
+    // HasMergeableBranch is there a branch model that requires integration history?
+    bool HasMergeableBranch() const { return m_hasMergeableBranch; };
+
     // ParseAffectedFiles create collections of merges and commits.
     // Breaks up the files into those that are within the view, with each item in the
     // list is its own target Git branch.
-    std::vector<BranchedFiles> ParseAffectedFiles(std::vector<FileData>& cl) const;
+    std::vector<BranchedFiles> ParseAffectedFiles(const std::vector<FileData>& cl) const;
 };

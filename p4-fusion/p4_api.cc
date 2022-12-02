@@ -108,11 +108,6 @@ bool P4API::IsFileUnderClientSpec(const std::string& fileRevision)
 	return m_ClientMapping.IsInRight(fileRevision);
 }
 
-// bool P4API::IsDeleted(const std::string& action)
-// {
-// 	return STDHelpers::Contains(action, "delete");
-// }
-
 bool P4API::IsBinary(const std::string& fileType)
 {
 	return STDHelpers::Contains(fileType, "binary");

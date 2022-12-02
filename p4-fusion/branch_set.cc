@@ -13,6 +13,7 @@ BranchSetBuilder::BranchSetBuilder(std::vector<std::string>& clientViewMapping)
     : m_streamsBranch(std::unique_ptr<AllStreamsBranchModel>(new AllStreamsBranchModel))
     , m_clientViewMapping(clientViewMapping)
     , m_closed(false)
+    , m_hasMergeableBranch(false)
 {
 }
 
@@ -24,6 +25,7 @@ void BranchSetBuilder::InsertStreamPath(const std::string streamPath)
         throw std::invalid_argument("Can't call the builder when it's been closed.");
     }
     m_streamsBranch->InsertStreamPath(streamPath);
+    m_hasMergeableBranch = true;
 }
 
 
@@ -34,6 +36,7 @@ void BranchSetBuilder::InsertBranchSpec(const std::string leftBranchName, const 
         throw std::invalid_argument("Can't call the builder when it's been closed.");
     }
     m_branchSpecs.push_back(std::unique_ptr<BranchSpecBranchModel>(new BranchSpecBranchModel(leftBranchName, rightBranchName, view)));
+    m_hasMergeableBranch = true;
 }
 
 
@@ -60,17 +63,18 @@ std::vector<std::unique_ptr<BranchModel>> BranchSetBuilder::CompleteBranches(con
 
 BranchSet::BranchSet(const std::string defaultBranchName, BranchSetBuilder& builder)
     : m_branches(builder.CompleteBranches(defaultBranchName))
+    , m_hasMergeableBranch(builder.HasMergeableBranch())
 {
     m_view.InsertTranslationMapping(builder.GetClientViewMapping());
 }
 
 
-std::vector<BranchedFiles> BranchSet::ParseAffectedFiles(std::vector<FileData>& cl) const
+std::vector<BranchedFiles> BranchSet::ParseAffectedFiles(const std::vector<FileData>& cl) const
 {
     std::vector<FileRevision> validRevs;
     for (int i = 0; i < cl.size(); i++)
     {
-        FileData& fileData = cl.at(i);
+        const FileData& fileData = cl.at(i);
         if (
             // depot file should always be present.
             // The left side of the client view is the depot side.
