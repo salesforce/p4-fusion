@@ -40,3 +40,13 @@ void STDHelpers::Erase(std::string& source, const std::string& subStr)
 
 	source.erase(source.find(subStr), subStr.size());
 }
+
+std::array<std::string, 2> STDHelpers::SplitAt(const std::string& source, const char c, const size_t startAt)
+{
+	size_t pos = source.find(c, startAt);
+	if (pos != std::string::npos && pos < source.size())
+	{
+		return {source.substr(startAt, pos - startAt), source.substr(pos + 1)};
+	}
+	return {source, ""};
+}

@@ -35,6 +35,7 @@ bool FileData::IsDeleted() const
     case FileAction::FileDelete:
     case FileAction::FileMoveDelete:
     case FileAction::FilePurge:
+    case FileAction::FileIntegrateDelete:
         return true;
     default:
         return false;
@@ -51,6 +52,7 @@ bool FileData::IsIntegrated() const
     case FileAction::FileIntegrate:
     case FileAction::FileImport:
     // case FileAction::FileArchive:
+    case FileAction::FileIntegrateDelete:
         return true;
     default:
         return false;
@@ -101,6 +103,11 @@ FileAction extrapolateFileAction(std::string& action)
     {
         return FileAction::FileArchive;
     }
+    if (FAKE_INTEGRATION_DELETE_ACTION_NAME == action)
+    {
+        return FileAction::FileIntegrateDelete;
+    }
+
 
     // That's all the actions known at the time of writing.
     // An unknown type, probably some future Perforce version with a new kind of action.

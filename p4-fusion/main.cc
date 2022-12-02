@@ -193,8 +193,10 @@ int Main(int argc, char** argv)
 		// Note: even if the branch doesn't exist, this returns some data.
 		// TODO discover if the branch actually exists.
 		// TODO should allow declaring whether the branch name is the left-hand side or the right-hand side.
+		// TODO figure out how to strip off depot path prefix to get a shared path between the branch sides.
 		branchBuilder.InsertBranchSpec(branchSpecName, otherBranchName, p4.Branch(branchSpecName).GetBranchData().view);    
         PRINT("Including branch: " << branchSpecName << " <-> " << otherBranchName << ")");
+		WARN("BRANCH SPECS ARE NOT PROPERLY SUPPORTED.  They will not map to a shared file path.");
 
 		// TODO ensure the client is within the branch map views.
     }
@@ -220,7 +222,7 @@ int Main(int argc, char** argv)
 		PRINT("" << i << ": action=" << fileLogData.at(i).action);
 		PRINT("" << i << ": changelist=" << fileLogData.at(i).changelist);
 		PRINT("" << i << ": revision=" << fileLogData.at(i).revision);
-		PRINT("" << i << ": source=" << fileLogData.at(i).sourceDepotFile << fileLogData.at(i).sourceRevision);
+		PRINT("" << i << ": source=" << fileLogData.at(i).sourceDepotFile << "#" << fileLogData.at(i).sourceRevision);
 	}
 	std::vector<BranchedFiles> branchGroups = branches.ParseAffectedFiles(fileLogData);
 	for (int i = 0; i < branchGroups.size(); i++)
@@ -230,7 +232,7 @@ int Main(int argc, char** argv)
 		std::vector<FileRevision>& files = branchGroups.at(i).files;
 		for (int j = 0; j < files.size(); j++)
 		{
-			PRINT("  " << j << " :: [" << files.at(j).target << "] <= [" << files.at(j).source << "]");
+			PRINT("  " << j << " :: " << files.at(j).targetRel << " [" << files.at(j).targetDepot << "] <= [" << files.at(j).sourceDepot << "]");
 		}
 	}
 

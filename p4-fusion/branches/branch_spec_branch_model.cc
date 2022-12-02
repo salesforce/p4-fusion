@@ -15,6 +15,8 @@ BranchSpecBranchModel::BranchSpecBranchModel(const std::string leftBranchName, c
 
 std::vector<BranchedFiles> BranchSpecBranchModel::GetBranchedFiles(const std::vector<FileRevision> changedFiles) const
 {
+    // BIG TODO map the targetDepot to a client view location.
+
     BranchedFiles leftToRight;
     leftToRight.sourceBranch = m_leftBranchName;
     leftToRight.hasSource = true;
@@ -36,15 +38,15 @@ std::vector<BranchedFiles> BranchSpecBranchModel::GetBranchedFiles(const std::ve
     for (int i = 0; i < changedFiles.size(); i++)
     {
         const FileRevision& rev = changedFiles.at(i);
-        std::string targetFromLeft = m_map.TranslateLeftToRight(rev.target);
-        std::string targetFromRight = m_map.TranslateRightToLeft(rev.target);
+        std::string targetFromLeft = m_map.TranslateLeftToRight(rev.targetDepot);
+        std::string targetFromRight = m_map.TranslateRightToLeft(rev.targetDepot);
 
         // This changed file can only go in one place.  Do this checking carefully.
         if (!targetFromRight.empty())
         {
             // The affected file is on the right side.
             // If it's a merge, then the target is on the right side.  The source, if valid, will be on the left.
-            if (rev.hasSource && rev.source == targetFromRight)
+            if (rev.hasSource && rev.sourceDepot == targetFromRight)
             {
                 // It's a branch.
                 leftToRight.files.push_back(rev);
@@ -59,7 +61,7 @@ std::vector<BranchedFiles> BranchSpecBranchModel::GetBranchedFiles(const std::ve
         {
             // The affected file is on the left side.
             // If it's a merge, then the target is on the left side.  The source, if valid, will be on the right.
-            if (rev.hasSource && rev.source == targetFromLeft)
+            if (rev.hasSource && rev.sourceDepot == targetFromLeft)
             {
                 // It's a branch.
                 rightToLeft.files.push_back(rev);

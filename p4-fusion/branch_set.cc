@@ -6,7 +6,7 @@
  */
 #include "branch_set.h"
 #include <stdexcept>
-#include "branches/consuming_branch_model.h"
+#include "branches/client_view_branch_model.h"
 
 
 BranchSetBuilder::BranchSetBuilder(std::vector<std::string>& clientViewMapping)
@@ -53,7 +53,7 @@ std::vector<std::unique_ptr<BranchModel>> BranchSetBuilder::CompleteBranches(con
     if (m_branchSpecs.empty())
     {
         // Require that at least one "branch" exists.
-        m_branchSpecs.push_back(std::unique_ptr<BranchModel>(new ConsumingBranchModel(defaultBranchName)));
+        m_branchSpecs.push_back(std::unique_ptr<BranchModel>(new ClientViewBranchModel(defaultBranchName, m_clientViewMapping)));
     }
     m_closed = true;
     return std::move(m_branchSpecs);
@@ -83,7 +83,7 @@ std::vector<BranchedFiles> BranchSet::ParseAffectedFiles(const std::vector<FileD
         {
             // It's okay to add, but may not be a valid branch.
             FileRevision rev;
-            rev.target = fileData.depotFile;
+            rev.targetDepot = fileData.depotFile;
             rev.hasSource = false;
             rev.operation = (
                 fileData.IsDeleted()
@@ -96,7 +96,7 @@ std::vector<BranchedFiles> BranchSet::ParseAffectedFiles(const std::vector<FileD
             )
             {
                 // It's an allowed integration.
-                rev.source = fileData.sourceDepotFile;
+                rev.sourceDepot = fileData.sourceDepotFile;
                 rev.hasSource = true;
                 rev.operation = FileOperation::FileMerged;
             }

@@ -21,8 +21,10 @@ std::vector<BranchedFiles> ClientViewBranchModel::GetBranchedFiles(const std::ve
     for (int i = 0; i < changedFiles.size(); i++)
     {
         const FileRevision& rev = changedFiles.at(i);
-        if (m_view.IsInLeft(rev.target))
+        std::string clientAbsPath = m_view.TranslateLeftToRight(rev.targetDepot);
+        if (!clientAbsPath.empty())
         {
+            // Set the relative location to the client 
             ret.files.push_back(rev);
         }
     }

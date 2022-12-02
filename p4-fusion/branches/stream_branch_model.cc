@@ -12,6 +12,7 @@
 #include <stdexcept>
 
 #include "common.h"
+#include "utils/std_helpers.h"
 
 std::string createStreamPrefix(const std::string& srcDepotName)
 {
@@ -26,35 +27,30 @@ StreamBranchModel::StreamBranchModel(const std::string srcDepotName)
 }
 
 
-// splitStreamPath split the stream path into depot name, stream name, using //(depotname)/1 stream depth pattern.
-// Returns two empty lists if it's not the right format.
-std::array<std::string, 2> splitStreamPath(const std::string& streamPath)
+// splitStreamFilePath split the file based on the format "//(depotname)/(streamname)/(path)"
+// returns {depotname, streamname, path}; path will NOT start with a '/'.
+std::array<std::string, 3> splitStreamFilePath(const std::string& filePath)
 {
-    if (streamPath.find_first_of("//") != 0)
+    if (filePath.find_first_of("//") != 0)
     {
-        return {"", ""};
+        return {"", "", ""};
     }
-    size_t spos = streamPath.rfind('/');
-    if (spos <= 2 || spos == std::string::npos)
+    std::array<std::string, 2> depotRest = STDHelpers::SplitAt(filePath, '/', 2);
+    if (depotRest[1].empty())
     {
-        // == 2 means "///", which is just wrong.
-        return {"", ""};
+        // Not in right format.
+        return {"", "", ""};
     }
-    std::string depotName = streamPath.substr(2, spos - 2);
-    if (depotName.find('/') != std::string::npos)
-    {
-        // more than one path separator in stream path.
-        return {"", ""};
-    }
-    std::string streamName = streamPath.substr(spos + 1);
-    return {depotName, streamName};
+    std::array<std::string, 2> streamPath = STDHelpers::SplitAt(depotRest[1], '/');
+    // Allow the path not not be present.
+    return {depotRest[0], streamPath[0], streamPath[1]};
 }
 
 
 StreamBranchModel::StreamBranchModel(const std::string streamPath, bool streamPathMarker)
 {
-    std::array<std::string, 2> parts = splitStreamPath(streamPath);
-    if (parts[0].size() <= 0 || parts[1].size() <= 0)
+    std::array<std::string, 3> parts = splitStreamFilePath(streamPath);
+    if (parts[0].empty() || parts[1].empty())
     {
         throw std::invalid_argument("invalid stream path");
     }
@@ -62,31 +58,6 @@ StreamBranchModel::StreamBranchModel(const std::string streamPath, bool streamPa
     m_streamPrefix = createStreamPrefix(parts[0]);
     // We can avoid the extra check and split.
     m_streams.push_back(parts[1]);
-}
-
-
-// splitStreamFilePath split the file based on the format "//(depotname)/(streamname)/(path)"
-// returns {depotname, streamname, /path}; path will start with a '/'.
-std::array<std::string, 3> splitStreamFilePath(const std::string& filePath)
-{
-    if (filePath.find_first_of("//") != 0)
-    {
-        return {"", "", ""};
-    }
-    size_t spos = filePath.find('/', 2);
-    if (spos <= 2 || spos == std::string::npos)
-    {
-        return {"", "", ""};
-    }
-    std::string depotName = filePath.substr(2, spos - 2);
-    size_t ppos = filePath.find('/', spos + 1);
-    if (ppos <= spos + 1 || ppos == std::string::npos)
-    {
-        return {"", "", ""};
-    }
-    std::string streamName = filePath.substr(spos + 1, ppos - spos - 1);
-    std::string path = filePath.substr(ppos);
-    return {depotName, streamName, path};
 }
 
 
@@ -98,11 +69,13 @@ struct streamIntegrationMap {
     void addTarget(std::string& targetBranch, const FileRevision& rev);
 };
 
+
 void streamIntegrationMap::addTarget(std::string& targetBranch, const FileRevision& rev)
 {
     std::string src = "";
     addMerge(src, targetBranch, rev);
 }
+
 
 void streamIntegrationMap::addMerge(std::string& sourceBranch, std::string& targetBranch, const FileRevision& rev)
 {
@@ -138,16 +111,20 @@ std::vector<BranchedFiles> StreamBranchModel::GetBranchedFiles(const std::vector
     streamIntegrationMap streamIntegrations;
     for (int i = 0; i < changedFiles.size(); i++)
     {
-        const FileRevision& rev = changedFiles.at(i);
-        std::array<std::string, 3> targetParts = splitStreamFilePath(rev.target);
+        const FileRevision& origRev = changedFiles.at(i);
+        std::array<std::string, 3> targetParts = splitStreamFilePath(origRev.targetDepot);
         if (targetParts[0] == m_depotName && ContainsStreamName(targetParts[1]))
         {
             // It's a valid target within a stream.
+            // Make a copy of the file revision, as we're going to alter it.
+            FileRevision rev = origRev;
+            rev.targetRel = targetParts[2];
+
             // Now see if it's a merge.
             bool isNormal = true;
             if (rev.hasSource)
             {
-                std::array<std::string, 3> sourceParts = splitStreamFilePath(rev.source);
+                std::array<std::string, 3> sourceParts = splitStreamFilePath(rev.sourceDepot);
                 if (
                         // Is the source also related to the same depot?
                         sourceParts[0] == m_depotName
@@ -184,6 +161,7 @@ bool StreamBranchModel::IsStreamPathInDepot(const std::string& streamPath) const
     return streamPath.find(m_streamPrefix) == 0;
 }
 
+
 bool StreamBranchModel::ContainsStreamName(const std::string& streamName) const
 {
     for (int i = 0; i < m_streams.size(); i++)
@@ -199,7 +177,7 @@ bool StreamBranchModel::ContainsStreamName(const std::string& streamName) const
 
 bool StreamBranchModel::InsertStream(const std::string streamPath)
 {
-    std::array<std::string, 2> parts = splitStreamPath(streamPath);
+    std::array<std::string, 3> parts = splitStreamFilePath(streamPath);
     if (m_depotName == parts[0])
     {
         m_streams.push_back(parts[1]);

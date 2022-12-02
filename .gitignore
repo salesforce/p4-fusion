@@ -10,3 +10,6 @@ helix-core-api/
 # Depot conversion results
 clones/
 *.log
+
+# Testing failures
+core

@@ -19,8 +19,11 @@ enum FileOperation {
 struct FileRevision {
     // Deleted files have a target.
     // hasSource only has meaning for integrated files.
-    std::string source;
-    std::string target;
+    // "Depot" is the full Perforce depot path
+    // "Rel" is the relative path that makes the branches look the same.
+    std::string sourceDepot;
+    std::string targetDepot;
+    std::string targetRel;
     bool hasSource;
     FileOperation operation;
 };
@@ -46,5 +49,7 @@ public:
 
     // GetBranchedFiles determine the file operations that were "branches" from one branch to another.
     // Each returned element group is one complete branch operation.
+    // On input, the FileRevision.targetRel is empty.
+    // On output, the FileRevision.targetRel should change to a path as it will appear in the git tree.
     virtual std::vector<BranchedFiles> GetBranchedFiles(const std::vector<FileRevision> changedFiles) const = 0;
 };

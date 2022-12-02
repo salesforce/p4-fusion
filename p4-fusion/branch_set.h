@@ -21,7 +21,8 @@
 struct BranchSetBuilder
 {
 private:
-    std::vector<std::string>& m_clientViewMapping;
+    // TODO should this be a ref to the client view?  Could lead to memory issues.
+    const std::vector<std::string> m_clientViewMapping;
     std::vector<std::unique_ptr<BranchModel>> m_branchSpecs;
     std::unique_ptr<AllStreamsBranchModel> m_streamsBranch;
     bool m_hasMergeableBranch;
@@ -32,7 +33,7 @@ public:
     void InsertStreamPath(const std::string streamPath);
     void InsertBranchSpec(const std::string leftBranchName, const std::string rightBranchName, const std::vector<std::string> view);
     
-    std::vector<std::string>& GetClientViewMapping() const { return m_clientViewMapping; };
+    std::vector<std::string> GetClientViewMapping() const { return m_clientViewMapping; };
     std::vector<std::unique_ptr<BranchModel>> CompleteBranches(const std::string defaultBranchName);
 
     bool HasMergeableBranch() const { return m_hasMergeableBranch; };

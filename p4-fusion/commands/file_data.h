@@ -9,6 +9,7 @@
 #include "common.h"
 #include "utils/std_helpers.h"
 
+#define FAKE_INTEGRATION_DELETE_ACTION_NAME "FAKE merge delete"
 
 // See https://www.perforce.com/manuals/cmdref/Content/CmdRef/p4_fstat.html
 // for a list of actions.
@@ -23,6 +24,8 @@ enum FileAction {
     FileImport, // import
     FilePurge, // purge
     FileArchive, // archive
+
+    FileIntegrateDelete, // artificial action to reflect an integration that happened that caused a delete
 };
 
 
