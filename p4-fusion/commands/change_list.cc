@@ -8,6 +8,8 @@
 
 #include "p4_api.h"
 #include "describe_result.h"
+#include "filelog_result.h"
+#include "fstat_change_result.h"
 #include "print_result.h"
 #include "utils/std_helpers.h"
 
@@ -21,20 +23,46 @@ ChangeList::ChangeList(const std::string& clNumber, const std::string& clDescrip
 {
 }
 
-void ChangeList::PrepareDownload()
+void ChangeList::PrepareDownload(const bool includeBranchSource)
 {
 	ChangeList& cl = *this;
 
-	ThreadPool::GetSingleton()->AddJob([&cl](P4API* p4)
-	    {
-		    const DescribeResult& describe = p4->Describe(cl.number);
-		    cl.changedFiles = std::move(describe.GetFileData());
-		    {
-			    std::unique_lock<std::mutex> lock((*(cl.canDownloadMutex)));
-			    *cl.canDownload = true;
-		    }
-		    cl.canDownloadCV->notify_all();
-	    });
+	// Cut and paste fun.
+	if (includeBranchSource)
+	{
+		// If we don't care about branches, then p4->Describe is much faster.
+		ThreadPool::GetSingleton()->AddJob([&cl](P4API* p4)
+			{
+				const DescribeResult& describe = p4->Describe(cl.number);
+				cl.changedFiles = std::move(describe.GetFileData());
+
+				{
+					std::unique_lock<std::mutex> lock((*(cl.canDownloadMutex)));
+					*cl.canDownload = true;
+				}
+				cl.canDownloadCV->notify_all();
+			});
+	}
+	else
+	{
+		// Otherwise, we need to run filelog to get where the file came from.
+		// Note that the filelog won't include the source changelist, but
+		// that doesn't give us too much information; even a full branch
+		// copy will have the target files listing the from-file with
+		// different changelists than the point-in-time source branch's
+		// changelist.
+		ThreadPool::GetSingleton()->AddJob([&cl](P4API* p4)
+			{
+				const FileLogResult& filelog = p4->FileLog(cl.number);
+				cl.changedFiles = std::move(filelog.GetFileData());
+
+				{
+					std::unique_lock<std::mutex> lock((*(cl.canDownloadMutex)));
+					*cl.canDownload = true;
+				}
+				cl.canDownloadCV->notify_all();
+			});
+	}
 }
 
 void ChangeList::StartDownload(const std::string& depotPath, const int& printBatch, const bool includeBinaries)

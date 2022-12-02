@@ -6,26 +6,20 @@
  */
 #pragma once
 
-#include <vector>
 #include <string>
+#include <vector>
 
 #include "common.h"
 #include "result.h"
 
-class ClientResult : public Result
+
+// Just the changelist for the requested files.
+class FstatChangelistResult : public Result
 {
-public:
-	struct ClientSpecData
-	{
-		std::string client;
-		std::vector<std::string> mapping;
-	};
-
-private:
-	ClientSpecData m_Data;
+	std::vector<std::string> m_Changelists;
 
 public:
-	const ClientSpecData& GetClientSpec() const { return m_Data; }
+	std::vector<std::string>& GetChangelists() { return m_Changelists; }
 
 	void OutputStat(StrDict* varList) override;
 };

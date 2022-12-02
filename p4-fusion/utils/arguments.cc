@@ -16,7 +16,7 @@ void Arguments::Initialize(int argc, char** argv)
 
 		if (m_Parameters.find(name) != m_Parameters.end())
 		{
-			m_Parameters.at(name).value = argv[i + 1];
+			m_Parameters.at(name).valueList.push_back(argv[i + 1]);
 			m_Parameters.at(name).isSet = true;
 		}
 		else
@@ -36,9 +36,23 @@ std::string Arguments::GetParameter(const std::string& argName) const
 {
 	if (m_Parameters.find(argName) != m_Parameters.end())
 	{
-		return m_Parameters.at(argName).value;
+		if (m_Parameters.at(argName).valueList.empty())
+		{
+			return "";
+		}
+		// Use the last specified version of the parameter.
+		return m_Parameters.at(argName).valueList.back();
 	}
 	return "";
+}
+
+std::vector<std::string> Arguments::GetParameterList(const std::string& argName) const
+{
+	if (m_Parameters.find(argName) != m_Parameters.end())
+	{
+		return m_Parameters.at(argName).valueList;
+	}
+	return {};
 }
 
 bool Arguments::IsValid() const
@@ -70,7 +84,7 @@ std::string Arguments::Help()
 		}
 		else
 		{
-			text += "\033[93m[Optional, Default is " + (paramData.value.empty() ? "empty" : paramData.value) + "]\033[0m";
+			text += "\033[93m[Optional, Default is " + (paramData.valueList.empty() ? "empty" : paramData.valueList.back()) + "]\033[0m";
 		}
 		text += "\n        " + paramData.helpText + "\n\n";
 	}
@@ -83,7 +97,6 @@ void Arguments::RequiredParameter(const std::string& name, const std::string& he
 	ParameterData paramData;
 	paramData.isRequired = true;
 	paramData.isSet = false;
-	paramData.value = "";
 	paramData.helpText = helpText;
 
 	m_Parameters[name] = paramData;
@@ -94,7 +107,17 @@ void Arguments::OptionalParameter(const std::string& name, const std::string& de
 	ParameterData paramData;
 	paramData.isRequired = false;
 	paramData.isSet = false;
-	paramData.value = defaultValue;
+	paramData.valueList.push_back(defaultValue);
+	paramData.helpText = helpText;
+
+	m_Parameters[name] = paramData;
+}
+
+void Arguments::OptionalParameterList(const std::string& name, const std::string& helpText)
+{
+	ParameterData paramData;
+	paramData.isRequired = false;
+	paramData.isSet = false;
 	paramData.helpText = helpText;
 
 	m_Parameters[name] = paramData;

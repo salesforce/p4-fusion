@@ -12,20 +12,22 @@
 #include "common.h"
 #include "result.h"
 
-class ClientResult : public Result
+
+class BranchResult : public Result
 {
 public:
-	struct ClientSpecData
+	struct BranchData
 	{
-		std::string client;
-		std::vector<std::string> mapping;
+		std::string name;
+		std::string description;
+		std::vector<std::string> view;
 	};
 
 private:
-	ClientSpecData m_Data;
+	BranchData m_Data;
 
 public:
-	const ClientSpecData& GetClientSpec() const { return m_Data; }
+	BranchData& GetBranchData() { return m_Data; };
 
 	void OutputStat(StrDict* varList) override;
 };

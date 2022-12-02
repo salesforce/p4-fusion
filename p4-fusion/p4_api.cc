@@ -100,23 +100,18 @@ bool P4API::IsFileUnderDepotPath(const std::string& fileRevision, const std::str
 
 bool P4API::IsDepotPathUnderClientSpec(const std::string& depotPath)
 {
-	MapApi depotMap;
-	depotMap.Insert(StrBuf(depotPath.c_str()), MapType::MapInclude);
-
-	return MapApi::Join(&m_ClientMapping, &depotMap) != nullptr;
+	return m_ClientMapping.IsInLeft(depotPath);
 }
 
 bool P4API::IsFileUnderClientSpec(const std::string& fileRevision)
 {
-	StrBuf to;
-	StrBuf from(fileRevision.c_str());
-	return m_ClientMapping.Translate(from, to);
+	return m_ClientMapping.IsInRight(fileRevision);
 }
 
-bool P4API::IsDeleted(const std::string& action)
-{
-	return STDHelpers::Contains(action, "delete");
-}
+// bool P4API::IsDeleted(const std::string& action)
+// {
+// 	return STDHelpers::Contains(action, "delete");
+// }
 
 bool P4API::IsBinary(const std::string& fileType)
 {
@@ -177,44 +172,7 @@ bool P4API::ShutdownLibraries()
 
 void P4API::AddClientSpecView(const std::vector<std::string>& viewStrings)
 {
-	for (int i = 0; i < viewStrings.size(); i++)
-	{
-		const std::string& view = viewStrings.at(i);
-
-		bool modification = view.front() != '/';
-
-		MapType mapType = MapType::MapInclude;
-		switch (view.front())
-		{
-		case '+':
-			mapType = MapType::MapOverlay;
-			break;
-		case '-':
-			mapType = MapType::MapExclude;
-			break;
-		case '&':
-			mapType = MapType::MapOneToMany;
-			break;
-		}
-
-		// Skip the first few characters to only match with the right half.
-		size_t right = view.find("//", 3);
-		if (right == std::string::npos)
-		{
-			WARN("Found a one-sided client mapping, ignoring...");
-			continue;
-		}
-
-		std::string mapStrLeft = view.substr(0, right).c_str() + modification;
-		mapStrLeft.erase(mapStrLeft.find_last_not_of(' ') + 1);
-		mapStrLeft.erase(0, mapStrLeft.find_first_not_of(' '));
-
-		std::string mapStrRight = view.substr(right).c_str();
-		mapStrRight.erase(mapStrRight.find_last_not_of(' ') + 1);
-		mapStrRight.erase(0, mapStrRight.find_first_not_of(' '));
-
-		m_ClientMapping.Insert(StrBuf(mapStrLeft.c_str()), StrBuf(mapStrRight.c_str()), mapType);
-	}
+	m_ClientMapping.InsertTranslationMapping(viewStrings);
 }
 
 void P4API::UpdateClientSpec()
@@ -316,6 +274,22 @@ ChangesResult P4API::OldestChange(const std::string& path)
 	                                     });
 }
 
+BranchResult P4API::Branch(const std::string& name)
+{
+	return Run<BranchResult>("branch", {
+											 "-o", // output
+											 name // Name of the branch
+									   });
+}
+
+StreamResult P4API::Stream(const std::string& name)
+{
+	return Run<StreamResult>("stream", {
+											"-o", // output
+											name // Name of the stream
+									   });
+}
+
 DescribeResult P4API::Describe(const std::string& cl)
 {
 	MTR_SCOPE("P4", __func__);
@@ -328,9 +302,28 @@ FilesResult P4API::Files(const std::string& path)
 	return Run<FilesResult>("files", { path });
 }
 
+FileLogResult P4API::FileLog(const std::string& changelist)
+{
+	return Run<FileLogResult>("filelog", {
+											"-c", // restrict output to a single changelist
+											changelist,
+											"-m1", // don't get the full history, just the first entry.
+											"//..." // rather than require the path to be passed in, just list all files.
+										 });
+}
+
 SizesResult P4API::Size(const std::string& file)
 {
 	return Run<SizesResult>("sizes", { "-a", "-s", file });
+}
+
+FstatChangelistResult P4API::FileRevisionChanges(const std::vector<std::string> pathsWithRev)
+{
+	std::vector<std::string> args = {
+		"-T", "headChange" // limit output to just the changelist number.
+	};
+	args.insert(args.end(), pathsWithRev.begin(), pathsWithRev.end());
+	return Run<FstatChangelistResult>("fstat", args);
 }
 
 Result P4API::Sync()

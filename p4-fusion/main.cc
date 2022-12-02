@@ -20,6 +20,9 @@
 #include "thread_pool.h"
 #include "p4_api.h"
 #include "git_api.h"
+#include "branch_set.h"
+#include "branches/all_streams_branch_model.h"
+#include "branches/branch_spec_branch_model.h"
 
 #include "p4/p4libs.h"
 #include "minitrace.h"
@@ -38,6 +41,8 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->RequiredParameter("--user", "Specify which P4USER to use. Please ensure that the user is logged in.");
 	Arguments::GetSingleton()->RequiredParameter("--client", "Name/path of the client workspace specification.");
 	Arguments::GetSingleton()->RequiredParameter("--lookAhead", "How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?");
+	Arguments::GetSingleton()->OptionalParameterList("--branch", "P4 Branch Spec name + ':' + the branch-to name.  When branches are used, only the specified branches will be transferred to the new Git repo.  This option may be set multiple times.");
+	Arguments::GetSingleton()->OptionalParameterList("--stream", "P4 Stream depot path.  When branches are used, only the specified branches will be transferred to the new Git repo.  This option may be set multiple times.");
 	Arguments::GetSingleton()->OptionalParameter("--networkThreads", std::to_string(std::thread::hardware_concurrency()), "Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.");
 	Arguments::GetSingleton()->OptionalParameter("--printBatch", "1", "Specify the p4 print batch size.");
 	Arguments::GetSingleton()->OptionalParameter("--maxChanges", "-1", "Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.");
@@ -69,6 +74,8 @@ int Main(int argc, char** argv)
 	const bool includeBinaries = Arguments::GetSingleton()->GetIncludeBinaries() != "false";
 	const int maxChanges = std::atoi(Arguments::GetSingleton()->GetMaxChanges().c_str());
 	const int flushRate = std::atoi(Arguments::GetSingleton()->GetFlushRate().c_str());
+	const std::vector<std::string> branchNames = Arguments::GetSingleton()->GetBranchSpecs();
+	const std::vector<std::string> streamPaths = Arguments::GetSingleton()->GetStreams();
 
 	PRINT("Running p4-fusion from: " << argv[0]);
 
@@ -172,6 +179,42 @@ int Main(int argc, char** argv)
 	PRINT("Profiling Flush Rate: " << flushRate);
 	PRINT("No Colored Output: " << noColor);
 
+	BranchSetBuilder branchBuilder(P4API::ClientSpec.mapping);
+	for (std::vector<std::string>::const_iterator i = branchNames.begin(); i != branchNames.end(); ++i)
+	{
+		size_t colPos = (*i).find_first_of(':');
+		if (colPos == std::string::npos)
+		{
+			ERR("Branch argument '" << (*i) << "' must be in the format 'branch spec name:other branch name'.");
+			return 1;
+		}
+		std::string branchSpecName = (*i).substr(0, colPos);
+		std::string otherBranchName = (*i).substr(colPos + 1);
+		// Note: even if the branch doesn't exist, this returns some data.
+		// TODO discover if the branch actually exists.
+		// TODO should allow declaring whether the branch name is the left-hand side or the right-hand side.
+		branchBuilder.InsertBranchSpec(branchSpecName, otherBranchName, p4.Branch(branchSpecName).GetBranchData().view);    
+        PRINT("Including branch: " << branchSpecName << " <-> " << otherBranchName << ")");
+
+		// TODO ensure the client is within the branch map views.
+    }
+
+
+	for (std::vector<std::string>::const_iterator i = streamPaths.begin(); i != streamPaths.end(); ++i)
+	{
+		StreamResult::StreamData stream = p4.Stream(*i).GetStreamData();
+		branchBuilder.InsertStreamPath(stream.stream);
+        PRINT("Including stream: " << stream.stream);
+
+		// TODO ensure the stream is within the branch map views.
+    }
+
+	// FIXME START DEBUGGING TESTS
+
+	return 0;
+	// FIXME END DEBUGGING TESTS
+
+
 	GitAPI git(fsyncEnable);
 
 	if (!git.InitializeRepository(srcPath))
@@ -225,8 +268,8 @@ int Main(int argc, char** argv)
 	{
 		ChangeList& cl = changes.at(currentCL);
 
-		// Start gathering changed files with `p4 describe`
-		cl.PrepareDownload();
+		// Start gathering changed files with `p4 describe` or `p4 filelog`
+		cl.PrepareDownload(true);
 
 		lastDownloadedCL = currentCL;
 	}
@@ -281,7 +324,7 @@ int Main(int argc, char** argv)
 		{
 			if (file.shouldCommit) // If the file survived the filters while being downloaded
 			{
-				if (p4.IsDeleted(file.action))
+				if (file.IsDeleted())
 				{
 					git.RemoveFileFromIndex(depotPath, file.depotFile);
 				}
@@ -321,7 +364,7 @@ int Main(int argc, char** argv)
 		{
 			lastDownloadedCL++;
 			ChangeList& downloadCL = changes.at(lastDownloadedCL);
-			downloadCL.PrepareDownload();
+			downloadCL.PrepareDownload(false);
 			downloadCL.StartDownload(depotPath, printBatch, includeBinaries);
 		}
 

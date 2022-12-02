@@ -37,7 +37,7 @@ struct ChangeList
 	ChangeList& operator=(ChangeList&&) = default;
 	~ChangeList() = default;
 
-	void PrepareDownload();
+	void PrepareDownload(const bool includeBranchSource);
 	void StartDownload(const std::string& depotPath, const int& printBatch, const bool includeBinaries);
 	void Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles, std::shared_ptr<std::vector<FileData*>> printBatchFileData);
 	void WaitForDownload();
