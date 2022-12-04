@@ -40,6 +40,7 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->RequiredParameter("--client", "Name/path of the client workspace specification.");
 	Arguments::GetSingleton()->RequiredParameter("--lookAhead", "How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?");
 	Arguments::GetSingleton()->OptionalParameterList("--branch", "A directory name under the '--path' to use as a branch.  If given, only the specified branches will be used, and each of these becomes the Git branch name.  This option may be set multiple times.");
+	Arguments::GetSingleton()->OptionalParameter("--noMerge", "false", "Disable performing a Git merge when a Perforce branch integrates (or copies, etc) into another branch.");
 	Arguments::GetSingleton()->OptionalParameter("--networkThreads", std::to_string(std::thread::hardware_concurrency()), "Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.");
 	Arguments::GetSingleton()->OptionalParameter("--printBatch", "1", "Specify the p4 print batch size.");
 	Arguments::GetSingleton()->OptionalParameter("--maxChanges", "-1", "Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.");
@@ -59,11 +60,13 @@ int Main(int argc, char** argv)
 		return 0;
 	}
 
-	bool noColor = Arguments::GetSingleton()->GetNoColor() != "false";
+	const bool noColor = Arguments::GetSingleton()->GetNoColor() != "false";
 	if (noColor)
 	{
 		Log::DisableColoredOutput();
 	}
+
+	const bool noMerge = Arguments::GetSingleton()->GetNoMerge() != "false";
 
 	const std::string depotPath = Arguments::GetSingleton()->GetDepotPath();
 	const std::string srcPath = Arguments::GetSingleton()->GetSourcePath();
@@ -329,26 +332,6 @@ int Main(int argc, char** argv)
 				git.SetActiveBranch(branchGroup.targetBranch);
 			}
 
-			if (branchGroup.hasSource)
-			{
-				// Perform the select file checkout...
-				std::string mergedCommitSHA = git.CreateNoopMergeFromBranch(
-					branchGroup.sourceBranch,
-					cl.number,
-					fullName,
-					email,
-					timezoneMinutes,
-					cl.timestamp);
-
-				SUCCESS(
-					"CL " << cl.number << " --> Commit " << mergedCommitSHA
-					<< " marked as merged from " << branchGroup.sourceBranch << ".");
-
-				// This cherry pick didn't actually update any files or commit.
-				// That is done like any other file update.
-			}
-
-
 			for (auto& file : branchGroup.files)
 			{
 				if (file.IsDeleted())
@@ -364,20 +347,34 @@ int Main(int argc, char** argv)
 				file.Clear();
 			}
 
+			std::string mergeFrom = "";
+			if (branchGroup.hasSource && !noMerge)
+			{
+				// Only perform merging if the branch group explicitly declares that the change
+				// has a source, and if the user wants merging.
+				mergeFrom = branchGroup.sourceBranch;
+			}
+
 			std::string commitSHA = git.Commit(depotPath,
 				cl.number,
 				fullName,
 				email,
 				timezoneMinutes,
 				cl.description,
-				cl.timestamp);
+				cl.timestamp,
+				mergeFrom);
 
+			// For scripting/testing purposes...
+			PRINT("COMMIT:" << commitSHA << ":" << cl.number << ":" << branchGroup.targetBranch << ":");
 			SUCCESS(
 				"CL " << cl.number << " --> Commit " << commitSHA
 					<< " with " << branchGroup.files.size() << " files"
 					<< (branchGroup.targetBranch.empty()
 						? ""
 						: (" to branch " + branchGroup.targetBranch))
+					<< (branchGroup.sourceBranch.empty()
+						? ""
+						: (" from branch " + branchGroup.sourceBranch))
 					<< ".");
 		}
 		SUCCESS(

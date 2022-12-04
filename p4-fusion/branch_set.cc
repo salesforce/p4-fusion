@@ -179,8 +179,13 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
         // If we have branches, then possibly sort the file into a branch group.
         if (HasMergeableBranch())
         {
+            // [0] == branch name, [1] == relative path in the branch.
             std::array<std::string, 2> branchPath = splitBranchPath(relativeDepotPath);
-            if (branchPath[0].empty() || branchPath[1].empty() || !isValidBranch(branchPath[0]))
+            if (
+                branchPath[0].empty()
+                || branchPath[1].empty() ||
+                !isValidBranch(branchPath[0])
+            )
             {
                 // not a valid branch file.  skip it.
                 continue;
@@ -194,11 +199,16 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
             if (fileData.IsIntegrated())
             {
                 // Only add the integration if the source is from a branch we care about.
+                // [0] == branch name, [1] == relative path in the branch.
                 std::array<std::string, 2> fromBranchPath = splitBranchPath(stripBasePath(fileData.GetFromDepotFile()));
                 if (
                     !fromBranchPath[0].empty()
                     && !fromBranchPath[1].empty()
                     && isValidBranch(fromBranchPath[0])
+
+                    // Can't have source and target be pointing to the same branch; that's not
+                    // a branch operation in the Git sense.
+                    && fromBranchPath[0] != branchPath[0]
                 )
                 {
                     // This is a valid integrate from a known source to a known target branch.

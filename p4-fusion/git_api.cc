@@ -102,10 +102,10 @@ void GitAPI::SetActiveBranch(const std::string& branchName)
 	if (errorCode == GIT_ENOTFOUND)
 	{
 		// Create the branch from the first index.
-		git_commit* tailCommit = nullptr;
-		GIT2(git_commit_lookup(&tailCommit, m_Repo, &m_FirstCommit));
-		GIT2(git_branch_create(&branch, m_Repo, branchName.c_str(), tailCommit, 0));
-		git_commit_free(tailCommit);
+		git_commit* firstCommit = nullptr;
+		GIT2(git_commit_lookup(&firstCommit, m_Repo, &m_FirstCommitOid));
+		GIT2(git_branch_create(&branch, m_Repo, branchName.c_str(), firstCommit, 0));
+		git_commit_free(firstCommit);
 	}
 
 	// Make head point to the branch.
@@ -114,70 +114,22 @@ void GitAPI::SetActiveBranch(const std::string& branchName)
 	git_reference_free(head);
 	git_reference_free(branch);
 
+	// Now update the files in the index to match the content of the commit pointed at by HEAD.
+	git_oid oidParentCommit;
+	GIT2(git_reference_name_to_id(&oidParentCommit, m_Repo, "HEAD"));
+
+	git_commit* headCommit = nullptr;
+	GIT2(git_commit_lookup(&headCommit, m_Repo, &oidParentCommit));
+
+	git_tree* headCommitTree = nullptr;
+	GIT2(git_commit_tree(&headCommitTree, headCommit));
+
+	GIT2(git_index_read_tree(m_Index, headCommitTree));
+
+	git_tree_free(headCommitTree);
+	git_commit_free(headCommit);
+
 	m_CurrentBranch = branchName;
-}
-
-std::string GitAPI::CreateNoopMergeFromBranch(
-		const std::string& sourceBranch,
-	    const std::string& cl,
-	    const std::string& user,
-	    const std::string& email,
-	    const int& timezone,
-	    const int64_t& timestamp)
-{
-	MTR_SCOPE("Git", __func__);
-
-	int errorCode;
-	// Look up the head branch commit
-	git_commit* branchCommit = nullptr;
-	git_oid branchOid;
-	errorCode = git_reference_name_to_id(&branchOid, m_Repo, ("refs/heads/" + sourceBranch).c_str());
-	if (errorCode != 0 && errorCode != GIT_ENOTFOUND)
-	{
-		GIT2(errorCode);
-	}
-	if (errorCode == GIT_ENOTFOUND)
-	{
-		// Create the branch from the first index.
-		GIT2(git_commit_lookup(&branchCommit, m_Repo, &m_FirstCommit));
-		git_reference *branch;
-		GIT2(git_branch_create(&branch, m_Repo, sourceBranch.c_str(), branchCommit, 0));
-		git_reference_free(branch);
-	}
-	else
-	{
-		// Find the head commit.
-		GIT2(git_commit_lookup(&branchCommit, m_Repo, &branchOid));
-	}
-
-	git_reference* ourRef;
-	GIT2(git_repository_head(&ourRef, m_Repo));
-	git_commit *ourCommit = nullptr;
-	GIT2(git_reference_peel((git_object **)&ourCommit, ourRef, GIT_OBJECT_COMMIT));
-
-	// Then make the commit with multiple parents.
-
-	git_oid commitTreeID;
-	GIT2(git_index_write_tree_to(&commitTreeID, m_Index, m_Repo));
-
-	git_tree* commitTree = nullptr;
-	GIT2(git_tree_lookup(&commitTree, m_Repo, &commitTreeID));
-
-	git_signature* author = nullptr;
-	GIT2(git_signature_new(&author, user.c_str(), email.c_str(), timestamp, timezone));
-
-	git_oid commitOid;
-	const git_commit *parents[] = {ourCommit, branchCommit};
-	std::string commitMsg = cl + " - merge from " + sourceBranch;
-	GIT2(git_commit_create(&commitOid, m_Repo, "HEAD", author, author, "UTF-8", commitMsg.c_str(), commitTree, 2, parents));
-
-	// Clean up
-	git_signature_free(author);
-	git_tree_free(commitTree);
-	git_commit_free(ourCommit);
-	git_reference_free(ourRef);
-	git_commit_free(branchCommit);
-	return git_oid_tostr_s(&commitOid);
 }
 
 
@@ -232,7 +184,7 @@ void GitAPI::CreateIndex()
 		git_revwalk_new(&walk, m_Repo);
 		git_revwalk_sorting(walk, GIT_SORT_TOPOLOGICAL);
 		git_revwalk_push_head(walk);
-		git_revwalk_next(&m_FirstCommit, walk);
+		git_revwalk_next(&m_FirstCommitOid, walk);
 
 		WARN("Loaded index was refreshed to match the tree of the current HEAD commit");
 	}
@@ -254,14 +206,14 @@ void GitAPI::CreateIndex()
 		git_object* parent = nullptr;
 		git_revparse_ext(&parent, &ref, m_Repo, "HEAD");
 
-		GIT2(git_commit_create_v(&m_FirstCommit, m_Repo, "HEAD", author, author, "UTF-8", "Initial repository.", commitTree, parent ? 1 : 0, parent));
+		GIT2(git_commit_create_v(&m_FirstCommitOid, m_Repo, "HEAD", author, author, "UTF-8", "Initial repository.", commitTree, parent ? 1 : 0, parent));
 
 		git_object_free(parent);
 		git_reference_free(ref);
 		git_signature_free(author);
 		git_tree_free(commitTree);
 
-		WARN("No HEAD commit was found. Created a fresh index " << git_oid_tostr_s(&m_FirstCommit) << ".");
+		WARN("No HEAD commit was found. Created a fresh index " << git_oid_tostr_s(&m_FirstCommitOid) << ".");
 	}
 }
 
@@ -295,7 +247,8 @@ std::string GitAPI::Commit(
     const std::string& email,
     const int& timezone,
     const std::string& desc,
-    const int64_t& timestamp)
+    const int64_t& timestamp,
+	const std::string& mergeFromStream)
 {
 	MTR_SCOPE("Git", __func__);
 
@@ -308,23 +261,51 @@ std::string GitAPI::Commit(
 	git_signature* author = nullptr;
 	GIT2(git_signature_new(&author, user.c_str(), email.c_str(), timestamp, timezone));
 
-	git_reference* ref = nullptr;
-	git_object* parent = nullptr;
+	// -3 to remove the trailing "..."
+	std::string commitMsg = cl + " - " + desc + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl + "]";
+
+	// Find the parent commits.
+	// Order is very important.
+	std::vector<std::string> parentRefs = {"HEAD"};
+	if (!mergeFromStream.empty())
 	{
-		int error = git_revparse_ext(&parent, &ref, m_Repo, "HEAD");
-		if (error == GIT_ENOTFOUND)
+		parentRefs.push_back("refs/heads/" + mergeFromStream);
+	}
+
+	git_commit* parents[2];
+	int parentCount = 0;
+	for (std::string& parentRef : parentRefs)
+	{
+		git_oid refOid;
+		int errorCode = git_reference_name_to_id(&refOid, m_Repo, parentRef.c_str());
+		if (errorCode != 0 && errorCode != GIT_ENOTFOUND)
 		{
-			WARN("GitAPI: HEAD not found. Creating first commit");
+			GIT2(errorCode);
 		}
+		else if (errorCode != GIT_ENOTFOUND)
+		{
+			git_commit* refCommit = nullptr;
+			GIT2(git_commit_lookup(&refCommit, m_Repo, &refOid));
+			if (parentCount > 0)
+			{
+				commitMsg += "; merged from " + parentRef;
+			}
+			parents[parentCount++] = refCommit;
+		}
+		// Skip the reference if it wasn't found.  That means it doesn't
+		// exist yet, which means there wasn't a previous commit for it.
+		// Practically speaking, this should only happen in non-branching
+		// mode on the first commit.
 	}
 
 	git_oid commitID;
-	// -3 to remove the trailing "..."
-	std::string commitMsg = cl + " - " + desc + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl + "]";
-	GIT2(git_commit_create_v(&commitID, m_Repo, "HEAD", author, author, "UTF-8", commitMsg.c_str(), commitTree, parent ? 1 : 0, parent));
+	GIT2(git_commit_create(&commitID, m_Repo, "HEAD", author, author, "UTF-8", commitMsg.c_str(), commitTree, parentCount, (const git_commit**) parents));
 
-	git_object_free(parent);
-	git_reference_free(ref);
+	for (int i = 0; i < parentCount; i++)
+	{
+		git_commit_free(parents[i]);
+		parents[i] = nullptr;
+	}
 	git_signature_free(author);
 	git_tree_free(commitTree);
 
