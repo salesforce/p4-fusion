@@ -52,7 +52,5 @@ public:
     // "..." format
     void InsertPrefixedPaths(const std::string prefix, const std::vector<std::string>& paths);
 
-    void InsertStreamPaths(const std::string& leftPrefix, const std::string& rightPrefix, const std::vector<std::string>& paths, const MapType mapType);
-
     void InsertFileMap(const FileMap& src);
 };

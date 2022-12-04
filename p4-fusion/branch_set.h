@@ -8,37 +8,45 @@
 
 #include <string>
 #include <vector>
+#include <array>
 #include <memory>
+#include <stdexcept>
 
-#include "branches/file_map.h"
-#include "branches/branch_model.h"
-#include "branches/all_streams_branch_model.h"
-#include "branches/branch_spec_branch_model.h"
+#include "commands/file_map.h"
 #include "commands/file_data.h"
+#include "utils/std_helpers.h"
 
 
-// builder pattern for the branch set.
-struct BranchSetBuilder
+struct BranchedFileGroup
 {
-private:
-    // TODO should this be a ref to the client view?  Could lead to memory issues.
-    const std::vector<std::string> m_clientViewMapping;
-    std::vector<std::unique_ptr<BranchModel>> m_branchSpecs;
-    std::unique_ptr<AllStreamsBranchModel> m_streamsBranch;
-    bool m_hasMergeableBranch;
-    bool m_closed;
-
-public:
-    BranchSetBuilder(std::vector<std::string>& clientViewMapping);
-    void InsertStreamPath(const std::string streamPath);
-    void InsertBranchSpec(const std::string leftBranchName, const std::string rightBranchName, const std::vector<std::string> view);
-    
-    std::vector<std::string> GetClientViewMapping() const { return m_clientViewMapping; };
-    std::vector<std::unique_ptr<BranchModel>> CompleteBranches(const std::string defaultBranchName);
-
-    bool HasMergeableBranch() const { return m_hasMergeableBranch; };
+    // If a BranchedFiles collection hasSource == true,
+    // then all files in this collection MUST be a merge
+    // from the given source branch to the target branch.
+    // These branch names will be the Git branch names.
+    std::string sourceBranch;
+    std::string targetBranch;
+    bool hasSource;
+    std::vector<FileData> files;
 };
 
+
+struct ChangedFileGroups
+{
+private:
+    ChangedFileGroups();
+
+public:
+    std::vector<BranchedFileGroup> branchedFileGroups;
+    int totalFileCount;
+
+    // When all the file groups have finished being used,
+    // only then can we safely clear out the data.
+    void Clear();
+
+    ChangedFileGroups(std::vector<BranchedFileGroup>& groups, int totalFileCount);
+
+    static std::unique_ptr<ChangedFileGroups> Empty() { return std::unique_ptr<ChangedFileGroups>(new ChangedFileGroups); };
+};
 
 
 // A singular view on the branches and a base view (acts as a filter to trim down affected files).
@@ -46,18 +54,32 @@ public:
 struct BranchSet
 {
 private:
-    std::vector<std::unique_ptr<BranchModel>> m_branches;
+    // Technically, these should all be const.
+    const bool m_includeBinaries;
+    std::string m_basePath;
+    const std::vector<std::string> m_branches;
     FileMap m_view;
-    bool m_hasMergeableBranch;
+
+    // stripBasePath remove the base path from the depot path, or "" if not in the base path.
+    std::string stripBasePath(const std::string& depotPath) const;
+
+    // splitBranchPath extract the branch name and path under the branch (no leading '/' on the path)
+    //    relativeDepotPath - already stripped from running stripBasePath.
+    std::array<std::string, 2> splitBranchPath(const std::string& relativeDepotPath) const;
+
+    bool isValidBranch(const std::string& name) const;
 
 public:
-    BranchSet(const std::string defaultBranchName, BranchSetBuilder& builder);
+    BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const bool includeBinaries);
 
     // HasMergeableBranch is there a branch model that requires integration history?
-    bool HasMergeableBranch() const { return m_hasMergeableBranch; };
+    bool HasMergeableBranch() const { return !m_branches.empty(); };
 
     // ParseAffectedFiles create collections of merges and commits.
     // Breaks up the files into those that are within the view, with each item in the
     // list is its own target Git branch.
-    std::vector<BranchedFiles> ParseAffectedFiles(const std::vector<FileData>& cl) const;
+    // This also has the side-effect of populating the relative path value in the file data.
+    //   ... the FileData object is copied, but it's underlying shared data is shared.  So, this
+    //       breaks the const.
+    std::unique_ptr<ChangedFileGroups> ParseAffectedFiles(const std::vector<FileData>& cl) const;
 };

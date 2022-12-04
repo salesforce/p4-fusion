@@ -55,6 +55,5 @@ public:
 	std::string GetMaxChanges() const { return GetParameter("--maxChanges"); };
 	std::string GetFlushRate() const { return GetParameter("--flushRate"); };
 	std::string GetNoColor() const { return GetParameter("--noColor"); };
-	std::vector<std::string> GetBranchSpecs() const { return GetParameterList("--branch"); };
-	std::vector<std::string> GetStreams() const { return GetParameterList("--stream"); };
+	std::vector<std::string> GetBranches() const { return GetParameterList("--branch"); };
 };

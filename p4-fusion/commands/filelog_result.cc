@@ -11,20 +11,27 @@
 //   is its own entry.
 void FileLogResult::OutputStat(StrDict* varList)
 {
-    FileData entry;
-    entry.depotFile = varList->GetVar("depotFile")->Text();
+	StrPtr* depotFile = varList->GetVar("depotFile");
+	if (!depotFile)
+	{
+		// Quick exit if the object returned is not a file
+		return;
+	}
+    std::string depotFileStr = depotFile->Text();
     // Only get the first record...
-    entry.revision = varList->GetVar("rev0")->Text();
-    PRINT("Read depot file " << m_FileData.size() << " " << entry.depotFile << "#" << entry.revision);
-    entry.changelist = varList->GetVar("change0")->Text();
-    entry.type = varList->GetVar("type0")->Text();
-    entry.SetAction(varList->GetVar("action0")->Text());
+    // std::string changelist = varList->GetVar(("change0").c_str())->Text();
+	std::string type = varList->GetVar("type0")->Text();
+	std::string revision = varList->GetVar("rev0")->Text();
+	std::string action = varList->GetVar("action0")->Text();
 
+	m_FileData.push_back(FileData(depotFileStr, revision, action, type));
+	FileData& fileData = m_FileData.back();
+
+    // Could optimize here by only performing this loop if the action type is
+    //   an integration style action (entry->isIntegration == true).
+    //   That needs testing, though.
 	int i = 0;
 	StrPtr* how = nullptr;
-
-    // Optimization: only perform this loop if the action type is
-    //   an integration style action.
 	while (true)
 	{
 		std::string indexString = std::to_string(i++);
@@ -57,24 +64,18 @@ void FileLogResult::OutputStat(StrDict* varList)
         {
             // The action needs to be marked as something very clearly a delete.
             // See file_data.h and file_data.cc for this special replaced action.
-            entry.SetAction(FAKE_INTEGRATION_DELETE_ACTION_NAME);
+            fileData.SetFakeIntegrationDeleteAction();
         }
 
         if (STDHelpers::EndsWith(howStr, " from"))
         {
             // copy or integrate or branch or move or archive from a location.
-            entry.sourceDepotFile = varList->GetVar(("file0," + indexString).c_str())->Text();
-            // already includes the '#' on it.  Strip it off for consistency with .revision value
-            std::string sourceRev = varList->GetVar(("erev0," + indexString).c_str())->Text();
-            if (STDHelpers::StartsWith(sourceRev, "#"))
-            {
-                sourceRev.erase(0, 1);
-            }
-            entry.sourceRevision = sourceRev;
-            PRINT("   " << entry.action << " <- " << entry.sourceDepotFile << "#" << entry.sourceRevision);
+            std::string fromDepotFile = varList->GetVar(("file0," + indexString).c_str())->Text();
+            std::string fromRev = varList->GetVar(("erev0," + indexString).c_str())->Text();
+            fileData.SetFromDepotFile(fromDepotFile, fromRev);
+
+            // Don't look for any other integration history; there can (should?) be at most one.
             break;
         }
 	}
-
-    m_FileData.push_back(entry);
 }

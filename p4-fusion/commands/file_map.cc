@@ -188,16 +188,6 @@ void FileMap::InsertPrefixedPaths(const std::string prefix, const std::vector<st
 }
 
 
-void FileMap::InsertStreamPaths(const std::string& leftPrefix, const std::string& rightPrefix, const std::vector<std::string>& paths, const MapType mapType)
-{
-	for (int i = 0; i < paths.size(); i++)
-	{
-        std::string view = paths.at(i);
-        insertMapping(leftPrefix + view, rightPrefix + view, mapType);
-	}
-}
-
-
 void FileMap::copyMapApiInto(MapApi& map) const
 {
     // MapAPI is poorly written and doesn't declare things as const when it should.

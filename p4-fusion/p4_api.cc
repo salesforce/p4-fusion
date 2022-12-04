@@ -108,16 +108,6 @@ bool P4API::IsFileUnderClientSpec(const std::string& fileRevision)
 	return m_ClientMapping.IsInRight(fileRevision);
 }
 
-bool P4API::IsBinary(const std::string& fileType)
-{
-	return STDHelpers::Contains(fileType, "binary");
-}
-
-bool P4API::IsExecutable(const std::string& fileType)
-{
-	return STDHelpers::Contains(fileType, "+x");
-}
-
 bool P4API::CheckErrors(Error& e, StrBuf& msg)
 {
 	if (e.Test())
@@ -269,32 +259,11 @@ ChangesResult P4API::OldestChange(const std::string& path)
 	                                     });
 }
 
-BranchResult P4API::Branch(const std::string& name)
-{
-	return Run<BranchResult>("branch", {
-											 "-o", // output
-											 name // Name of the branch
-									   });
-}
-
-StreamResult P4API::Stream(const std::string& name)
-{
-	return Run<StreamResult>("stream", {
-											"-o", // output
-											name // Name of the stream
-									   });
-}
-
 DescribeResult P4API::Describe(const std::string& cl)
 {
 	MTR_SCOPE("P4", __func__);
 	return Run<DescribeResult>("describe", { "-s", // Omit the diffs
 	                                           cl });
-}
-
-FilesResult P4API::Files(const std::string& path)
-{
-	return Run<FilesResult>("files", { path });
 }
 
 FileLogResult P4API::FileLog(const std::string& changelist)

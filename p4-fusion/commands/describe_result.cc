@@ -20,17 +20,12 @@ int DescribeResult::OutputStatPartial(StrDict* varList)
 		// Quick exit if the object returned is not a file
 		return 0;
 	}
-	StrPtr* type = varList->GetVar(("type" + indexString).c_str());
-	StrPtr* revision = varList->GetVar(("rev" + indexString).c_str());
-	StrPtr* action = varList->GetVar(("action" + indexString).c_str());
+	std::string depotFileStr = depotFile->Text();
+	std::string type = varList->GetVar(("type" + indexString).c_str())->Text();
+	std::string revision = varList->GetVar(("rev" + indexString).c_str())->Text();
+	std::string action = varList->GetVar(("action" + indexString).c_str())->Text();
 
-	m_FileData.push_back(FileData {});
-	FileData* fileData = &m_FileData.back();
-
-	fileData->depotFile = depotFile->Text();
-	fileData->revision = revision->Text();
-	fileData->type = type->Text();
-	fileData->action = action->Text();
+	m_FileData.push_back(FileData(depotFileStr, revision, action, type));
 
 	return 1;
 }

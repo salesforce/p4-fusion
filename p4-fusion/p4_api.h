@@ -12,11 +12,9 @@
 
 #include "common.h"
 
-#include "branches/file_map.h"
-#include "commands/branch_result.h"
+#include "commands/file_map.h"
 #include "commands/changes_result.h"
 #include "commands/describe_result.h"
-#include "commands/files_result.h"
 #include "commands/filelog_result.h"
 #include "commands/sizes_result.h"
 #include "commands/sync_result.h"
@@ -24,7 +22,6 @@
 #include "commands/users_result.h"
 #include "commands/info_result.h"
 #include "commands/client_result.h"
-#include "commands/stream_result.h"
 #include "commands/fstat_change_result.h"
 #include "commands/test_result.h"
 
@@ -65,9 +62,6 @@ public:
 	bool IsFileUnderDepotPath(const std::string& fileRevision, const std::string& depotPath);
 	bool IsDepotPathUnderClientSpec(const std::string& depotPath);
 	bool IsFileUnderClientSpec(const std::string& fileRevision);
-	// bool IsDeleted(const std::string& action);
-	bool IsBinary(const std::string& fileType);
-	bool IsExecutable(const std::string& fileType);
 
 	void AddClientSpecView(const std::vector<std::string>& viewStrings);
 
@@ -78,10 +72,7 @@ public:
 	ChangesResult ChangesFromTo(const std::string& path, const std::string& from, const std::string& to);
 	ChangesResult LatestChange(const std::string& path);
 	ChangesResult OldestChange(const std::string& path);
-	BranchResult Branch(const std::string& name);
-	StreamResult Stream(const std::string& name);
 	DescribeResult Describe(const std::string& cl);
-	FilesResult Files(const std::string& path);
 	FileLogResult FileLog(const std::string& changelist);
 	SizesResult Size(const std::string& file);
 	FstatChangelistResult FileRevisionChanges(const std::vector<std::string> pathsWithRev);

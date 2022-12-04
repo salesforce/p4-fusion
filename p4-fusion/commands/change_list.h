@@ -12,7 +12,7 @@
 #include <mutex>
 
 #include "common.h"
-#include "file_data.h"
+#include "../branch_set.h"
 
 struct ChangeList
 {
@@ -20,7 +20,7 @@ struct ChangeList
 	std::string user;
 	std::string description;
 	int64_t timestamp = 0;
-	std::vector<FileData> changedFiles;
+	std::unique_ptr<ChangedFileGroups> changedFileGroups = ChangedFileGroups::Empty();
 
 	std::shared_ptr<std::atomic<int>> filesDownloaded = std::make_shared<std::atomic<int>>(-1);
 	std::shared_ptr<std::atomic<bool>> canDownload = std::make_shared<std::atomic<bool>>(false);
@@ -37,8 +37,8 @@ struct ChangeList
 	ChangeList& operator=(ChangeList&&) = default;
 	~ChangeList() = default;
 
-	void PrepareDownload(const bool includeBranchSource);
-	void StartDownload(const std::string& depotPath, const int& printBatch, const bool includeBinaries);
+	void PrepareDownload(const BranchSet& branchSet);
+	void StartDownload(const int& printBatch);
 	void Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles, std::shared_ptr<std::vector<FileData*>> printBatchFileData);
 	void WaitForDownload();
 	void Clear();
