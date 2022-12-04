@@ -11,6 +11,17 @@ static const std::string EMPTY_STRING = "";
 static const std::array<std::string, 2> INVALID_BRANCH_PATH {EMPTY_STRING, EMPTY_STRING};
 
 
+std::vector<std::string> BranchedFileGroup::GetRelativeFileNames()
+{
+    std::vector<std::string> ret;
+    for (auto& fileData : files)
+    {
+        ret.push_back(fileData.GetRelativePath());
+    }
+    return ret;
+}
+
+
 ChangedFileGroups::ChangedFileGroups()
     : totalFileCount(0)
 {

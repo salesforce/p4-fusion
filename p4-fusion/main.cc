@@ -154,6 +154,8 @@ int Main(int argc, char** argv)
 		P4API::CommandRefreshThreshold = std::atoi(refreshStr.c_str());
 	}
 
+	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, includeBinaries);
+
 	bool profiling = false;
 #if MTR_ENABLED
 	profiling = true;
@@ -175,10 +177,9 @@ int Main(int argc, char** argv)
 	PRINT("Profiling Flush Rate: " << flushRate);
 	PRINT("No Colored Output: " << noColor);
 
-	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, includeBinaries);
-
 	// FIXME START DEBUGGING TESTS
 	// Note that, for debugging here, lookAhead is being used as a changelist number.
+	/*
 	const std::vector<FileData> fileLogData = std::move(p4.FileLog(lookAheadStr).GetFileData());
 	for (int i = 0; i < fileLogData.size(); i++)
 	{
@@ -204,6 +205,7 @@ int Main(int argc, char** argv)
 	}
 
 	return 0;
+	*/
 	// FIXME END DEBUGGING TESTS
 
 
@@ -322,20 +324,30 @@ int Main(int argc, char** argv)
 
 		for (auto& branchGroup : cl.changedFileGroups->branchedFileGroups)
 		{
-			// Check if the target branch exists yet.
-			// TODO IMPLEMENT
+			if (!branchGroup.targetBranch.empty())
+			{
+				git.SetActiveBranch(branchGroup.targetBranch);
+			}
 
 			if (branchGroup.hasSource)
 			{
-				// Check if the source branch exists; skip if it doesn't.
-				// TODO IMPLEMENT
+				// Perform the select file checkout...
+				std::string mergedCommitSHA = git.CreateNoopMergeFromBranch(
+					branchGroup.sourceBranch,
+					cl.number,
+					fullName,
+					email,
+					timezoneMinutes,
+					cl.timestamp);
 
-				// Perform a cherrypick + commit
-				// TODO IMPLEMENT
+				SUCCESS(
+					"CL " << cl.number << " --> Commit " << mergedCommitSHA
+					<< " marked as merged from " << branchGroup.sourceBranch << ".");
+
+				// This cherry pick didn't actually update any files or commit.
+				// That is done like any other file update.
 			}
 
-			// After the merge, some files may have been altered or come from some
-			// non-top revision of the source branch.  So still add in the files.
 
 			for (auto& file : branchGroup.files)
 			{
@@ -362,12 +374,20 @@ int Main(int argc, char** argv)
 
 			SUCCESS(
 				"CL " << cl.number << " --> Commit " << commitSHA
-					<< " with " << cl.changedFileGroups->totalFileCount << " files (" << i + 1 << "/" << changes.size() << "|" << lastDownloadedCL - (long long)i << "). "
-					<< "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
-					<< ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
+					<< " with " << branchGroup.files.size() << " files"
+					<< (branchGroup.targetBranch.empty()
+						? ""
+						: (" to branch " + branchGroup.targetBranch))
+					<< ".");
 		}
+		SUCCESS(
+			"CL " << cl.number << " with "
+				<< cl.changedFileGroups->totalFileCount << " files (" << i + 1 << "/" << changes.size() << "|" << lastDownloadedCL - (long long)i << "). "
+				<< "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
+				<< ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
 		// Clear out finished changelist.
 		cl.Clear();
+
 
 		// Start downloading the CL chronologically after the last CL that was previously downloaded, if there's still some left
 		if (lastDownloadedCL + 1 < changes.size())

@@ -27,6 +27,9 @@ struct BranchedFileGroup
     std::string targetBranch;
     bool hasSource;
     std::vector<FileData> files;
+
+    // Get all the relative file names from each of the file data.
+    std::vector<std::string> GetRelativeFileNames();
 };
 
 
