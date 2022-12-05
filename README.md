@@ -44,6 +44,12 @@ These execution times are expected to scale as expected with larger depots (mill
 --lookAhead [Required]
         How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?
 
+--branch [Optional]
+        A branch to migrate under the depot path.  May be specified more than once.  If at least one is given and the noMerge option is false, then the Git repository will include merges between branches in the history.
+
+--noMerge [Optional, Default is false]
+        When false and at least one branch is given, then .  If this is true, then the Git history will not contain any merges, except for an artificial empty commit added at the root, which acts as a common source to make later merges easier.
+
 --maxChanges [Optional, Default is -1]
         Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.
 
@@ -74,6 +80,22 @@ These execution times are expected to scale as expected with larger depots (mill
 --user [Required]
         Specify which P4USER to use. Please ensure that the user is logged in.
 ```
+
+## Notes On Branches
+
+When at least one branch argument exists, the tool will enable branching mode.
+
+Branching mode currently only supports very simple branch layouts.  The format must be `//common/depot/path/branch-name`.  The common depot path is given as the `--path` argument, and each `--branch` argument specifies one branch name to inspect.  Branch names must be a directory name immediately after the path (it replaces the `...`).
+
+In branching mode, the generated Git repository will be initially populated with a zero-content commit.  This allows branches to later be merged without needing the `--allow-unrelated-histories` flag in Git.  All branches will have this in their history.
+
+If a Perforce changelist contains an integration like action (move, integrate, copy, etc.) from another branch listed in a `--branch` argument, then the tool will mark the Git commit with the integration as having two parents - the current branch and the source branch.  If a changelist contains integrations into one branch from multiple other branches, they are put into separate commits, each with just one source branch.  If a changelist contains integrations into multiple branches, then each one of those is also its own commit.
+
+Because Perforce integration isn't a 1-to-1 mapping onto Git merge, there can be situations where having the tool mark a commit as a merge, but not bringing over all the changes, leads to later merge logic not picking up every changed file correctly.  To avoid this situation, the `--noMerge true` will ensure they only have the single zero-content root commit shared, so any merge done after the migration will force full file tree inspection.
+
+## Checking Results
+
+The (testing document)[testing.md] describes methods for ensuring the Git repository contains commit-for-changelist identical files.
 
 ## Build
 
