@@ -22,7 +22,6 @@
 #include "commands/users_result.h"
 #include "commands/info_result.h"
 #include "commands/client_result.h"
-#include "commands/fstat_change_result.h"
 #include "commands/test_result.h"
 
 class P4API
@@ -75,7 +74,6 @@ public:
 	DescribeResult Describe(const std::string& cl);
 	FileLogResult FileLog(const std::string& changelist);
 	SizesResult Size(const std::string& file);
-	FstatChangelistResult FileRevisionChanges(const std::vector<std::string> pathsWithRev);
 	Result Sync();
 	Result Sync(const std::string& path);
 	SyncResult GetFilesToSyncAtCL(const std::string& path, const std::string& cl);

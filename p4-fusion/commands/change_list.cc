@@ -9,7 +9,6 @@
 #include "p4_api.h"
 #include "describe_result.h"
 #include "filelog_result.h"
-#include "fstat_change_result.h"
 #include "print_result.h"
 #include "utils/std_helpers.h"
 

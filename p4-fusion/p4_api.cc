@@ -281,15 +281,6 @@ SizesResult P4API::Size(const std::string& file)
 	return Run<SizesResult>("sizes", { "-a", "-s", file });
 }
 
-FstatChangelistResult P4API::FileRevisionChanges(const std::vector<std::string> pathsWithRev)
-{
-	std::vector<std::string> args = {
-		"-T", "headChange" // limit output to just the changelist number.
-	};
-	args.insert(args.end(), pathsWithRev.begin(), pathsWithRev.end());
-	return Run<FstatChangelistResult>("fstat", args);
-}
-
 Result P4API::Sync()
 {
 	return Run<Result>("sync", {});
