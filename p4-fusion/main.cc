@@ -179,38 +179,7 @@ int Main(int argc, char** argv)
 	PRINT("Profiling: " << profiling);
 	PRINT("Profiling Flush Rate: " << flushRate);
 	PRINT("No Colored Output: " << noColor);
-
-	// FIXME START DEBUGGING TESTS
-	// Note that, for debugging here, lookAhead is being used as a changelist number.
-	/*
-	const std::vector<FileData> fileLogData = std::move(p4.FileLog(lookAheadStr).GetFileData());
-	for (int i = 0; i < fileLogData.size(); i++)
-	{
-		PRINT("" << i << ": depotFile=" << fileLogData.at(i).GetDepotFile());
-		PRINT("" << i << ": action=" << fileLogData.at(i).GetAction());
-		// PRINT("" << i << ": changelist=" << fileLogData.at(i).GetChangelist());
-		PRINT("" << i << ": revision=" << fileLogData.at(i).GetRevision());
-		if (fileLogData.at(i).IsIntegrated())
-		{
-			PRINT("" << i << ": source=" << fileLogData.at(i).GetFromDepotFile() << "#" << fileLogData.at(i).GetFromRevision());
-		}
-	}
-	std::unique_ptr<ChangedFileGroups> changedFileGroups = branchSet.ParseAffectedFiles(fileLogData);
-	for (auto& branchGroup : changedFileGroups->branchedFileGroups)
-	{
-		PRINT("Branch " << branchGroup.targetBranch);
-		if (branchGroup.hasSource) PRINT("  <- " << branchGroup.sourceBranch);
-		std::vector<FileData>& files = branchGroup.files;
-		for (int j = 0; j < files.size(); j++)
-		{
-			PRINT("  " << j << " :: " << files.at(j).GetRelativePath() << " [" << files.at(j).GetDepotFile() << "] <= [" << files.at(j).GetFromDepotFile() << "]");
-		}
-	}
-
-	return 0;
-	*/
-	// FIXME END DEBUGGING TESTS
-
+	PRINT("Inspecting " << branchSet.Count() << " branches");
 
 	GitAPI git(fsyncEnable);
 

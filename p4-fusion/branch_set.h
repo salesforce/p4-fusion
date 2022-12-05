@@ -78,6 +78,8 @@ public:
     // HasMergeableBranch is there a branch model that requires integration history?
     bool HasMergeableBranch() const { return !m_branches.empty(); };
 
+    int Count() const { return m_branches.size(); };
+
     // ParseAffectedFiles create collections of merges and commits.
     // Breaks up the files into those that are within the view, with each item in the
     // list is its own target Git branch.
