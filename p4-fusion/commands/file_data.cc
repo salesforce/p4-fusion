@@ -128,7 +128,11 @@ void FileDataStore::SetAction(std::string fileAction)
 
 
     case FileAction::FileIntegrateDelete:
-        isIntegrated = true;
+        // This is the source of the integration,
+        //   so even though this causes a delete to happen,
+        //   as a source, there isn't something merging into this
+        //   change.
+        isIntegrated = false;
         isDeleted = true;
         break;
 

@@ -95,7 +95,11 @@ Because Perforce integration isn't a 1-to-1 mapping onto Git merge, there can be
 
 ## Checking Results
 
-The (testing document)[testing.md] describes methods for ensuring the Git repository contains commit-for-changelist identical files.
+In order to test the validity of the logic, we need to run the program over a Perforce depot and compare each changelist against the corresponding Git commit SHA, to ensure the files match up.
+
+The provided script [validate-migration.sh](validate-migration.sh) runs through every generated Git commit, and ensures the file state exactly matches the state of the Perforce depot.
+
+Because of the extra effort the script performs, expect it to take orders of magnitude longer than the original p4-fusion execution.
 
 ## Build
 

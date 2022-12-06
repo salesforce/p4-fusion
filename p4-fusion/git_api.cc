@@ -213,7 +213,7 @@ void GitAPI::CreateIndex()
 		git_signature_free(author);
 		git_tree_free(commitTree);
 
-		WARN("No HEAD commit was found. Created a fresh index " << git_oid_tostr_s(&m_FirstCommitOid) << ".");
+		WARN("No HEAD commit was found. Created fresh index " << git_oid_tostr_s(&m_FirstCommitOid) << ".");
 	}
 }
 
