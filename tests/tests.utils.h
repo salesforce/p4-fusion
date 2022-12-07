@@ -83,8 +83,16 @@ int TestUtils()
 	TEST(Time::GetTimezoneMinutes("2022/03/09 22:59:04 +0000 GMT"), +0);
 	TEST(Time::GetTimezoneMinutes("2022/03/09 22:59:04 -0000 GMT"), +0);
 
-	TEST(STDHelpers::SplitAt("depot/path/some/other", '/'), std::array<std::string, 2> { "depot", "path/some/other" });
-	TEST(STDHelpers::SplitAt("//depot/path", '/', 2), std::array<std::string, 2> { "depot", "path", "" });
+	{
+		auto actual = STDHelpers::SplitAt("depot/path/some/other", '/');
+		auto expected = std::array<std::string, 2> { "depot", "path/some/other" };
+		TEST(actual, expected);
+	}
+	{
+		auto actual = STDHelpers::SplitAt("//depot/path", '/', 2);
+		auto expected = std::array<std::string, 2> { "depot", "path" };
+		TEST(actual, expected);
+	}
 
 	TEST_END();
 	return TEST_EXIT_CODE();

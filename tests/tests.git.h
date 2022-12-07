@@ -17,7 +17,7 @@ int TestGitAPI()
 
 	TEST(git.InitializeRepository("/tmp/test-repo"), true);
 	git.CreateIndex();
-	git.AddFileToIndex("//a/b/c/...", "//a/b/c/foo.txt", { 'x', 'y', 'z' }, false);
+	git.AddFileToIndex("foo.txt", { 'x', 'y', 'z' }, false);
 	git.Commit(
 	    "//a/b/c/...",
 	    "12345678",
@@ -25,14 +25,15 @@ int TestGitAPI()
 	    "test@user",
 	    0,
 	    "Test description",
-	    10000000);
+	    10000000,
+		"");
 	TEST(git.IsHEADExists(), true);
 	TEST(git.IsRepositoryClonedFrom("//a/b/c/..."), true);
 	TEST(git.IsRepositoryClonedFrom("//a/b/c/d/..."), false);
 	TEST(git.IsRepositoryClonedFrom("//x/y/z/..."), false);
 	TEST(git.DetectLatestCL(), "12345678");
 
-	git.RemoveFileFromIndex("//a/b/c/...", "//a/b/c/foo.txt");
+	git.RemoveFileFromIndex("foo.txt");
 	git.Commit(
 	    "//a/b/c/...",
 	    "12345679",
@@ -40,7 +41,8 @@ int TestGitAPI()
 	    "test2@user",
 	    0,
 	    "Test description",
-	    20000000);
+	    20000000,
+		"");
 	TEST(git.IsHEADExists(), true);
 	TEST(git.IsRepositoryClonedFrom("//a/b/c/..."), true);
 	TEST(git.IsRepositoryClonedFrom("//a/b/c/d/..."), false);
