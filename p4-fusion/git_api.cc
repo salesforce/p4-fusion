@@ -93,7 +93,7 @@ void GitAPI::SetActiveBranch(const std::string& branchName)
 
 	int errorCode;
 	// Look up the branch.
-	git_reference *branch;
+	git_reference* branch;
 	errorCode = git_reference_lookup(&branch, m_Repo, ("refs/heads/" + branchName).c_str());
 	if (errorCode != 0 && errorCode != GIT_ENOTFOUND)
 	{
@@ -109,7 +109,7 @@ void GitAPI::SetActiveBranch(const std::string& branchName)
 	}
 
 	// Make head point to the branch.
-	git_reference *head;
+	git_reference* head;
 	GIT2(git_reference_symbolic_create(&head, m_Repo, "HEAD", git_reference_name(branch), 1, branchName.c_str()));
 	git_reference_free(head);
 	git_reference_free(branch);
@@ -131,7 +131,6 @@ void GitAPI::SetActiveBranch(const std::string& branchName)
 
 	m_CurrentBranch = branchName;
 }
-
 
 git_oid GitAPI::CreateBlob(const std::vector<char>& data)
 {
@@ -180,7 +179,7 @@ void GitAPI::CreateIndex()
 		git_commit_free(head_commit);
 
 		// Find the first commit
-		git_revwalk *walk;
+		git_revwalk* walk;
 		git_revwalk_new(&walk, m_Repo);
 		git_revwalk_sorting(walk, GIT_SORT_TOPOLOGICAL);
 		git_revwalk_push_head(walk);
@@ -248,7 +247,7 @@ std::string GitAPI::Commit(
     const int& timezone,
     const std::string& desc,
     const int64_t& timestamp,
-	const std::string& mergeFromStream)
+    const std::string& mergeFromStream)
 {
 	MTR_SCOPE("Git", __func__);
 
@@ -266,7 +265,7 @@ std::string GitAPI::Commit(
 
 	// Find the parent commits.
 	// Order is very important.
-	std::vector<std::string> parentRefs = {"HEAD"};
+	std::vector<std::string> parentRefs = { "HEAD" };
 	if (!mergeFromStream.empty())
 	{
 		parentRefs.push_back("refs/heads/" + mergeFromStream);
@@ -299,7 +298,7 @@ std::string GitAPI::Commit(
 	}
 
 	git_oid commitID;
-	GIT2(git_commit_create(&commitID, m_Repo, "HEAD", author, author, "UTF-8", commitMsg.c_str(), commitTree, parentCount, (const git_commit**) parents));
+	GIT2(git_commit_create(&commitID, m_Repo, "HEAD", author, author, "UTF-8", commitMsg.c_str(), commitTree, parentCount, (const git_commit**)parents));
 
 	for (int i = 0; i < parentCount; i++)
 	{

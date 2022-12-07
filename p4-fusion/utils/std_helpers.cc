@@ -46,7 +46,7 @@ std::array<std::string, 2> STDHelpers::SplitAt(const std::string& source, const 
 	size_t pos = source.find(c, startAt);
 	if (pos != std::string::npos && pos < source.size())
 	{
-		return {source.substr(startAt, pos - startAt), source.substr(pos + 1)};
+		return { source.substr(startAt, pos - startAt), source.substr(pos + 1) };
 	}
-	return {source, ""};
+	return { source, "" };
 }

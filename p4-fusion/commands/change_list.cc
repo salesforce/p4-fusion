@@ -19,7 +19,7 @@ ChangeList::ChangeList(const std::string& clNumber, const std::string& clDescrip
     , user(userID)
     , description(clDescription)
     , timestamp(clTimestamp)
-	, changedFileGroups(ChangedFileGroups::Empty())
+    , changedFileGroups(ChangedFileGroups::Empty())
 {
 }
 
@@ -28,32 +28,32 @@ void ChangeList::PrepareDownload(const BranchSet& branchSet)
 	ChangeList& cl = *this;
 
 	ThreadPool::GetSingleton()->AddJob([&cl, &branchSet](P4API* p4)
-		{
-			std::vector<FileData> changedFiles;
-			if (branchSet.HasMergeableBranch())
-			{
-				// If we care about branches, we need to run filelog to get where the file came from.
-				// Note that the filelog won't include the source changelist, but
-				// that doesn't give us too much information; even a full branch
-				// copy will have the target files listing the from-file with
-				// different changelists than the point-in-time source branch's
-				// changelist.
-				const FileLogResult& filelog = p4->FileLog(cl.number);
-				cl.changedFileGroups = branchSet.ParseAffectedFiles(filelog.GetFileData());
-			}
-			else
-			{
-				// If we don't care about branches, then p4->Describe is much faster.
-				const DescribeResult& describe = p4->Describe(cl.number);
-				cl.changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData());
-			}
+	    {
+		    std::vector<FileData> changedFiles;
+		    if (branchSet.HasMergeableBranch())
+		    {
+			    // If we care about branches, we need to run filelog to get where the file came from.
+			    // Note that the filelog won't include the source changelist, but
+			    // that doesn't give us too much information; even a full branch
+			    // copy will have the target files listing the from-file with
+			    // different changelists than the point-in-time source branch's
+			    // changelist.
+			    const FileLogResult& filelog = p4->FileLog(cl.number);
+			    cl.changedFileGroups = branchSet.ParseAffectedFiles(filelog.GetFileData());
+		    }
+		    else
+		    {
+			    // If we don't care about branches, then p4->Describe is much faster.
+			    const DescribeResult& describe = p4->Describe(cl.number);
+			    cl.changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData());
+		    }
 
-			{
-				std::unique_lock<std::mutex> lock((*(cl.canDownloadMutex)));
-				*cl.canDownload = true;
-			}
-			cl.canDownloadCV->notify_all();
-		});
+		    {
+			    std::unique_lock<std::mutex> lock((*(cl.canDownloadMutex)));
+			    *cl.canDownload = true;
+		    }
+		    cl.canDownloadCV->notify_all();
+	    });
 }
 
 void ChangeList::StartDownload(const int& printBatch)
@@ -71,7 +71,7 @@ void ChangeList::StartDownload(const int& printBatch)
 
 		    *cl.filesDownloaded = 0;
 
-			// early exit on everything-filtered scenario.
+		    // early exit on everything-filtered scenario.
 		    if (cl.changedFileGroups->totalFileCount <= 0)
 		    {
 			    return;
@@ -80,30 +80,30 @@ void ChangeList::StartDownload(const int& printBatch)
 		    std::shared_ptr<std::vector<std::string>> printBatchFiles = std::make_shared<std::vector<std::string>>();
 		    std::shared_ptr<std::vector<FileData*>> printBatchFileData = std::make_shared<std::vector<FileData*>>();
 
-			for (auto& branchedFileGroup : cl.changedFileGroups->branchedFileGroups)
-			{
-				// Note: the files at this point have already been filtered.
-				for (auto& fileData : branchedFileGroup.files)
-				{
-					if (fileData.IsDownloadNeeded())
-					{
-						fileData.SetPendingDownload();
-						printBatchFiles->push_back(fileData.GetDepotFile() + "#" + fileData.GetRevision());
-						printBatchFileData->push_back(&fileData);
+		    for (auto& branchedFileGroup : cl.changedFileGroups->branchedFileGroups)
+		    {
+			    // Note: the files at this point have already been filtered.
+			    for (auto& fileData : branchedFileGroup.files)
+			    {
+				    if (fileData.IsDownloadNeeded())
+				    {
+					    fileData.SetPendingDownload();
+					    printBatchFiles->push_back(fileData.GetDepotFile() + "#" + fileData.GetRevision());
+					    printBatchFileData->push_back(&fileData);
 
-						// Clear the batches if it fits
-						if (printBatchFiles->size() == printBatch)
-						{
-							cl.Flush(printBatchFiles, printBatchFileData);
+					    // Clear the batches if it fits
+					    if (printBatchFiles->size() == printBatch)
+					    {
+						    cl.Flush(printBatchFiles, printBatchFileData);
 
-							// We let go of the refs held by us and create new ones to queue the next batch
-							printBatchFiles = std::make_shared<std::vector<std::string>>();
-							printBatchFileData = std::make_shared<std::vector<FileData*>>();
-							// Now only the thread job has access to the older batch
-						}
-					}
-				}
-			}
+						    // We let go of the refs held by us and create new ones to queue the next batch
+						    printBatchFiles = std::make_shared<std::vector<std::string>>();
+						    printBatchFileData = std::make_shared<std::vector<FileData*>>();
+						    // Now only the thread job has access to the older batch
+					    }
+				    }
+			    }
+		    }
 
 		    // Flush any remaining files that were smaller in number than the total batch size
 		    if (!printBatchFiles->empty())

@@ -49,6 +49,6 @@ public:
 	    const int& timezone,
 	    const std::string& desc,
 	    const int64_t& timestamp,
-		const std::string& mergeFromStream);
+	    const std::string& mergeFromStream);
 	void CloseIndex();
 };

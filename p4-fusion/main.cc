@@ -325,35 +325,35 @@ int Main(int argc, char** argv)
 			}
 
 			std::string commitSHA = git.Commit(depotPath,
-				cl.number,
-				fullName,
-				email,
-				timezoneMinutes,
-				cl.description,
-				cl.timestamp,
-				mergeFrom);
+			    cl.number,
+			    fullName,
+			    email,
+			    timezoneMinutes,
+			    cl.description,
+			    cl.timestamp,
+			    mergeFrom);
 
 			// For scripting/testing purposes...
 			PRINT("COMMIT:" << commitSHA << ":" << cl.number << ":" << branchGroup.targetBranch << ":");
 			SUCCESS(
-				"CL " << cl.number << " --> Commit " << commitSHA
-					<< " with " << branchGroup.files.size() << " files"
-					<< (branchGroup.targetBranch.empty()
-						? ""
-						: (" to branch " + branchGroup.targetBranch))
-					<< (branchGroup.sourceBranch.empty()
-						? ""
-						: (" from branch " + branchGroup.sourceBranch))
-					<< ".");
+			    "CL " << cl.number << " --> Commit " << commitSHA
+			          << " with " << branchGroup.files.size() << " files"
+			          << (branchGroup.targetBranch.empty()
+			                     ? ""
+			                     : (" to branch " + branchGroup.targetBranch))
+			          << (branchGroup.sourceBranch.empty()
+			                     ? ""
+			                     : (" from branch " + branchGroup.sourceBranch))
+			          << ".");
 		}
 		SUCCESS(
-			"CL " << cl.number << " with "
-				<< cl.changedFileGroups->totalFileCount << " files (" << i + 1 << "/" << changes.size() << "|" << lastDownloadedCL - (long long)i << "). "
-				<< "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
-				<< ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
+		    "CL " << cl.number << " with "
+		          << cl.changedFileGroups->totalFileCount << " files (" << i + 1 << "/" << changes.size()
+		          << "|" << lastDownloadedCL - (long long)i
+		          << "). Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
+		          << ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
 		// Clear out finished changelist.
 		cl.Clear();
-
 
 		// Start downloading the CL chronologically after the last CL that was previously downloaded, if there's still some left
 		if (lastDownloadedCL + 1 < changes.size())

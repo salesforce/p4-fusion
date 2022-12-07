@@ -269,11 +269,11 @@ DescribeResult P4API::Describe(const std::string& cl)
 FileLogResult P4API::FileLog(const std::string& changelist)
 {
 	return Run<FileLogResult>("filelog", {
-											"-c", // restrict output to a single changelist
-											changelist,
-											"-m1", // don't get the full history, just the first entry.
-											"//..." // rather than require the path to be passed in, just list all files.
-										 });
+	                                         "-c", // restrict output to a single changelist
+	                                         changelist,
+	                                         "-m1", // don't get the full history, just the first entry.
+	                                         "//..." // rather than require the path to be passed in, just list all files.
+	                                     });
 }
 
 SizesResult P4API::Size(const std::string& file)
