@@ -26,7 +26,7 @@ int TestGitAPI()
 	    0,
 	    "Test description",
 	    10000000,
-		"");
+	    "");
 	TEST(git.IsHEADExists(), true);
 	TEST(git.IsRepositoryClonedFrom("//a/b/c/..."), true);
 	TEST(git.IsRepositoryClonedFrom("//a/b/c/d/..."), false);
@@ -42,7 +42,7 @@ int TestGitAPI()
 	    0,
 	    "Test description",
 	    20000000,
-		"");
+	    "");
 	TEST(git.IsHEADExists(), true);
 	TEST(git.IsRepositoryClonedFrom("//a/b/c/..."), true);
 	TEST(git.IsRepositoryClonedFrom("//a/b/c/d/..."), false);
