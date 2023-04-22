@@ -148,8 +148,12 @@ std::string GitAPI::DetectLatestCL()
 	GIT2(git_commit_lookup(&headCommit, m_Repo, &oid));
 
 	std::string message = git_commit_message(headCommit);
-	size_t clStart = message.find_last_of("change = ") + 1;
-	std::string cl(message.begin() + clStart, message.end() - 1);
+	// Look for the specific change message generated from the Commit method.
+	// Note that extra branching information can be added after it.
+	// ": change = " is 11 characters long.
+	size_t clStart = message.rfind(": change = ") + 11;
+	size_t clEnd = message.find(']', clStart);
+	std::string cl(message, clStart, clEnd - clStart);
 
 	git_commit_free(headCommit);
 
