@@ -68,7 +68,26 @@ BranchSet::BranchSet(std::vector<std::string>& clientViewMapping, const std::str
 
 std::array<std::string, 2> BranchSet::splitBranchPath(const std::string& relativeDepotPath) const
 {
-	return STDHelpers::SplitAt(relativeDepotPath, '/');
+	// Check if the relative depot path starts with any of the branches.
+	// This checks the branches in their stored order, which can mean that having a branch
+	// order like "//a/b/c" and "//a/b" will only work if the sub-branches are listed first.
+	// To do this properly, the stored branches should be scanned based on their length - longest
+	// first, but that's extra processing and code for a use case that is rare and has a manual
+	// work around (list branches in a specific order).
+	for (auto& branch : m_branches)
+	{
+		if (
+			// The relative depot branch, to match this branch path, must start with the
+			// branch path + "/".  The "StartsWith" is put at the end of the 'and' checks,
+			// because it takes the longest.
+			relativeDepotPath.size() > branch.size()
+			&& relativeDepotPath[branch.size()] == '/'
+			&& STDHelpers::StartsWith(relativeDepotPath, branch))
+		{
+			return {branch, relativeDepotPath.substr(branch.size() + 1)};
+		}
+	}
+	return {"", ""};
 }
 
 std::string BranchSet::stripBasePath(const std::string& depotPath) const
