@@ -71,45 +71,40 @@ void ChangeList::StartDownload(const int& printBatch)
 
 		    *cl.filesDownloaded = 0;
 
-		    // early exit on everything-filtered scenario.
-		    if (cl.changedFileGroups->totalFileCount <= 0)
-		    {
-			    return;
-		    }
-
 		    std::shared_ptr<std::vector<std::string>> printBatchFiles = std::make_shared<std::vector<std::string>>();
 		    std::shared_ptr<std::vector<FileData*>> printBatchFileData = std::make_shared<std::vector<FileData*>>();
-
-		    for (auto& branchedFileGroup : cl.changedFileGroups->branchedFileGroups)
+		    // Only perform the group inspection if there are files.
+		    if (cl.changedFileGroups->totalFileCount > 0)
 		    {
-			    // Note: the files at this point have already been filtered.
-			    for (auto& fileData : branchedFileGroup.files)
+			    for (auto& branchedFileGroup : cl.changedFileGroups->branchedFileGroups)
 			    {
-				    if (fileData.IsDownloadNeeded())
+				    // Note: the files at this point have already been filtered.
+				    for (auto& fileData : branchedFileGroup.files)
 				    {
-					    fileData.SetPendingDownload();
-					    printBatchFiles->push_back(fileData.GetDepotFile() + "#" + fileData.GetRevision());
-					    printBatchFileData->push_back(&fileData);
-
-					    // Clear the batches if it fits
-					    if (printBatchFiles->size() == printBatch)
+					    if (fileData.IsDownloadNeeded())
 					    {
-						    cl.Flush(printBatchFiles, printBatchFileData);
+						    fileData.SetPendingDownload();
+						    printBatchFiles->push_back(fileData.GetDepotFile() + "#" + fileData.GetRevision());
+						    printBatchFileData->push_back(&fileData);
 
-						    // We let go of the refs held by us and create new ones to queue the next batch
-						    printBatchFiles = std::make_shared<std::vector<std::string>>();
-						    printBatchFileData = std::make_shared<std::vector<FileData*>>();
-						    // Now only the thread job has access to the older batch
+						    // Clear the batches if it fits
+						    if (printBatchFiles->size() == printBatch)
+						    {
+							    cl.Flush(printBatchFiles, printBatchFileData);
+
+							    // We let go of the refs held by us and create new ones to queue the next batch
+							    printBatchFiles = std::make_shared<std::vector<std::string>>();
+							    printBatchFileData = std::make_shared<std::vector<FileData*>>();
+							    // Now only the thread job has access to the older batch
+						    }
 					    }
 				    }
 			    }
 		    }
 
-		    // Flush any remaining files that were smaller in number than the total batch size
-		    if (!printBatchFiles->empty())
-		    {
-			    cl.Flush(printBatchFiles, printBatchFileData);
-		    }
+		    // Flush any remaining files that were smaller in number than the total batch size.
+		    // Additionally, signal the batch processing end.
+		    cl.Flush(printBatchFiles, printBatchFileData);
 	    });
 }
 
@@ -118,15 +113,20 @@ void ChangeList::Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles
 	// Share ownership of this batch with the thread job
 	ThreadPool::GetSingleton()->AddJob([this, printBatchFiles, printBatchFileData](P4API* p4)
 	    {
-		    const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
-
-		    for (int i = 0; i < printBatchFiles->size(); i++)
+		    // Only perform the batch processing when there are files to process.
+		    if (!printBatchFileData->empty())
 		    {
-			    printBatchFileData->at(i)->MoveContentsOnceFrom(printData.GetPrintData().at(i).contents);
+			    const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
+
+			    for (int i = 0; i < printBatchFiles->size(); i++)
+			    {
+				    printBatchFileData->at(i)->MoveContentsOnceFrom(printData.GetPrintData().at(i).contents);
+			    }
+
+			    (*filesDownloaded) += printBatchFiles->size();
 		    }
 
-		    (*filesDownloaded) += printBatchFiles->size();
-
+		    // Ensure the notify_all is called.
 		    commitCV->notify_all();
 	    });
 }

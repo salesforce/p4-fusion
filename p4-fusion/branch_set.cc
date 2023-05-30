@@ -77,17 +77,17 @@ std::array<std::string, 2> BranchSet::splitBranchPath(const std::string& relativ
 	for (auto& branch : m_branches)
 	{
 		if (
-			// The relative depot branch, to match this branch path, must start with the
-			// branch path + "/".  The "StartsWith" is put at the end of the 'and' checks,
-			// because it takes the longest.
-			relativeDepotPath.size() > branch.size()
-			&& relativeDepotPath[branch.size()] == '/'
-			&& STDHelpers::StartsWith(relativeDepotPath, branch))
+		    // The relative depot branch, to match this branch path, must start with the
+		    // branch path + "/".  The "StartsWith" is put at the end of the 'and' checks,
+		    // because it takes the longest.
+		    relativeDepotPath.size() > branch.size()
+		    && relativeDepotPath[branch.size()] == '/'
+		    && STDHelpers::StartsWith(relativeDepotPath, branch))
 		{
-			return {branch, relativeDepotPath.substr(branch.size() + 1)};
+			return { branch, relativeDepotPath.substr(branch.size() + 1) };
 		}
 	}
-	return {"", ""};
+	return { "", "" };
 }
 
 std::string BranchSet::stripBasePath(const std::string& depotPath) const
