@@ -15,7 +15,7 @@ This tool solves some of the most impactful scaling and performance limitations 
 
 ## Performance
 
-Please be aware that this tool is fast enough to instantaneously generate a tremendous amount of load on your Perforce server (more than 150K requests in a few seconds if running with a couple hundred network threads). Since p4-fusion will continue generating load within the limits set using the runtime arguments, it needs careful monitoring to ensure that your Perforce server does not get impacted. 
+Please be aware that this tool is fast enough to instantaneously generate a tremendous amount of load on your Perforce server (more than 150K requests in a few seconds if running with a couple hundred network threads). Since p4-fusion will continue generating load within the limits set using the runtime arguments, it needs careful monitoring to ensure that your Perforce server does not get impacted.
 
 However, having no rate limits and running this tool with several hundred network threads (or more if possible) is the ideal case for achieving maximum speed in the conversion process.
 
@@ -45,7 +45,7 @@ These execution times are expected to scale as expected with larger depots (mill
         How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?
 
 --branch [Optional]
-        A branch to migrate under the depot path.  May be specified more than once.  If at least one is given and the noMerge option is false, then the Git repository will include merges between branches in the history.
+        A branch to migrate under the depot path.  May be specified more than once.  If at least one is given and the noMerge option is false, then the Git repository will include merges between branches in the history.  You may use the formatting 'depot/path:git-alias', separating the Perforce branch sub-path from the git alias name by a ':'; if the depot path contains a ':', then you must provide the git branch alias.
 
 --noMerge [Optional, Default is false]
         When false and at least one branch is given, then .  If this is true, then the Git history will not contain any merges, except for an artificial empty commit added at the root, which acts as a common source to make later merges easier.
@@ -92,6 +92,8 @@ In branching mode, the generated Git repository will be initially populated with
 If a Perforce changelist contains an integration like action (move, integrate, copy, etc.) from another branch listed in a `--branch` argument, then the tool will mark the Git commit with the integration as having two parents - the current branch and the source branch.  If a changelist contains integrations into one branch from multiple other branches, they are put into separate commits, each with just one source branch.  If a changelist contains integrations into multiple branches, then each one of those is also its own commit.
 
 Because Perforce integration isn't a 1-to-1 mapping onto Git merge, there can be situations where having the tool mark a commit as a merge, but not bringing over all the changes, leads to later merge logic not picking up every changed file correctly.  To avoid this situation, the `--noMerge true` will ensure they only have the single zero-content root commit shared, so any merge done after the migration will force full file tree inspection.
+
+If the Perforce tree contains sub-branches, such as `//base/tree/sub` being a sub-branch of `//base/tree`, then you can use the arguments `--path //base/... --branch tree/sub:tree-sub --branch tree`.  The ordering is important here - provide the deeper paths first to have them take priority over the others.  Because Git creates branches with '/' characters as implicit directories, you must provide the Git branch alias to prevent Git reporting an error where the branch "tree" can't be created because is already a directory, or "tree/sub" can't be created because "tree" isn't a directory.
 
 ## Checking Results
 

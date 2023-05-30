@@ -49,6 +49,19 @@ public:
 	static std::unique_ptr<ChangedFileGroups> Empty() { return std::unique_ptr<ChangedFileGroups>(new ChangedFileGroups); };
 };
 
+struct Branch
+{
+public:
+	const std::string depotBranchPath;
+	const std::string gitAlias;
+
+	Branch(const std::string& branch, const std::string& alias);
+
+	// splitBranchPath If the relativeDepotPath matches, returns {branch alias, branch file path}.
+	//   Otherwise, returns {"", ""}
+	std::array<std::string, 2> SplitBranchPath(const std::string& relativeDepotPath) const;
+};
+
 // A singular view on the branches and a base view (acts as a filter to trim down affected files).
 // Maps a changed file state to a list of resulting branches and affected files.
 struct BranchSet
@@ -57,7 +70,7 @@ private:
 	// Technically, these should all be const.
 	const bool m_includeBinaries;
 	std::string m_basePath;
-	const std::vector<std::string> m_branches;
+	const std::vector<Branch> m_branches;
 	FileMap m_view;
 
 	// stripBasePath remove the base path from the depot path, or "" if not in the base path.
@@ -66,8 +79,6 @@ private:
 	// splitBranchPath extract the branch name and path under the branch (no leading '/' on the path)
 	//    relativeDepotPath - already stripped from running stripBasePath.
 	std::array<std::string, 2> splitBranchPath(const std::string& relativeDepotPath) const;
-
-	bool isValidBranch(const std::string& name) const;
 
 public:
 	BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const bool includeBinaries);

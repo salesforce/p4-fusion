@@ -46,8 +46,68 @@ void ChangedFileGroups::Clear()
 	totalFileCount = 0;
 }
 
+Branch::Branch(const std::string& branch, const std::string& alias)
+    : depotBranchPath(branch)
+    , gitAlias(alias)
+{
+	if (depotBranchPath.empty())
+	{
+		throw std::invalid_argument("branch name is empty");
+	}
+	if (gitAlias.empty())
+	{
+		throw std::invalid_argument("branch alias is empty");
+	}
+}
+
+std::array<std::string, 2> Branch::SplitBranchPath(const std::string& relativeDepotPath) const
+{
+	if (
+	    // The relative depot branch, to match this branch path, must start with the
+	    // branch path + "/".  The "StartsWith" is put at the end of the 'and' checks,
+	    // because it takes the longest.
+	    relativeDepotPath.size() > depotBranchPath.size()
+	    && relativeDepotPath[depotBranchPath.size()] == '/'
+	    && STDHelpers::StartsWith(relativeDepotPath, depotBranchPath))
+	{
+		return { gitAlias, relativeDepotPath.substr(depotBranchPath.size() + 1) };
+	}
+	return { "", "" };
+}
+
+Branch createBranchFromPath(const std::string& depotBranchPath)
+{
+	std::string branchPath = std::string(depotBranchPath);
+	std::string alias = std::string(depotBranchPath);
+
+	// The formatting using a ':' to separate the branch path from the git alias MUST be
+	// the last ':' in the string.  This allows the command to work with branch paths that contain
+	// a ':' character, as long as the git alias does NOT contain a ':', and it implies that the git
+	// alias MUST be given.
+	size_t pos = depotBranchPath.rfind(':');
+	if (pos > 0 && depotBranchPath.size() > pos)
+	{
+		branchPath.erase(pos);
+		alias.erase(0, pos + 1);
+	}
+
+	STDHelpers::StripSurrounding(branchPath, '/');
+	STDHelpers::StripSurrounding(alias, '/');
+	return Branch(branchPath, alias);
+}
+
+std::vector<Branch> createBranchesFromPaths(const std::vector<std::string>& branches)
+{
+	std::vector<Branch> parsed;
+	for (auto& branch : branches)
+	{
+		parsed.push_back(createBranchFromPath(branch));
+	}
+	return parsed;
+}
+
 BranchSet::BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const bool includeBinaries)
-    : m_branches(branches)
+    : m_branches(createBranchesFromPaths(branches))
     , m_includeBinaries(includeBinaries)
 {
 	m_view.InsertTranslationMapping(clientViewMapping);
@@ -76,15 +136,10 @@ std::array<std::string, 2> BranchSet::splitBranchPath(const std::string& relativ
 	// work around (list branches in a specific order).
 	for (auto& branch : m_branches)
 	{
-		if (
-		    // The relative depot branch, to match this branch path, must start with the
-		    // branch path + "/".  The "StartsWith" is put at the end of the 'and' checks,
-		    // because it takes the longest.
-		    relativeDepotPath.size() > branch.size()
-		    && relativeDepotPath[branch.size()] == '/'
-		    && STDHelpers::StartsWith(relativeDepotPath, branch))
+		auto split = branch.SplitBranchPath(relativeDepotPath);
+		if (!split[0].empty() && !split[1].empty())
 		{
-			return { branch, relativeDepotPath.substr(branch.size() + 1) };
+			return split;
 		}
 	}
 	return { "", "" };
@@ -143,18 +198,6 @@ void branchIntegrationMap::addMerge(const std::string& sourceBranch, const std::
 	fileCount++;
 }
 
-bool BranchSet::isValidBranch(const std::string& name) const
-{
-	for (auto& branch : m_branches)
-	{
-		if (name == branch)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 // Post condition: all returned FileData (e.g. filtered for git commit) have the relativePath set.
 std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vector<FileData>& cl) const
 {
@@ -191,8 +234,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 			std::array<std::string, 2> branchPath = splitBranchPath(relativeDepotPath);
 			if (
 			    branchPath[0].empty()
-			    || branchPath[1].empty()
-			    || !isValidBranch(branchPath[0]))
+			    || branchPath[1].empty())
 			{
 				// not a valid branch file.  skip it.
 				continue;
@@ -211,7 +253,6 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 				if (
 				    !fromBranchPath[0].empty()
 				    && !fromBranchPath[1].empty()
-				    && isValidBranch(fromBranchPath[0])
 
 				    // Can't have source and target be pointing to the same branch; that's not
 				    // a branch operation in the Git sense.
