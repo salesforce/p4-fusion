@@ -8,6 +8,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 #include "common.h"
 
@@ -17,19 +18,21 @@ class Arguments
 	{
 		bool isRequired;
 		bool isSet;
-		std::string value;
+		std::vector<std::string> valueList;
 		std::string helpText;
 	};
 
 	std::map<std::string, ParameterData> m_Parameters;
 
 	std::string GetParameter(const std::string& argName) const;
+	std::vector<std::string> GetParameterList(const std::string& argName) const;
 
 public:
 	static Arguments* GetSingleton();
 
 	void RequiredParameter(const std::string& name, const std::string& helpText);
 	void OptionalParameter(const std::string& name, const std::string& defaultValue, const std::string& helpText);
+	void OptionalParameterList(const std::string& name, const std::string& helpText);
 	void Initialize(int argc, char** argv);
 	bool IsValid() const;
 	std::string Help();
@@ -52,4 +55,6 @@ public:
 	std::string GetMaxChanges() const { return GetParameter("--maxChanges"); };
 	std::string GetFlushRate() const { return GetParameter("--flushRate"); };
 	std::string GetNoColor() const { return GetParameter("--noColor"); };
+	std::string GetNoMerge() const { return GetParameter("--noMerge"); };
+	std::vector<std::string> GetBranches() const { return GetParameterList("--branch"); };
 };

@@ -12,9 +12,10 @@
 
 #include "common.h"
 
+#include "commands/file_map.h"
 #include "commands/changes_result.h"
 #include "commands/describe_result.h"
-#include "commands/files_result.h"
+#include "commands/filelog_result.h"
 #include "commands/sizes_result.h"
 #include "commands/sync_result.h"
 #include "commands/print_result.h"
@@ -26,7 +27,7 @@
 class P4API
 {
 	ClientApi m_ClientAPI;
-	MapApi m_ClientMapping;
+	FileMap m_ClientMapping;
 	int m_Usage;
 
 	bool Initialize();
@@ -60,9 +61,6 @@ public:
 	bool IsFileUnderDepotPath(const std::string& fileRevision, const std::string& depotPath);
 	bool IsDepotPathUnderClientSpec(const std::string& depotPath);
 	bool IsFileUnderClientSpec(const std::string& fileRevision);
-	bool IsDeleted(const std::string& action);
-	bool IsBinary(const std::string& fileType);
-	bool IsExecutable(const std::string& fileType);
 
 	void AddClientSpecView(const std::vector<std::string>& viewStrings);
 
@@ -74,7 +72,7 @@ public:
 	ChangesResult LatestChange(const std::string& path);
 	ChangesResult OldestChange(const std::string& path);
 	DescribeResult Describe(const std::string& cl);
-	FilesResult Files(const std::string& path);
+	FileLogResult FileLog(const std::string& changelist);
 	SizesResult Size(const std::string& file);
 	Result Sync();
 	Result Sync(const std::string& path);

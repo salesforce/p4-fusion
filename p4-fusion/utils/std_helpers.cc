@@ -40,3 +40,36 @@ void STDHelpers::Erase(std::string& source, const std::string& subStr)
 
 	source.erase(source.find(subStr), subStr.size());
 }
+
+void STDHelpers::StripSurrounding(std::string& source, const char c)
+{
+	const size_t size = source.size();
+	size_t start = 0;
+	size_t end = size;
+	while (start < end && source[start] == c)
+	{
+		start++;
+	}
+	while (end - 1 > start && source[end - 1] == c)
+	{
+		end--;
+	}
+	if (end < size)
+	{
+		source.erase(end, size - end);
+	}
+	if (start > 0)
+	{
+		source.erase(0, start);
+	}
+}
+
+std::array<std::string, 2> STDHelpers::SplitAt(const std::string& source, const char c, const size_t startAt)
+{
+	size_t pos = source.find(c, startAt);
+	if (pos != std::string::npos && pos < source.size())
+	{
+		return { source.substr(startAt, pos - startAt), source.substr(pos + 1) };
+	}
+	return { source, "" };
+}

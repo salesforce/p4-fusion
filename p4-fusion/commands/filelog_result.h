@@ -6,28 +6,23 @@
  */
 #pragma once
 
+#include <vector>
+#include <string>
+
 #include "common.h"
 #include "result.h"
+#include "file_data.h"
+#include "utils/std_helpers.h"
 
-class FilesResult : public Result
+// Very limited to just a single file log entry per file.
+class FileLogResult : public Result
 {
-public:
-	struct FileData
-	{
-		std::string depotFile;
-		std::string revision;
-		std::string change;
-		std::string action;
-		std::string type;
-		std::string time;
-		std::string size;
-	};
-
 private:
-	std::vector<FileData> m_Files;
+	std::vector<FileData> m_FileData;
 
 public:
-	std::vector<FileData>& GetFilesResult() { return m_Files; }
+	const std::vector<FileData>& GetFileData() const { return m_FileData; }
 
 	void OutputStat(StrDict* varList) override;
+	// int OutputStatPartial(StrDict* varList) override;
 };

@@ -8,6 +8,7 @@
 
 #include "p4_api.h"
 #include "describe_result.h"
+#include "filelog_result.h"
 #include "print_result.h"
 #include "utils/std_helpers.h"
 
@@ -18,17 +19,35 @@ ChangeList::ChangeList(const std::string& clNumber, const std::string& clDescrip
     , user(userID)
     , description(clDescription)
     , timestamp(clTimestamp)
+    , changedFileGroups(ChangedFileGroups::Empty())
 {
 }
 
-void ChangeList::PrepareDownload()
+void ChangeList::PrepareDownload(const BranchSet& branchSet)
 {
 	ChangeList& cl = *this;
 
-	ThreadPool::GetSingleton()->AddJob([&cl](P4API* p4)
+	ThreadPool::GetSingleton()->AddJob([&cl, &branchSet](P4API* p4)
 	    {
-		    const DescribeResult& describe = p4->Describe(cl.number);
-		    cl.changedFiles = std::move(describe.GetFileData());
+		    std::vector<FileData> changedFiles;
+		    if (branchSet.HasMergeableBranch())
+		    {
+			    // If we care about branches, we need to run filelog to get where the file came from.
+			    // Note that the filelog won't include the source changelist, but
+			    // that doesn't give us too much information; even a full branch
+			    // copy will have the target files listing the from-file with
+			    // different changelists than the point-in-time source branch's
+			    // changelist.
+			    const FileLogResult& filelog = p4->FileLog(cl.number);
+			    cl.changedFileGroups = branchSet.ParseAffectedFiles(filelog.GetFileData());
+		    }
+		    else
+		    {
+			    // If we don't care about branches, then p4->Describe is much faster.
+			    const DescribeResult& describe = p4->Describe(cl.number);
+			    cl.changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData());
+		    }
+
 		    {
 			    std::unique_lock<std::mutex> lock((*(cl.canDownloadMutex)));
 			    *cl.canDownload = true;
@@ -37,11 +56,11 @@ void ChangeList::PrepareDownload()
 	    });
 }
 
-void ChangeList::StartDownload(const std::string& depotPath, const int& printBatch, const bool includeBinaries)
+void ChangeList::StartDownload(const int& printBatch)
 {
 	ChangeList& cl = *this;
 
-	ThreadPool::GetSingleton()->AddJob([&cl, &depotPath, printBatch, includeBinaries](P4API* p4)
+	ThreadPool::GetSingleton()->AddJob([&cl, printBatch](P4API* p4)
 	    {
 		    // Wait for describe to finish, if it is still running
 		    {
@@ -52,50 +71,40 @@ void ChangeList::StartDownload(const std::string& depotPath, const int& printBat
 
 		    *cl.filesDownloaded = 0;
 
-		    if (cl.changedFiles.empty())
-		    {
-			    return;
-		    }
-
 		    std::shared_ptr<std::vector<std::string>> printBatchFiles = std::make_shared<std::vector<std::string>>();
 		    std::shared_ptr<std::vector<FileData*>> printBatchFileData = std::make_shared<std::vector<FileData*>>();
-
-		    for (int i = 0; i < cl.changedFiles.size(); i++)
+		    // Only perform the group inspection if there are files.
+		    if (cl.changedFileGroups->totalFileCount > 0)
 		    {
-			    FileData& fileData = cl.changedFiles[i];
-			    if (p4->IsFileUnderDepotPath(fileData.depotFile, depotPath)
-			        && p4->IsFileUnderClientSpec(fileData.depotFile)
-			        && (includeBinaries || !p4->IsBinary(fileData.type))
-			        && !STDHelpers::Contains(fileData.depotFile, "/.git/") // To avoid adding .git/ files in the Perforce history if any
-			        && !STDHelpers::EndsWith(fileData.depotFile, "/.git")) // To avoid adding a .git submodule file in the Perforce history if any
+			    for (auto& branchedFileGroup : cl.changedFileGroups->branchedFileGroups)
 			    {
-				    fileData.shouldCommit = true;
-				    printBatchFiles->push_back(fileData.depotFile + "#" + fileData.revision);
-				    printBatchFileData->push_back(&fileData);
-			    }
-			    else
-			    {
-				    (*cl.filesDownloaded)++;
-				    cl.commitCV->notify_all();
-			    }
+				    // Note: the files at this point have already been filtered.
+				    for (auto& fileData : branchedFileGroup.files)
+				    {
+					    if (fileData.IsDownloadNeeded())
+					    {
+						    fileData.SetPendingDownload();
+						    printBatchFiles->push_back(fileData.GetDepotFile() + "#" + fileData.GetRevision());
+						    printBatchFileData->push_back(&fileData);
 
-			    // Clear the batches if it fits
-			    if (printBatchFiles->size() == printBatch)
-			    {
-				    cl.Flush(printBatchFiles, printBatchFileData);
+						    // Clear the batches if it fits
+						    if (printBatchFiles->size() == printBatch)
+						    {
+							    cl.Flush(printBatchFiles, printBatchFileData);
 
-				    // We let go of the refs held by us and create new ones to queue the next batch
-				    printBatchFiles = std::make_shared<std::vector<std::string>>();
-				    printBatchFileData = std::make_shared<std::vector<FileData*>>();
-				    // Now only the thread job has access to the older batch
+							    // We let go of the refs held by us and create new ones to queue the next batch
+							    printBatchFiles = std::make_shared<std::vector<std::string>>();
+							    printBatchFileData = std::make_shared<std::vector<FileData*>>();
+							    // Now only the thread job has access to the older batch
+						    }
+					    }
+				    }
 			    }
 		    }
 
-		    // Flush any remaining files that were smaller in number than the total batch size
-		    if (!printBatchFiles->empty())
-		    {
-			    cl.Flush(printBatchFiles, printBatchFileData);
-		    }
+		    // Flush any remaining files that were smaller in number than the total batch size.
+		    // Additionally, signal the batch processing end.
+		    cl.Flush(printBatchFiles, printBatchFileData);
 	    });
 }
 
@@ -104,15 +113,20 @@ void ChangeList::Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles
 	// Share ownership of this batch with the thread job
 	ThreadPool::GetSingleton()->AddJob([this, printBatchFiles, printBatchFileData](P4API* p4)
 	    {
-		    const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
-
-		    for (int i = 0; i < printBatchFiles->size(); i++)
+		    // Only perform the batch processing when there are files to process.
+		    if (!printBatchFileData->empty())
 		    {
-			    printBatchFileData->at(i)->contents = std::move(printData.GetPrintData().at(i).contents);
+			    const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
+
+			    for (int i = 0; i < printBatchFiles->size(); i++)
+			    {
+				    printBatchFileData->at(i)->MoveContentsOnceFrom(printData.GetPrintData().at(i).contents);
+			    }
+
+			    (*filesDownloaded) += printBatchFiles->size();
 		    }
 
-		    (*filesDownloaded) += printBatchFiles->size();
-
+		    // Ensure the notify_all is called.
 		    commitCV->notify_all();
 	    });
 }
@@ -121,7 +135,7 @@ void ChangeList::WaitForDownload()
 {
 	std::unique_lock<std::mutex> lock(*commitMutex);
 	commitCV->wait(lock, [this]()
-	    { return *(filesDownloaded) == (int)changedFiles.size(); });
+	    { return *(filesDownloaded) == (int)changedFileGroups->totalFileCount; });
 }
 
 void ChangeList::Clear()
@@ -129,7 +143,7 @@ void ChangeList::Clear()
 	number.clear();
 	user.clear();
 	description.clear();
-	changedFiles.clear();
+	changedFileGroups->Clear();
 
 	filesDownloaded.reset();
 	canDownload.reset();

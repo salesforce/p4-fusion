@@ -19,6 +19,9 @@ class GitAPI
 {
 	git_repository* m_Repo = nullptr;
 	git_index* m_Index = nullptr;
+	git_oid m_FirstCommitOid;
+
+	std::string m_CurrentBranch = "";
 
 public:
 	GitAPI(bool fsyncEnable);
@@ -34,8 +37,10 @@ public:
 	git_oid CreateBlob(const std::vector<char>& data);
 
 	void CreateIndex();
-	void AddFileToIndex(const std::string& depotPath, const std::string& depotFile, const std::vector<char>& contents, const bool plusx);
-	void RemoveFileFromIndex(const std::string& depotPath, const std::string& depotFile);
+	void SetActiveBranch(const std::string& branchName);
+	void AddFileToIndex(const std::string& relativePath, const std::vector<char>& contents, const bool plusx);
+	void RemoveFileFromIndex(const std::string& relativePath);
+
 	std::string Commit(
 	    const std::string& depotPath,
 	    const std::string& cl,
@@ -43,6 +48,7 @@ public:
 	    const std::string& email,
 	    const int& timezone,
 	    const std::string& desc,
-	    const int64_t& timestamp);
+	    const int64_t& timestamp,
+	    const std::string& mergeFromStream);
 	void CloseIndex();
 };

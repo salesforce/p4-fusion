@@ -20,6 +20,7 @@
 #include "thread_pool.h"
 #include "p4_api.h"
 #include "git_api.h"
+#include "branch_set.h"
 
 #include "p4/p4libs.h"
 #include "minitrace.h"
@@ -32,12 +33,14 @@ int Main(int argc, char** argv)
 {
 	Timer programTimer;
 
-	Arguments::GetSingleton()->RequiredParameter("--path", "P4 depot path to convert to a Git repo");
+	Arguments::GetSingleton()->RequiredParameter("--path", "P4 depot path to convert to a Git repo.  If used with '--branch', this is the base path for the branches.");
 	Arguments::GetSingleton()->RequiredParameter("--src", "Relative path where the git repository should be created. This path should be empty before running p4-fusion for the first time in a directory.");
 	Arguments::GetSingleton()->RequiredParameter("--port", "Specify which P4PORT to use.");
 	Arguments::GetSingleton()->RequiredParameter("--user", "Specify which P4USER to use. Please ensure that the user is logged in.");
 	Arguments::GetSingleton()->RequiredParameter("--client", "Name/path of the client workspace specification.");
 	Arguments::GetSingleton()->RequiredParameter("--lookAhead", "How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?");
+	Arguments::GetSingleton()->OptionalParameterList("--branch", "A branch to migrate under the depot path.  May be specified more than once.  If at least one is given and the noMerge option is false, then the Git repository will include merges between branches in the history.  You may use the formatting 'depot/path:git-alias', separating the Perforce branch sub-path from the git alias name by a ':'; if the depot path contains a ':', then you must provide the git branch alias.");
+	Arguments::GetSingleton()->OptionalParameter("--noMerge", "false", "Disable performing a Git merge when a Perforce branch integrates (or copies, etc) into another branch.");
 	Arguments::GetSingleton()->OptionalParameter("--networkThreads", std::to_string(std::thread::hardware_concurrency()), "Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.");
 	Arguments::GetSingleton()->OptionalParameter("--printBatch", "1", "Specify the p4 print batch size.");
 	Arguments::GetSingleton()->OptionalParameter("--maxChanges", "-1", "Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.");
@@ -57,11 +60,13 @@ int Main(int argc, char** argv)
 		return 0;
 	}
 
-	bool noColor = Arguments::GetSingleton()->GetNoColor() != "false";
+	const bool noColor = Arguments::GetSingleton()->GetNoColor() != "false";
 	if (noColor)
 	{
 		Log::DisableColoredOutput();
 	}
+
+	const bool noMerge = Arguments::GetSingleton()->GetNoMerge() != "false";
 
 	const std::string depotPath = Arguments::GetSingleton()->GetDepotPath();
 	const std::string srcPath = Arguments::GetSingleton()->GetSourcePath();
@@ -69,6 +74,7 @@ int Main(int argc, char** argv)
 	const bool includeBinaries = Arguments::GetSingleton()->GetIncludeBinaries() != "false";
 	const int maxChanges = std::atoi(Arguments::GetSingleton()->GetMaxChanges().c_str());
 	const int flushRate = std::atoi(Arguments::GetSingleton()->GetFlushRate().c_str());
+	const std::vector<std::string> branchNames = Arguments::GetSingleton()->GetBranches();
 
 	PRINT("Running p4-fusion from: " << argv[0]);
 
@@ -151,6 +157,8 @@ int Main(int argc, char** argv)
 		P4API::CommandRefreshThreshold = std::atoi(refreshStr.c_str());
 	}
 
+	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, includeBinaries);
+
 	bool profiling = false;
 #if MTR_ENABLED
 	profiling = true;
@@ -171,6 +179,7 @@ int Main(int argc, char** argv)
 	PRINT("Profiling: " << profiling);
 	PRINT("Profiling Flush Rate: " << flushRate);
 	PRINT("No Colored Output: " << noColor);
+	PRINT("Inspecting " << branchSet.Count() << " branches");
 
 	GitAPI git(fsyncEnable);
 
@@ -201,7 +210,7 @@ int Main(int argc, char** argv)
 
 	PRINT("Requesting changelists to convert from the Perforce server");
 
-	std::vector<ChangeList> changes = p4.Changes(depotPath, resumeFromCL, maxChanges).GetChanges();
+	std::vector<ChangeList> changes = std::move(p4.Changes(depotPath, resumeFromCL, maxChanges).GetChanges());
 
 	// Return early if we have no work to do
 	if (changes.empty())
@@ -225,8 +234,8 @@ int Main(int argc, char** argv)
 	{
 		ChangeList& cl = changes.at(currentCL);
 
-		// Start gathering changed files with `p4 describe`
-		cl.PrepareDownload();
+		// Start gathering changed files with `p4 describe` or `p4 filelog`
+		cl.PrepareDownload(branchSet);
 
 		lastDownloadedCL = currentCL;
 	}
@@ -239,7 +248,7 @@ int Main(int argc, char** argv)
 		ChangeList& cl = changes.at(currentCL);
 
 		// Start running `p4 print` on changed files when the describe is finished
-		cl.StartDownload(depotPath, printBatch, includeBinaries);
+		cl.StartDownload(printBatch);
 	}
 
 	SUCCESS("Queued first " << startupDownloadsCount << " CLs up until CL " << changes.at(lastDownloadedCL).number << " for downloading");
@@ -277,24 +286,6 @@ int Main(int argc, char** argv)
 		// Ensure the files are downloaded before committing them to the repository
 		cl.WaitForDownload();
 
-		for (auto& file : cl.changedFiles)
-		{
-			if (file.shouldCommit) // If the file survived the filters while being downloaded
-			{
-				if (p4.IsDeleted(file.action))
-				{
-					git.RemoveFileFromIndex(depotPath, file.depotFile);
-				}
-				else
-				{
-					git.AddFileToIndex(depotPath, file.depotFile, file.contents, p4.IsExecutable(file.type));
-				}
-
-				// No use for keeping the contents in memory once it has been added
-				file.Clear();
-			}
-		}
-
 		std::string fullName = cl.user;
 		std::string email = "deleted@user";
 		if (users.find(cl.user) != users.end())
@@ -302,27 +293,75 @@ int Main(int argc, char** argv)
 			fullName = users.at(cl.user).fullName;
 			email = users.at(cl.user).email;
 		}
-		std::string commitSHA = git.Commit(depotPath,
-		    cl.number,
-		    fullName,
-		    email,
-		    timezoneMinutes,
-		    cl.description,
-		    cl.timestamp);
 
+		for (auto& branchGroup : cl.changedFileGroups->branchedFileGroups)
+		{
+			if (!branchGroup.targetBranch.empty())
+			{
+				git.SetActiveBranch(branchGroup.targetBranch);
+			}
+
+			for (auto& file : branchGroup.files)
+			{
+				if (file.IsDeleted())
+				{
+					git.RemoveFileFromIndex(file.GetRelativePath());
+				}
+				else
+				{
+					git.AddFileToIndex(file.GetRelativePath(), file.GetContents(), file.IsExecutable());
+				}
+
+				// No use for keeping the contents in memory once it has been added
+				file.Clear();
+			}
+
+			std::string mergeFrom = "";
+			if (branchGroup.hasSource && !noMerge)
+			{
+				// Only perform merging if the branch group explicitly declares that the change
+				// has a source, and if the user wants merging.
+				mergeFrom = branchGroup.sourceBranch;
+			}
+
+			std::string commitSHA = git.Commit(depotPath,
+			    cl.number,
+			    fullName,
+			    email,
+			    timezoneMinutes,
+			    cl.description,
+			    cl.timestamp,
+			    mergeFrom);
+
+			// For scripting/testing purposes...
+			PRINT("COMMIT:" << commitSHA << ":" << cl.number << ":" << branchGroup.targetBranch << ":");
+			SUCCESS(
+			    "CL " << cl.number << " --> Commit " << commitSHA
+			          << " with " << branchGroup.files.size() << " files"
+			          << (branchGroup.targetBranch.empty()
+			                     ? ""
+			                     : (" to branch " + branchGroup.targetBranch))
+			          << (branchGroup.sourceBranch.empty()
+			                     ? ""
+			                     : (" from branch " + branchGroup.sourceBranch))
+			          << ".");
+		}
 		SUCCESS(
-		    "CL " << cl.number << " --> Commit " << commitSHA
-		          << " with " << cl.changedFiles.size() << " files (" << i + 1 << "/" << changes.size() << "|" << lastDownloadedCL - (long long)i << "). "
-		          << "Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
+		    "CL " << cl.number << " with "
+		          << cl.changedFileGroups->totalFileCount << " files (" << i + 1 << "/" << changes.size()
+		          << "|" << lastDownloadedCL - (long long)i
+		          << "). Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
 		          << ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
+		// Clear out finished changelist.
+		cl.Clear();
 
 		// Start downloading the CL chronologically after the last CL that was previously downloaded, if there's still some left
 		if (lastDownloadedCL + 1 < changes.size())
 		{
 			lastDownloadedCL++;
 			ChangeList& downloadCL = changes.at(lastDownloadedCL);
-			downloadCL.PrepareDownload();
-			downloadCL.StartDownload(depotPath, printBatch, includeBinaries);
+			downloadCL.PrepareDownload(branchSet);
+			downloadCL.StartDownload(printBatch);
 		}
 
 		// Occasionally flush the profiling data

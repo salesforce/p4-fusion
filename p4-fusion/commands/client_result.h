@@ -11,7 +11,6 @@
 
 #include "common.h"
 #include "result.h"
-#include "p4/mapapi.h"
 
 class ClientResult : public Result
 {
