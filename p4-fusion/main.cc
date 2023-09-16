@@ -25,7 +25,7 @@
 #include "p4/p4libs.h"
 #include "minitrace.h"
 
-#define P4_FUSION_VERSION "v1.12.0"
+#define P4_FUSION_VERSION "v1.13.0"
 
 void SignalHandler(sig_atomic_t s);
 
