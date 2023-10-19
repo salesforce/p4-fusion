@@ -11,6 +11,8 @@
 #include <utility>
 
 #include "common.h"
+#include "commands/file_data.h"
+#include "commands/change_list.h"
 #include "git2/oid.h"
 
 struct git_repository;
@@ -18,37 +20,27 @@ struct git_repository;
 class GitAPI
 {
 	git_repository* m_Repo = nullptr;
-	git_index* m_Index = nullptr;
 	git_oid m_FirstCommitOid;
-
-	std::string m_CurrentBranch = "";
+	int timezoneMinutes;
 
 public:
-	GitAPI(bool fsyncEnable);
+	GitAPI(const bool fsyncEnable, const int timezoneMinutes);
+	GitAPI() = delete;
 	~GitAPI();
 
-	bool InitializeRepository(const std::string& srcPath);
-	void OpenRepository(const std::string& repoPath);
+	bool InitializeRepository(const std::string& srcPath, const bool noCreateBaseCommit);
+	bool IsHEADExists() const;
+	bool IsRepositoryClonedFrom(const std::string& depotPath) const;
+	/* Checks if a previous commit was made and extracts the corresponding changelist number. */
+	const std::string DetectLatestCL() const;
 
-	bool IsHEADExists();
-	bool IsRepositoryClonedFrom(const std::string& depotPath);
-	std::string DetectLatestCL();
-
-	git_oid CreateBlob(const std::vector<char>& data);
-
-	void CreateIndex();
-	void SetActiveBranch(const std::string& branchName);
-	void AddFileToIndex(const std::string& relativePath, const std::vector<char>& contents, const bool plusx);
-	void RemoveFileFromIndex(const std::string& relativePath);
-
-	std::string Commit(
-	    const std::string& depotPath,
-	    const std::string& cl,
-	    const std::string& user,
-	    const std::string& email,
-	    const int& timezone,
-	    const std::string& desc,
-	    const int64_t& timestamp,
-	    const std::string& mergeFromStream);
-	void CloseIndex();
+	/* files are cleared as they are visited. Empty targetBranch means HEAD. */
+	std::string WriteChangelistBranch(
+	    const std::string depotPath,
+	    const ChangeList& cl,
+	    std::vector<FileData>& files,
+	    const std::string targetBranch,
+	    const std::string authorName,
+	    const std::string authorEmail,
+	    const std::string mergeFrom) const;
 };

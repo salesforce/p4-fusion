@@ -16,8 +16,6 @@
 #include "commands/changes_result.h"
 #include "commands/describe_result.h"
 #include "commands/filelog_result.h"
-#include "commands/sizes_result.h"
-#include "commands/sync_result.h"
 #include "commands/print_result.h"
 #include "commands/users_result.h"
 #include "commands/info_result.h"
@@ -39,6 +37,7 @@ class P4API
 	T Run(const char* command, const std::vector<std::string>& stringArguments);
 	template <class T>
 	T RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries);
+	void AddClientSpecView(const std::vector<std::string>& viewStrings);
 
 public:
 	static std::string P4PORT;
@@ -49,7 +48,7 @@ public:
 	static int CommandRefreshThreshold;
 
 	// Helix Core C++ API seems to crash while making connections parallely.
-	static std::mutex InitializationMutex;
+	// static std::mutex InitializationMutex;
 
 	static bool InitializeLibraries();
 	static bool ShutdownLibraries();
@@ -58,28 +57,13 @@ public:
 	~P4API();
 
 	bool IsDepotPathValid(const std::string& depotPath);
-	bool IsFileUnderDepotPath(const std::string& fileRevision, const std::string& depotPath);
 	bool IsDepotPathUnderClientSpec(const std::string& depotPath);
-	bool IsFileUnderClientSpec(const std::string& fileRevision);
-
-	void AddClientSpecView(const std::vector<std::string>& viewStrings);
 
 	TestResult TestConnection(const int retries);
-	ChangesResult ShortChanges(const std::string& path);
-	ChangesResult Changes(const std::string& path);
 	ChangesResult Changes(const std::string& path, const std::string& from, int32_t maxCount);
-	ChangesResult ChangesFromTo(const std::string& path, const std::string& from, const std::string& to);
-	ChangesResult LatestChange(const std::string& path);
-	ChangesResult OldestChange(const std::string& path);
 	DescribeResult Describe(const std::string& cl);
 	FileLogResult FileLog(const std::string& changelist);
-	SizesResult Size(const std::string& file);
-	Result Sync();
-	Result Sync(const std::string& path);
-	SyncResult GetFilesToSyncAtCL(const std::string& path, const std::string& cl);
-	PrintResult PrintFile(const std::string& filePathRevision);
 	PrintResult PrintFiles(const std::vector<std::string>& fileRevisions);
-	void UpdateClientSpec();
 	ClientResult Client();
 	UsersResult Users();
 	InfoResult Info();

@@ -25,17 +25,19 @@ class Arguments
 	std::map<std::string, ParameterData> m_Parameters;
 
 	std::string GetParameter(const std::string& argName) const;
+	int GetParameterInt(const std::string& argName) const;
+	bool GetParameterBool(const std::string& argName) const;
 	std::vector<std::string> GetParameterList(const std::string& argName) const;
 
 public:
-	static Arguments* GetSingleton();
+	Arguments(int argc, char** argv);
+	Arguments() = delete;
 
 	void RequiredParameter(const std::string& name, const std::string& helpText);
 	void OptionalParameter(const std::string& name, const std::string& defaultValue, const std::string& helpText);
 	void OptionalParameterList(const std::string& name, const std::string& helpText);
-	void Initialize(int argc, char** argv);
 	bool IsValid() const;
-	std::string Help();
+	std::string Help() const;
 
 	const ParameterData& GetParameterData(const std::string& name) const { return m_Parameters.at(name); }
 
@@ -44,17 +46,18 @@ public:
 	std::string GetDepotPath() const { return GetParameter("--path"); };
 	std::string GetSourcePath() const { return GetParameter("--src"); };
 	std::string GetClient() const { return GetParameter("--client"); };
-	std::string GetNetworkThreads() const { return GetParameter("--networkThreads"); };
-	std::string GetFileSystemThreads() const { return GetParameter("--fileSystemThreads"); };
-	std::string GetPrintBatch() const { return GetParameter("--printBatch"); };
-	std::string GetLookAhead() const { return GetParameter("--lookAhead"); };
-	std::string GetRetries() const { return GetParameter("--retries"); };
-	std::string GetRefresh() const { return GetParameter("--refresh"); };
-	std::string GetFsyncEnable() const { return GetParameter("--fsyncEnable"); };
-	std::string GetIncludeBinaries() const { return GetParameter("--includeBinaries"); };
-	std::string GetMaxChanges() const { return GetParameter("--maxChanges"); };
-	std::string GetFlushRate() const { return GetParameter("--flushRate"); };
-	std::string GetNoColor() const { return GetParameter("--noColor"); };
-	std::string GetNoMerge() const { return GetParameter("--noMerge"); };
+	int GetNetworkThreads() const { return GetParameterInt("--networkThreads"); };
+	int GetFileSystemThreads() const { return GetParameterInt("--fileSystemThreads"); };
+	int GetPrintBatch() const { return GetParameterInt("--printBatch"); };
+	int GetLookAhead() const { return GetParameterInt("--lookAhead"); };
+	int GetRetries() const { return GetParameterInt("--retries"); };
+	int GetRefresh() const { return GetParameterInt("--refresh"); };
+	bool GetFsyncEnable() const { return GetParameterBool("--fsyncEnable"); };
+	bool GetIncludeBinaries() const { return GetParameterBool("--includeBinaries"); };
+	int GetMaxChanges() const { return GetParameterInt("--maxChanges"); };
+	int GetFlushRate() const { return GetParameterInt("--flushRate"); };
+	bool GetNoColor() const { return GetParameterBool("--noColor"); };
+	bool GetNoMerge() const { return GetParameterBool("--noMerge"); };
+	bool GetNoBaseCommit() const { return GetParameterBool("--noBaseCommit"); };
 	std::vector<std::string> GetBranches() const { return GetParameterList("--branch"); };
 };

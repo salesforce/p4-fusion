@@ -12,12 +12,14 @@ void DescribeResult::OutputStat(StrDict* varList)
 
 int DescribeResult::OutputStatPartial(StrDict* varList)
 {
-	std::string indexString = std::to_string(m_FileData.size());
+	const std::string indexString = std::to_string(m_FileData.size());
 
 	StrPtr* depotFile = varList->GetVar(("depotFile" + indexString).c_str());
 	if (!depotFile)
 	{
+		// TODO: Is this acceptable? Can this cause issues because a file is not found?
 		// Quick exit if the object returned is not a file
+		// Also, returning 0 here means OutputStat is called.
 		return 0;
 	}
 	std::string depotFileStr = depotFile->Text();

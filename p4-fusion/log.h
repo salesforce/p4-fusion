@@ -6,6 +6,8 @@
  */
 #pragma once
 
+#include <mutex>
+
 class Log
 {
 public:
@@ -13,21 +15,37 @@ public:
 	static const char* ColorYellow;
 	static const char* ColorGreen;
 	static const char* ColorNormal;
+	static std::mutex mutex;
 
 	static void DisableColoredOutput();
 };
 
-#define PRINT(x) std::cout << "[ PRINT @ " << __func__ << ":" << __LINE__ << " ] " << x << std::endl
+#define PRINT(x)                                                                             \
+	{                                                                                        \
+		std::lock_guard<std::mutex> lk(Log::mutex);                                          \
+		std::cout << "[ PRINT @ " << __func__ << ":" << __LINE__ << " ] " << x << std::endl; \
+	}
 
-#define ERR(x)                                                        \
-	std::cerr << Log::ColorRed                                        \
-	          << "[ ERROR @ " << __func__ << ":" << __LINE__ << " ] " \
-	          << x << Log::ColorNormal << std::endl
+#define ERR(x)                                                            \
+	{                                                                     \
+		std::lock_guard<std::mutex> lk(Log::mutex);                       \
+		std::cerr << Log::ColorRed                                        \
+		          << "[ ERROR @ " << __func__ << ":" << __LINE__ << " ] " \
+		          << x << Log::ColorNormal << std::endl;                  \
+	}
 
-#define WARN(x) std::cerr << Log::ColorYellow                                       \
-	                      << "[ WARNING @ " << __func__ << ":" << __LINE__ << " ] " \
-	                      << x << Log::ColorNormal << std::endl
+#define WARN(x)                                                             \
+	{                                                                       \
+		std::lock_guard<std::mutex> lk(Log::mutex);                         \
+		std::cerr << Log::ColorYellow                                       \
+		          << "[ WARNING @ " << __func__ << ":" << __LINE__ << " ] " \
+		          << x << Log::ColorNormal << std::endl;                    \
+	}
 
-#define SUCCESS(x) std::cerr << Log::ColorGreen                                        \
-	                         << "[ SUCCESS @ " << __func__ << ":" << __LINE__ << " ] " \
-	                         << x << Log::ColorNormal << std::endl
+#define SUCCESS(x)                                                          \
+	{                                                                       \
+		std::lock_guard<std::mutex> lk(Log::mutex);                         \
+		std::cerr << Log::ColorGreen                                        \
+		          << "[ SUCCESS @ " << __func__ << ":" << __LINE__ << " ] " \
+		          << x << Log::ColorNormal << std::endl;                    \
+	}

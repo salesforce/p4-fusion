@@ -13,6 +13,7 @@ void UsersResult::OutputStat(StrDict* varList)
 
 	if (!userIDPtr || !emailPtr)
 	{
+		// TODO: We don't actually throw here.
 		ERR("UserID or email not found for a Perforce user");
 		return;
 	}

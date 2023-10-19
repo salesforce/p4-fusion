@@ -25,7 +25,7 @@
 #include "p4/p4libs.h"
 #include "minitrace.h"
 
-#define P4_FUSION_VERSION "v1.13.0"
+#define P4_FUSION_VERSION "v1.13.1-sg"
 
 void SignalHandler(sig_atomic_t s);
 
@@ -33,48 +33,29 @@ int Main(int argc, char** argv)
 {
 	Timer programTimer;
 
-	Arguments::GetSingleton()->RequiredParameter("--path", "P4 depot path to convert to a Git repo.  If used with '--branch', this is the base path for the branches.");
-	Arguments::GetSingleton()->RequiredParameter("--src", "Relative path where the git repository should be created. This path should be empty before running p4-fusion for the first time in a directory.");
-	Arguments::GetSingleton()->RequiredParameter("--port", "Specify which P4PORT to use.");
-	Arguments::GetSingleton()->RequiredParameter("--user", "Specify which P4USER to use. Please ensure that the user is logged in.");
-	Arguments::GetSingleton()->RequiredParameter("--client", "Name/path of the client workspace specification.");
-	Arguments::GetSingleton()->RequiredParameter("--lookAhead", "How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?");
-	Arguments::GetSingleton()->OptionalParameterList("--branch", "A branch to migrate under the depot path.  May be specified more than once.  If at least one is given and the noMerge option is false, then the Git repository will include merges between branches in the history.  You may use the formatting 'depot/path:git-alias', separating the Perforce branch sub-path from the git alias name by a ':'; if the depot path contains a ':', then you must provide the git branch alias.");
-	Arguments::GetSingleton()->OptionalParameter("--noMerge", "false", "Disable performing a Git merge when a Perforce branch integrates (or copies, etc) into another branch.");
-	Arguments::GetSingleton()->OptionalParameter("--networkThreads", std::to_string(std::thread::hardware_concurrency()), "Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.");
-	Arguments::GetSingleton()->OptionalParameter("--printBatch", "1", "Specify the p4 print batch size.");
-	Arguments::GetSingleton()->OptionalParameter("--maxChanges", "-1", "Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.");
-	Arguments::GetSingleton()->OptionalParameter("--retries", "10", "Specify how many times a command should be retried before the process exits in a failure.");
-	Arguments::GetSingleton()->OptionalParameter("--refresh", "100", "Specify how many times a connection should be reused before it is refreshed.");
-	Arguments::GetSingleton()->OptionalParameter("--fsyncEnable", "false", "Enable fsync() while writing objects to disk to ensure they get written to permanent storage immediately instead of being cached. This is to mitigate data loss in events of hardware failure.");
-	Arguments::GetSingleton()->OptionalParameter("--includeBinaries", "false", "Do not discard binary files while downloading changelists.");
-	Arguments::GetSingleton()->OptionalParameter("--flushRate", "1000", "Rate at which profiling data is flushed on the disk.");
-	Arguments::GetSingleton()->OptionalParameter("--noColor", "false", "Disable colored output.");
-
 	PRINT("p4-fusion " P4_FUSION_VERSION);
 
-	Arguments::GetSingleton()->Initialize(argc, argv);
-	if (!Arguments::GetSingleton()->IsValid())
+	Arguments arguments(argc, argv);
+	if (!arguments.IsValid())
 	{
-		PRINT("Usage:" + Arguments::GetSingleton()->Help());
-		return 0;
+		PRINT("Usage:" + arguments.Help());
+		return 1;
 	}
 
-	const bool noColor = Arguments::GetSingleton()->GetNoColor() != "false";
+	const bool noColor = arguments.GetNoColor();
 	if (noColor)
 	{
 		Log::DisableColoredOutput();
 	}
 
-	const bool noMerge = Arguments::GetSingleton()->GetNoMerge() != "false";
-
-	const std::string depotPath = Arguments::GetSingleton()->GetDepotPath();
-	const std::string srcPath = Arguments::GetSingleton()->GetSourcePath();
-	const bool fsyncEnable = Arguments::GetSingleton()->GetFsyncEnable() != "false";
-	const bool includeBinaries = Arguments::GetSingleton()->GetIncludeBinaries() != "false";
-	const int maxChanges = std::atoi(Arguments::GetSingleton()->GetMaxChanges().c_str());
-	const int flushRate = std::atoi(Arguments::GetSingleton()->GetFlushRate().c_str());
-	const std::vector<std::string> branchNames = Arguments::GetSingleton()->GetBranches();
+	const bool noMerge = arguments.GetNoMerge();
+	const std::string depotPath = arguments.GetDepotPath();
+	const std::string srcPath = arguments.GetSourcePath();
+	const bool fsyncEnable = arguments.GetFsyncEnable();
+	const bool includeBinaries = arguments.GetIncludeBinaries();
+	const int maxChanges = arguments.GetMaxChanges();
+	const int flushRate = arguments.GetFlushRate();
+	const std::vector<std::string> branchNames = arguments.GetBranches();
 
 	PRINT("Running p4-fusion from: " << argv[0]);
 
@@ -82,35 +63,50 @@ int Main(int argc, char** argv)
 	{
 		return 1;
 	}
-	// Set the signal here because it gets reset after P4API library is initialized
+
+	// Set the signal here because it gets reset after P4API library is initialized.
 	std::signal(SIGINT, SignalHandler);
 	std::signal(SIGTERM, SignalHandler);
 
-	P4API::P4PORT = Arguments::GetSingleton()->GetPort();
-	P4API::P4USER = Arguments::GetSingleton()->GetUsername();
+	P4API::P4PORT = arguments.GetPort();
+	P4API::P4USER = arguments.GetUsername();
 
-	const Error& serviceConnectionResult = P4API().TestConnection(5).GetError();
-	bool serverAvailable = serviceConnectionResult.IsError() == 0;
-	if (serverAvailable)
+	TestResult serviceConnectionResult = P4API().TestConnection(5);
+	if (serviceConnectionResult.HasError())
 	{
-		SUCCESS("Perforce server is available");
-	}
-	else
-	{
-		ERR("Error occurred while connecting to " << P4API::P4PORT);
+		ERR("Error occurred while connecting to " << P4API::P4PORT << ": " << serviceConnectionResult.PrintError());
 		return 1;
 	}
-	P4API::P4CLIENT = Arguments::GetSingleton()->GetClient();
-	P4API::ClientSpec = P4API().Client().GetClientSpec();
+
+	SUCCESS("Perforce server is available");
+
+	P4API::P4CLIENT = arguments.GetClient();
+	ClientResult clientRes = P4API().Client();
+	if (clientRes.HasError())
+	{
+		ERR("Error occurred while fetching client spec: " + clientRes.PrintError());
+		return 1;
+	}
+	P4API::ClientSpec = clientRes.GetClientSpec();
 
 	if (P4API::ClientSpec.mapping.empty())
 	{
-		WARN("Received a client spec with no mappings. Did you use the correct corresponding P4PORT for the " + P4API::ClientSpec.client + " client spec?");
+		ERR("Received a client spec with no mappings. Did you use the correct corresponding P4PORT for the " + P4API::ClientSpec.client + " client spec?");
+		return 1;
 	}
 
 	PRINT("Updated client workspace view " << P4API::ClientSpec.client << " with " << P4API::ClientSpec.mapping.size() << " mappings");
 
 	P4API p4;
+
+	InfoResult p4infoRes = p4.Info();
+	if (p4infoRes.HasError())
+	{
+		ERR("Failed to fetch Perforce server timezone: " << p4infoRes.PrintError());
+		return 1;
+	}
+	int timezoneMinutes = p4infoRes.GetServerTimezoneMinutes();
+	SUCCESS("Perforce server timezone is " << timezoneMinutes << " minutes");
 
 	if (!p4.IsDepotPathValid(depotPath))
 	{
@@ -124,45 +120,18 @@ int Main(int argc, char** argv)
 		return 1;
 	}
 
-	int networkThreads = 1;
-	std::string networkThreadsStr = Arguments::GetSingleton()->GetNetworkThreads();
-	if (!networkThreadsStr.empty())
-	{
-		networkThreads = std::atoi(networkThreadsStr.c_str());
-	}
-
-	int printBatch = 1;
-	std::string printBatchStr = Arguments::GetSingleton()->GetPrintBatch();
-	if (!printBatchStr.empty())
-	{
-		printBatch = std::atoi(printBatchStr.c_str());
-	}
-
-	int lookAhead = 1;
-	std::string lookAheadStr = Arguments::GetSingleton()->GetLookAhead();
-	if (!lookAheadStr.empty())
-	{
-		lookAhead = std::atoi(lookAheadStr.c_str());
-	}
-
-	std::string retriesStr = Arguments::GetSingleton()->GetRetries();
-	if (!retriesStr.empty())
-	{
-		P4API::CommandRetries = std::atoi(retriesStr.c_str());
-	}
-
-	std::string refreshStr = Arguments::GetSingleton()->GetRefresh();
-	if (!refreshStr.empty())
-	{
-		P4API::CommandRefreshThreshold = std::atoi(refreshStr.c_str());
-	}
-
-	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, includeBinaries);
-
+	int networkThreads = arguments.GetNetworkThreads();
+	int printBatch = arguments.GetPrintBatch();
+	int lookAhead = arguments.GetLookAhead();
+	P4API::CommandRetries = arguments.GetRetries();
+	P4API::CommandRefreshThreshold = arguments.GetRefresh();
 	bool profiling = false;
 #if MTR_ENABLED
 	profiling = true;
 #endif
+	const std::string tracePath = (srcPath + (srcPath.back() == '/' ? "" : "/") + "trace.json");
+
+	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, includeBinaries);
 
 	PRINT("Perforce Port: " << P4API::P4PORT);
 	PRINT("Perforce User: " << P4API::P4USER);
@@ -171,26 +140,27 @@ int Main(int argc, char** argv)
 	PRINT("Network Threads: " << networkThreads);
 	PRINT("Print Batch: " << printBatch);
 	PRINT("Look Ahead: " << lookAhead);
-	PRINT("Max Retries: " << retriesStr);
+	PRINT("Max Retries: " << P4API::CommandRetries);
 	PRINT("Max Changes: " << maxChanges);
-	PRINT("Refresh Threshold: " << refreshStr);
+	PRINT("Refresh Threshold: " << P4API::CommandRefreshThreshold);
 	PRINT("Fsync Enable: " << fsyncEnable);
 	PRINT("Include Binaries: " << includeBinaries);
-	PRINT("Profiling: " << profiling);
+	PRINT("Profiling: " << profiling << " (" << tracePath << ")");
 	PRINT("Profiling Flush Rate: " << flushRate);
 	PRINT("No Colored Output: " << noColor);
 	PRINT("Inspecting " << branchSet.Count() << " branches");
 
-	GitAPI git(fsyncEnable);
+	GitAPI git(fsyncEnable, timezoneMinutes);
 
-	if (!git.InitializeRepository(srcPath))
+	if (!git.InitializeRepository(srcPath, arguments.GetNoBaseCommit()))
 	{
 		ERR("Could not initialize Git repository. Exiting.");
 		return 1;
 	}
 
-	// Setup trace file generation
-	mtr_init((srcPath + (srcPath.back() == '/' ? "" : "/") + "trace.json").c_str());
+	// Setup trace file generation. This HAS to happen after initializing the
+	// repository, only then the tracePath will be ensured to exist.
+	mtr_init(tracePath.c_str());
 	MTR_META_PROCESS_NAME("p4-fusion");
 	MTR_META_THREAD_NAME("Main Thread");
 	MTR_META_THREAD_SORT_INDEX(0);
@@ -205,85 +175,95 @@ int Main(int argc, char** argv)
 		}
 
 		resumeFromCL = git.DetectLatestCL();
-		WARN("Detected last CL committed as CL " << resumeFromCL);
+		SUCCESS("Detected last CL committed as CL " << resumeFromCL);
 	}
 
+	// Load mapping data from usernames to emails.
+	PRINT("Requesting userbase details from the Perforce server");
+	UsersResult usersRes = p4.Users();
+	if (usersRes.HasError())
+	{
+		ERR("Failed to retrieve user details for mapping: " << usersRes.PrintError());
+		return 1;
+	}
+	const std::unordered_map<UsersResult::UserID, UsersResult::UserData> users = std::move(usersRes.GetUserEmails());
+	SUCCESS("Received " << users.size() << " userbase details from the Perforce server");
+
+	// Request changelists.
 	PRINT("Requesting changelists to convert from the Perforce server");
-
-	std::vector<ChangeList> changes = std::move(p4.Changes(depotPath, resumeFromCL, maxChanges).GetChanges());
-
+	ChangesResult changesRes = p4.Changes(depotPath, resumeFromCL, maxChanges);
+	if (changesRes.HasError())
+	{
+		ERR("Failed to list changes: " << changesRes.PrintError());
+		return 1;
+	}
+	std::vector<ChangeList> changes = std::move(changesRes.GetChanges());
 	// Return early if we have no work to do
 	if (changes.empty())
 	{
 		SUCCESS("Repository is up to date. Exiting.");
 		return 0;
 	}
-
-	// The changes are received in chronological order
 	SUCCESS("Found " << changes.size() << " uncloned CLs starting from CL " << changes.front().number << " to CL " << changes.back().number);
 
 	PRINT("Creating " << networkThreads << " network threads");
-	ThreadPool::GetSingleton()->Initialize(networkThreads);
-	SUCCESS("Created " << ThreadPool::GetSingleton()->GetThreadCount() << " threads in thread pool");
+	ThreadPool pool(networkThreads);
+	SUCCESS("Created " << pool.GetThreadCount() << " threads in thread pool");
 
-	int startupDownloadsCount = 0;
+	auto t = std::thread([&pool]()
+	    {
+			// See if the threadpool encountered any exceptions.
+			try
+			{
+				pool.RaiseCaughtExceptions();
+			}
+			catch (const std::exception& e)
+			{
+				// This is unrecoverable
+				ERR("Threadpool encountered an exception: " << e.what());
+				pool.ShutDown();
+				std::exit(1);
+			} });
 
-	// Go in the chronological order
-	size_t lastDownloadedCL = 0;
-	for (size_t currentCL = 0; currentCL < changes.size() && currentCL < lookAhead; currentCL++)
+	// Go in the chronological order.
+	std::atomic<int> downloaded;
+	downloaded.store(0);
+	int startupDownloadsCount = lookAhead;
+	if (lookAhead > changes.size())
+	{
+		startupDownloadsCount = changes.size();
+	}
+	// First, we enqueue the initial set of changelists for download, at most
+	// lookAhead jobs.
+	for (size_t currentCL = 0; currentCL < startupDownloadsCount; currentCL++)
 	{
 		ChangeList& cl = changes.at(currentCL);
 
-		// Start gathering changed files with `p4 describe` or `p4 filelog`
-		cl.PrepareDownload(branchSet);
-
-		lastDownloadedCL = currentCL;
+		pool.AddJob([&downloaded, &cl, &branchSet, printBatch](P4API* p4)
+		    { cl.PrepareDownload(p4, branchSet); });
 	}
-
-	// This is intentionally put in a separate loop.
-	// We want to submit `p4 describe` commands before sending any of the `p4 print` commands.
-	// Gives ~15% perf boost.
-	for (size_t currentCL = 0; currentCL <= lastDownloadedCL; currentCL++)
+	for (size_t currentCL = 0; currentCL < startupDownloadsCount; currentCL++)
 	{
 		ChangeList& cl = changes.at(currentCL);
 
-		// Start running `p4 print` on changed files when the describe is finished
-		cl.StartDownload(printBatch);
+		pool.AddJob([&downloaded, &cl, &branchSet, printBatch](P4API* p4)
+		    {
+			cl.StartDownload(p4, branchSet, printBatch);
+			// Mark download as done.
+			downloaded++; });
 	}
 
-	SUCCESS("Queued first " << startupDownloadsCount << " CLs up until CL " << changes.at(lastDownloadedCL).number << " for downloading");
-
-	int timezoneMinutes = p4.Info().GetServerTimezoneMinutes();
-	SUCCESS("Perforce server timezone is " << timezoneMinutes << " minutes");
-
-	// Map usernames to emails
-	const std::unordered_map<UsersResult::UserID, UsersResult::UserData> users = std::move(p4.Users().GetUserEmails());
-	SUCCESS("Received userbase details from the Perforce server");
+	SUCCESS("Queued first " << startupDownloadsCount << " CLs up until CL " << changes.at(startupDownloadsCount - 1).number << " for downloading");
 
 	// Commit procedure start
 	Timer commitTimer;
 
-	PRINT("Last CL to start downloading is CL " << changes.at(lastDownloadedCL).number);
-
-	git.CreateIndex();
 	for (size_t i = 0; i < changes.size(); i++)
 	{
-		// See if the threadpool encountered any exceptions
-		try
-		{
-			ThreadPool::GetSingleton()->RaiseCaughtExceptions();
-		}
-		catch (const std::exception& e)
-		{
-			// This is unrecoverable
-			ERR("Threadpool encountered an exception: " << e.what());
-			ThreadPool::GetSingleton()->ShutDown();
-			std::exit(1);
-		}
-
 		ChangeList& cl = changes.at(i);
 
 		// Ensure the files are downloaded before committing them to the repository
+		PRINT("Waiting for download of CL " << cl.number << " to complete");
 		cl.WaitForDownload();
 
 		std::string fullName = cl.user;
@@ -296,26 +276,6 @@ int Main(int argc, char** argv)
 
 		for (auto& branchGroup : cl.changedFileGroups->branchedFileGroups)
 		{
-			if (!branchGroup.targetBranch.empty())
-			{
-				git.SetActiveBranch(branchGroup.targetBranch);
-			}
-
-			for (auto& file : branchGroup.files)
-			{
-				if (file.IsDeleted())
-				{
-					git.RemoveFileFromIndex(file.GetRelativePath());
-				}
-				else
-				{
-					git.AddFileToIndex(file.GetRelativePath(), file.GetContents(), file.IsExecutable());
-				}
-
-				// No use for keeping the contents in memory once it has been added
-				file.Clear();
-			}
-
 			std::string mergeFrom = "";
 			if (branchGroup.hasSource && !noMerge)
 			{
@@ -324,13 +284,13 @@ int Main(int argc, char** argv)
 				mergeFrom = branchGroup.sourceBranch;
 			}
 
-			std::string commitSHA = git.Commit(depotPath,
-			    cl.number,
+			const std::string commitSHA = git.WriteChangelistBranch(
+			    depotPath,
+			    cl,
+			    branchGroup.files,
+			    branchGroup.targetBranch,
 			    fullName,
 			    email,
-			    timezoneMinutes,
-			    cl.description,
-			    cl.timestamp,
 			    mergeFrom);
 
 			// For scripting/testing purposes...
@@ -349,19 +309,24 @@ int Main(int argc, char** argv)
 		SUCCESS(
 		    "CL " << cl.number << " with "
 		          << cl.changedFileGroups->totalFileCount << " files (" << i + 1 << "/" << changes.size()
-		          << "|" << lastDownloadedCL - (long long)i
+		          << "|" << downloaded
 		          << "). Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
 		          << ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.");
 		// Clear out finished changelist.
 		cl.Clear();
 
-		// Start downloading the CL chronologically after the last CL that was previously downloaded, if there's still some left
-		if (lastDownloadedCL + 1 < changes.size())
+		// Once a cl has been downloaded, we check if we can enqueue a new job
+		// right away.
+		size_t next = startupDownloadsCount + i;
+		if (next < changes.size())
 		{
-			lastDownloadedCL++;
-			ChangeList& downloadCL = changes.at(lastDownloadedCL);
-			downloadCL.PrepareDownload(branchSet);
-			downloadCL.StartDownload(printBatch);
+			ChangeList& downloadCL = changes.at(next);
+			pool.AddJob([&downloaded, &downloadCL, &branchSet, printBatch](P4API* p4)
+			    {
+				downloadCL.PrepareDownload(p4, branchSet);
+				downloadCL.StartDownload(p4, branchSet, printBatch);
+				// Mark download as done.
+				downloaded++; });
 		}
 
 		// Occasionally flush the profiling data
@@ -369,21 +334,21 @@ int Main(int argc, char** argv)
 		{
 			mtr_flush();
 		}
-
-		// Deallocate this CL's metadata from memory
-		cl.Clear();
 	}
-	git.CloseIndex();
 
 	SUCCESS("Completed conversion of " << changes.size() << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes, taking " << commitTimer.GetTimeS() / 60.0f << " to commit CLs");
 
-	ThreadPool::GetSingleton()->ShutDown();
+	pool.ShutDown();
+
+	// Wait for exception handler to finish.
+	t.join();
 
 	if (!P4API::ShutdownLibraries())
 	{
 		return 1;
 	}
 
+	// Finalize tracing.
 	mtr_flush();
 	mtr_shutdown();
 
@@ -402,7 +367,8 @@ void SignalHandler(sig_atomic_t s)
 
 	ERR("Signal Received: " << strsignal(s));
 
-	ThreadPool::GetSingleton()->ShutDown();
+	// TODO: Propagate cancel signal to main function.
+	// pool.ShutDown();
 
 	std::exit(s);
 }

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -eo pipefail
+
 migration_log_file=""
 p4_client_dir=""
 bare_git_dir=""
@@ -202,40 +204,48 @@ while read line ; do
     if [ ${debug} = 1 ]; then
       echo "Writing diff into ${diff_file}"
     fi
+    set +e
     diff "${diff_args[@]}" "${workdir}/repo" "${p4dir}" > "${diff_file}"
+    set -e
     if [ -s "${diff_file}" ] ; then
-      echo "${p4cl}:${gitcommit}:${diffile}" >> "${workdir}/commit-differences.txt"
+      echo "${p4cl}:${gitcommit}:${diff_file}" >> "${workdir}/commit-differences.txt"
       echo "${p4cl}" >> "${workdir}/all-changelist-differences.txt"
     fi
 done < "${workdir}/history.txt"
 
 # For the error detection, only loop through unique changelists.
-sort < "${workdir}/all-changelist-differences.txt" | uniq > "${workdir}/changelist-differences.txt"
+if [ -f "${workdir}/all-changelist-differences.txt" ]; then
+  sort < "${workdir}/all-changelist-differences.txt" | uniq > "${workdir}/changelist-differences.txt"
+fi
 
 error_count=0
 
 if [ ${debug} = 1 ]; then
   echo "Discovering problems."
 fi
-while read p4cl ; do
-  # This changelist had at least 1 corresponding commit with a problem.
-  # If there is some commit with the same changelist with no problem,
-  # then that means it eventually matched.
-  # Note that, with the splat pattern, non-branch runs will always have
-  # this changelist be marked as a problem.
-  is_error=1
-  file_list=()
-  for diff in "${workdir}/diffs/diff-${p4cl}-"*.txt ; do
-    file_list+=("$( basename "${diff}" )")
-    if [ ! -s "${diff}" ] ; then
-      is_error=0
+
+if [ -f "${workdir}/changelist-differences.txt" ]; then
+  while read p4cl ; do
+    # This changelist had at least 1 corresponding commit with a problem.
+    # If there is some commit with the same changelist with no problem,
+    # then that means it eventually matched.
+    # Note that, with the splat pattern, non-branch runs will always have
+    # this changelist be marked as a problem.
+    is_error=1
+    file_list=()
+    for diff in ${workdir}/diffs/diff-${p4cl}.txt ; do
+      file_list+=("$( basename "${diff}" )")
+      if [ ! -s "${diff}" ] ; then
+        is_error=0
+      fi
+    done
+    if [ ${is_error} = 1 ] ; then
+      error_count=$(( error_count + 1 ))
+      echo "${p4cl} ${file_list[*]}" >> "${workdir}/errors.txt"
+      echo "ERROR: changelist ${p4cl}"
     fi
-  done
-  if [ ${is_error} = 1 ] ; then
-    error_count=$(( error_count + 1 ))
-    echo "${p4cl} ${file_list[*]}" >> "${workdir}/errors.txt"
-    echo "ERROR: changelist ${p4cl}"
-  fi
-done < "${workdir}/changelist-differences.txt"
+  done < "${workdir}/changelist-differences.txt"
+fi
+
 echo "${error_count} problems discovered.  Complete list in ${workdir}/errors.txt and ${workdir}/commit-differences.txt"
 exit ${error_count}

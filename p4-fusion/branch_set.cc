@@ -5,6 +5,7 @@
  * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 #include "branch_set.h"
+#include "minitrace.h"
 #include <map>
 
 static const std::string EMPTY_STRING = "";
@@ -201,6 +202,8 @@ void branchIntegrationMap::addMerge(const std::string& sourceBranch, const std::
 // Post condition: all returned FileData (e.g. filtered for git commit) have the relativePath set.
 std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vector<FileData>& cl) const
 {
+	MTR_SCOPE("BranchSet", __func__);
+
 	branchIntegrationMap branchMap;
 	for (auto& clFileData : cl)
 	{
@@ -224,6 +227,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 		{
 			// Not under the depot path.  Shouldn't happen due to the way we
 			// scan for files, but...
+			// TODO: Should this throw an error then?
 			continue;
 		}
 
@@ -236,7 +240,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 			    branchPath[0].empty()
 			    || branchPath[1].empty())
 			{
-				// not a valid branch file.  skip it.
+				// not a valid branch file. skip it.
 				continue;
 			}
 

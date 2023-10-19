@@ -83,17 +83,14 @@ public:
 	void MoveContentsOnceFrom(const std::vector<char>& contents);
 	void SetPendingDownload();
 	bool IsDownloadNeeded() const { return !m_data->isContentsSet && !m_data->isContentsPendingDownload; };
-	bool IsReady() const { return m_data->isContentsSet; }
 
 	const std::string& GetDepotFile() const { return m_data->depotFile; };
 	const std::string& GetRevision() const { return m_data->revision; };
-	const FileAction GetAction() const { return m_data->actionCategory; };
 	const std::string& GetRelativePath() const { return m_data->relativePath; };
 	const std::vector<char>& GetContents() const { return m_data->contents; };
 	bool IsDeleted() const { return m_data->isDeleted; };
 	bool IsIntegrated() const { return m_data->isIntegrated; };
 	std::string& GetFromDepotFile() const { return m_data->fromDepotFile; };
-	std::string& GetFromRevision() const { return m_data->fromRevision; };
 
 	bool IsBinary() const;
 	bool IsExecutable() const;

@@ -13,3 +13,6 @@ clones/
 
 # Testing failures
 core
+
+# Test output.
+/verify/

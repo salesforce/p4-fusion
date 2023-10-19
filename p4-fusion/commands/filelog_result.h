@@ -24,5 +24,4 @@ public:
 	const std::vector<FileData>& GetFileData() const { return m_FileData; }
 
 	void OutputStat(StrDict* varList) override;
-	// int OutputStatPartial(StrDict* varList) override;
 };

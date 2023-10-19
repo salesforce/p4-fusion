@@ -16,4 +16,24 @@ public:
 	void HandleError(Error* e) override;
 
 	const Error& GetError() const { return m_Error; }
+	/*
+	 * HasError returns true when the result contains an error.
+	 */
+	bool HasError() const
+	{
+		return GetError().IsError();
+	}
+	/*
+	 * PrintError formats the contained error, if any, as a std::string.
+	 */
+	std::string PrintError() const
+	{
+		if (!HasError())
+		{
+			return "";
+		}
+		StrBuf str;
+		m_Error.Fmt(&str);
+		return std::string(str.Text());
+	}
 };

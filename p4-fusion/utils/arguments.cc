@@ -7,9 +7,29 @@
 #include "arguments.h"
 
 #include <algorithm>
+#include <thread>
 
-void Arguments::Initialize(int argc, char** argv)
+Arguments::Arguments(int argc, char** argv)
 {
+	RequiredParameter("--path", "P4 depot path to convert to a Git repo.  If used with '--branch', this is the base path for the branches.");
+	RequiredParameter("--src", "Relative path where the git repository should be created. This path should be empty before running p4-fusion for the first time in a directory.");
+	RequiredParameter("--port", "Specify which P4PORT to use.");
+	RequiredParameter("--user", "Specify which P4USER to use. Please ensure that the user is logged in.");
+	RequiredParameter("--client", "Name/path of the client workspace specification.");
+	OptionalParameter("--lookAhead", "1", "How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?");
+	OptionalParameter("--noBaseCommit", "false", "Whether an empty base commit should be created so that branches have a common merge base.");
+	OptionalParameterList("--branch", "A branch to migrate under the depot path.  May be specified more than once.  If at least one is given and the noMerge option is false, then the Git repository will include merges between branches in the history.  You may use the formatting 'depot/path:git-alias', separating the Perforce branch sub-path from the git alias name by a ':'; if the depot path contains a ':', then you must provide the git branch alias.");
+	OptionalParameter("--noMerge", "false", "Disable performing a Git merge when a Perforce branch integrates (or copies, etc) into another branch.");
+	OptionalParameter("--networkThreads", std::to_string(std::thread::hardware_concurrency()), "Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.");
+	OptionalParameter("--printBatch", "1", "Specify the p4 print batch size.");
+	OptionalParameter("--maxChanges", "-1", "Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.");
+	OptionalParameter("--retries", "10", "Specify how many times a command should be retried before the process exits in a failure.");
+	OptionalParameter("--refresh", "100", "Specify how many times a connection should be reused before it is refreshed.");
+	OptionalParameter("--fsyncEnable", "false", "Enable fsync() while writing objects to disk to ensure they get written to permanent storage immediately instead of being cached. This is to mitigate data loss in events of hardware failure.");
+	OptionalParameter("--includeBinaries", "false", "Do not discard binary files while downloading changelists.");
+	OptionalParameter("--flushRate", "1000", "Rate at which profiling data is flushed on the disk.");
+	OptionalParameter("--noColor", "false", "Disable colored output.");
+
 	for (int i = 1; i < argc - 1; i += 2)
 	{
 		std::string name = argv[i];
@@ -21,15 +41,10 @@ void Arguments::Initialize(int argc, char** argv)
 		}
 		else
 		{
+			// TODO: Throw?
 			WARN("Unknown argument: " << name);
 		}
 	}
-}
-
-Arguments* Arguments::GetSingleton()
-{
-	static Arguments singleton;
-	return &singleton;
 }
 
 std::string Arguments::GetParameter(const std::string& argName) const
@@ -44,6 +59,20 @@ std::string Arguments::GetParameter(const std::string& argName) const
 		return m_Parameters.at(argName).valueList.back();
 	}
 	return "";
+}
+
+// Returns the parameters value for the given argument, or 0 if not present or
+// cannot be parsed.
+int Arguments::GetParameterInt(const std::string& argName) const
+{
+	auto val = GetParameter(argName);
+	return std::atoi(val.c_str());
+}
+
+bool Arguments::GetParameterBool(const std::string& argName) const
+{
+	auto val = GetParameter(argName);
+	return val != "false";
 }
 
 std::vector<std::string> Arguments::GetParameterList(const std::string& argName) const
@@ -68,7 +97,7 @@ bool Arguments::IsValid() const
 	return true;
 }
 
-std::string Arguments::Help()
+std::string Arguments::Help() const
 {
 	std::string text = "\n";
 

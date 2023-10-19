@@ -15,11 +15,12 @@ const char* Log::ColorRed = COLOR_RED;
 const char* Log::ColorYellow = COLOR_YELLOW;
 const char* Log::ColorGreen = COLOR_GREEN;
 const char* Log::ColorNormal = COLOR_NORMAL;
+std::mutex Log::mutex;
 
 void Log::DisableColoredOutput()
 {
-	ColorRed = COLOR_NORMAL;
-	ColorYellow = COLOR_NORMAL;
-	ColorGreen = COLOR_NORMAL;
-	ColorNormal = COLOR_NORMAL;
+	ColorRed = "";
+	ColorYellow = "";
+	ColorGreen = "";
+	ColorNormal = "";
 }
