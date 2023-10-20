@@ -7,7 +7,6 @@
 #include <thread>
 #include <map>
 #include <atomic>
-#include <mutex>
 #include <sstream>
 #include <typeinfo>
 #include <csignal>
