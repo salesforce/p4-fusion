@@ -15,7 +15,7 @@ cmakeArgs=(
     -DUSE_SSH=OFF
     -DUSE_HTTPS=OFF
     -DUSE_THREADS=ON
-    -DOPENSSL_ROOT_DIR=/usr/local/ssl
+    -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR:-"/usr/local/ssl"}"
     -DCMAKE_C_COMPILER=/usr/bin/gcc
     -DCMAKE_CXX_COMPILER=/usr/bin/g++
 )

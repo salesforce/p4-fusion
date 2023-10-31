@@ -24,3 +24,8 @@ insert_final_newline = unset
 trim_trailing_whitespace = unset
 indent_style = unset
 indent_size = unset
+
+[{*.sh, *.bash}]
+indent_style = space
+indent_size = 2
+switch_case_indent = true

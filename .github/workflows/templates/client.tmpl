@@ -1,0 +1,20 @@
+Client: ${P4CLIENT}
+
+Owner:  ${P4USER}
+
+Host: ${P4_CLIENT_HOST}
+
+Description: ${DEPOT_DESCRIPTION}
+
+Root: ${DEPOT_DIR}
+
+# Note!!! The rmdir option here is very important!
+Options: noallwrite noclobber nocompress unlocked nomodtime rmdir
+
+SubmitOptions:  submitunchanged
+
+LineEnd: local
+
+View:
+        //${DEPOT_NAME}/... //${P4CLIENT}/...
+
