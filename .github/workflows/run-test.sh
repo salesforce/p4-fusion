@@ -62,14 +62,13 @@ fi
   delete_perforce_client
   envsubst <"${TEMPLATES}/client.tmpl"
   # create new client
-  P4_CLIENT_HOST="$(hostname)" envsubst <"${TEMPLATES}/client.tmpl" |
-    p4 client -i
+  P4_CLIENT_HOST="$(hostname)" envsubst <"${TEMPLATES}/client.tmpl" | p4 client -i
 
   printf "done\n"
 }
 
 # build p4-fusion
-OPENSSL_ROOT_DIR="/opt/homebrew/opt/openssl@1.1/" ./generate_cache.sh Debug
+./generate_cache.sh Debug
 ./build.sh
 
 # run p4-fusion against the downloaded depot

@@ -17,3 +17,7 @@ core
 
 # Test output.
 /verify/
+
+# Ignore secert and env files
+**/**/*.secrets
+**/**/*.env

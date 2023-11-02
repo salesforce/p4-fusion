@@ -1,0 +1,47 @@
+name: validate-migration
+
+on: [ push ]
+
+env:
+  P4PORT: "perforce.sgdev.org:1666"
+  P4USER: "admin"
+  P4PASSWD: ${{ secrets.P4PASSWD }}
+
+jobs:
+  validate-migration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      # install p4 client from Perforce
+      - name: "Install p4-fusion client"
+        uses: perforce/setup-p4@1.0.2
+        with:
+          command: "help"
+          p4_version: 23.1
+
+      - name: "Install dependencies"
+        run: |
+          sudo apt-get update
+          sudo apt-get install gettext --yes # for envsubst 
+          sudo apt-get install git make cmake g++ --yes # p4-fusion dependencies
+          
+          # download p4-fusion headers
+          curl -L https://www.perforce.com/downloads/perforce/r22.1/bin.linux26x86_64/p4api-glibc2.3-openssl1.0.2.tgz --output p4.tgz
+          mkdir -p vendor/helix-core-api/linux
+          tar -C vendor/helix-core-api/linux -xzf p4.tgz --strip 1
+
+          # compile openssl
+          mkdir openssl-src
+          curl -L https://www.openssl.org/source/openssl-1.0.2t.tar.gz --output openssl.tgz
+          tar -C openssl-src -xzf openssl.tgz --strip 1
+          pushd openssl-src
+          ./config --prefix=/tmp/openssl-install
+          make install
+          popd 
+
+
+      - name: "run validate migration script"
+        run: bash .github/workflows/run-test.sh
+        env:
+          OPENSSL_ROOT_DIR: "/tmp/openssl-install"
