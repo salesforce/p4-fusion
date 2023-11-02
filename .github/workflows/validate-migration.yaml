@@ -3,9 +3,18 @@ name: validate-migration
 on: [ push ]
 
 env:
-  P4PORT: "perforce.sgdev.org:1666"
-  P4USER: "admin"
-  P4PASSWD: ${{ secrets.P4PASSWD }}
+  # Constants
+  P4_DOWNLOAD_URL: "https://www.perforce.com/downloads/perforce/r23.1/bin.linux26x86_64/p4api-glibc2.3-openssl1.0.2.tgz"
+  OPENSSL_DOWNLOAD_URL: "https://www.openssl.org/source/openssl-1.0.2u.tar.gz"
+  OPENSSL_INSTALL_DIR: "/tmp/openssl-install"
+
+  # Perforce credentials
+  P4PORT: "perforce.sgdev.org:1666" # the address of the Perforce server to connect to
+  P4USER: "admin" # the name of the Perforce user
+  P4PASSWD: ${{ secrets.P4PASSWD }} # the ticket for the Perforce user
+  P4CLIENT: "validate-migration-${{ github.ref_name }}-${{ github.run_number }}" # the temporary Perforce client name to use while validating the git migration
+
+  DEPOT_NAME: "source/src-cli" # the name of the Perforce depot to validate the git migration against
 
 jobs:
   validate-migration:
@@ -13,35 +22,54 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      # install p4 client from Perforce
-      - name: "Install p4-fusion client"
+
+      - name: "Install Perforce CLI"
         uses: perforce/setup-p4@1.0.2
         with:
           command: "help"
           p4_version: 23.1
 
-      - name: "Install dependencies"
+      - name: "Install c++ compilation dependencies"
         run: |
           sudo apt-get update
-          sudo apt-get install gettext --yes # for envsubst 
-          sudo apt-get install git make cmake g++ --yes # p4-fusion dependencies
-          
-          # download p4-fusion headers
-          curl -L https://www.perforce.com/downloads/perforce/r22.1/bin.linux26x86_64/p4api-glibc2.3-openssl1.0.2.tgz --output p4.tgz
+          sudo apt-get install git make cmake clang --yes # p4-fusion dependencies
+
+      - name: "Cache Perforce API headers"
+        id: cache-p4api
+        uses: actions/cache@v2
+        with:
+          path: vendor/helix-core-api/linux
+          key: ${{ runner.os }}-p4api-${{ env.P4_DOWNLOAD_URL }}
+
+      - name: "Download Perforce API headers"
+        if: ${{ steps.cache-p4api.outputs.cache-hit != 'true' }}
+        run: |
+          curl -L "${P4_DOWNLOAD_URL}" --output p4.tgz
           mkdir -p vendor/helix-core-api/linux
           tar -C vendor/helix-core-api/linux -xzf p4.tgz --strip 1
 
-          # compile openssl
+      - name: "Cache OpenSSL"
+        uses: actions/cache@v2
+        id: cache-openssl
+        with:
+          path: ${{ env.OPENSSL_INSTALL_DIR }}
+          key: ${{ runner.os }}-openssl-${{ env.OPENSSL_DOWNLOAD_URL }}
+
+      - name: "Compile OpenSSL"
+        if: ${{ steps.cache-openssl.outputs.cache-hit != 'true' }}
+        run: |
           mkdir openssl-src
-          curl -L https://www.openssl.org/source/openssl-1.0.2t.tar.gz --output openssl.tgz
+          curl -L "${OPENSSL_DOWNLOAD_URL}" --output openssl.tgz
           tar -C openssl-src -xzf openssl.tgz --strip 1
           pushd openssl-src
-          ./config --prefix=/tmp/openssl-install
+          ./config --prefix="${OPENSSL_INSTALL_DIR}" --static
           make install
           popd 
 
-
-      - name: "run validate migration script"
-        run: bash .github/workflows/run-test.sh
+      - name: "Run validate migration script"
+        run: |
+          sudo apt-get install gettext --yes # for envsubst 
+          .github/workflows/run-test.sh
         env:
-          OPENSSL_ROOT_DIR: "/tmp/openssl-install"
+          OPENSSL_ROOT_DIR: ${{ env.OPENSSL_INSTALL_DIR }}
+          CXX: "clang"

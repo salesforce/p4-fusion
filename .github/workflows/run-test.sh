@@ -60,19 +60,21 @@ fi
 
   # delete older copy of client (if it exists)
   delete_perforce_client
-  envsubst <"${TEMPLATES}/client.tmpl"
   # create new client
   P4_CLIENT_HOST="$(hostname)" envsubst <"${TEMPLATES}/client.tmpl" | p4 client -i
 
   printf "done\n"
 }
 
-# build p4-fusion
-./generate_cache.sh Debug
-./build.sh
+echo "::group::{Build P4 Fusion}"
 
-# run p4-fusion against the downloaded depot
-./build/p4-fusion/p4-fusion \
+time (./generate_cache.sh Debug && ./build.sh)
+
+echo "::endgroup::"
+
+echo "::group::{Run p4-fusion against the downloaded depot}"
+
+time ./build/p4-fusion/p4-fusion \
   --path "//${DEPOT_NAME}/..." \
   --client "${P4CLIENT}" \
   --user "$P4USER" \
@@ -89,11 +91,16 @@ fi
   --fsyncEnable true \
   --noColor true 2>&1 | tee "${P4_FUSION_LOG}"
 
-# run validation on migrated data
-./validate-migration.sh \
+echo "::endgroup::"
+
+echo "::group::{Run validation on migrated data}"
+
+time ./validate-migration.sh \
   --force \
   --debug \
   --logfile="${P4_FUSION_LOG}" \
   --p4workdir="${DEPOT_DIR}" \
   --gitdir="${GIT_DEPOT_DIR}" \
   --datadir="${TMP}/datadir"
+
+echo "::endgroup::"
