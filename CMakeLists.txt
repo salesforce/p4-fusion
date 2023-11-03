@@ -21,8 +21,13 @@ if (NOT DEFINED OPENSSL_ROOT_DIR)
     endif ()
 endif ()
 
-set(CMAKE_C_COMPILER "/usr/bin/gcc")
-set(CMAKE_CXX_COMPILER "/usr/bin/g++")
+if (NOT DEFINED CMAKE_C_COMPILER)
+    set(CMAKE_C_COMPILER "/usr/bin/gcc")
+endif ()
+
+if (NOT DEFINED CMAKE_CXX_COMPILER)
+    set(CMAKE_CXX_COMPILER "/usr/bin/g++")
+endif ()
 
 option(MTR_ENABLED "Enable minitrace profiling" OFF)
 option(BUILD_TESTS "Build tests" OFF)
@@ -33,6 +38,8 @@ set(CMAKE_CXX_STANDARD 11)
 
 set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+
+set(CMAKE_CXX_FLAGS "$ENV{CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS}")
 
 project(
         p4-fusion
@@ -54,6 +61,6 @@ add_subdirectory(vendor)
 add_subdirectory(p4-fusion)
 
 if (BUILD_TESTS)
-    message(STATUS "Building tests")
+    message(STATUS "Building tests ")
     add_subdirectory(tests)
 endif ()

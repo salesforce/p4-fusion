@@ -12,12 +12,37 @@ env:
   P4PORT: "perforce.sgdev.org:1666" # the address of the Perforce server to connect to
   P4USER: "admin" # the name of the Perforce user
   P4PASSWD: ${{ secrets.P4PASSWD }} # the ticket for the Perforce user
-  P4CLIENT: "validate-migration-${{ github.ref_name }}-${{ github.run_number }}" # the temporary Perforce client name to use while validating the git migration
 
   DEPOT_NAME: "source/src-cli" # the name of the Perforce depot to validate the git migration against
 
 jobs:
   validate-migration:
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer:
+          - addressSanitizer
+          - threadSanitizer
+          #          disabled until we figure out how to build with clang in github actions
+          #          - memorySanitizer
+          - leakSanitizer
+          - undefinedSanitizer
+          - noSanitizer
+        include:
+          - sanitizer: addressSanitizer
+            CMAKE_CXX_FLAGS: "-fsanitize=address -g"
+          - sanitizer: threadSanitizer
+            CMAKE_CXX_FLAGS: "-fsanitize=thread -g"
+          #          disabled until we figure out how to build with clang in github actions
+          #          - sanitizer: memorySanitizer
+          #            CMAKE_CXX_FLAGS: "-fsanitize=memory -g"
+          - sanitizer: leakSanitizer
+            CMAKE_CXX_FLAGS: "-fsanitize=leak -g"
+          - sanitizer: undefinedSanitizer
+            CMAKE_CXX_FLAGS: "-fsanitize=undefined -g"
+          - sanitizer: noSanitizer
+            CMAKE_CXX_FLAGS: ""
+
     runs-on: ubuntu-latest
 
     steps:
@@ -32,7 +57,7 @@ jobs:
       - name: "Install c++ compilation dependencies"
         run: |
           sudo apt-get update
-          sudo apt-get install git make cmake clang --yes # p4-fusion dependencies
+          sudo apt-get install git make cmake gcc g++ clang --yes # p4-fusion dependencies
 
       - name: "Cache Perforce API headers"
         id: cache-p4api
@@ -71,5 +96,6 @@ jobs:
           sudo apt-get install gettext --yes # for envsubst 
           .github/workflows/run-test.sh
         env:
+          P4CLIENT: "validate-migration-${{ github.ref_name }}-${{ github.run_number }}-${{ matrix.sanitizer }}" # the temporary Perforce client name to use while validating the git migration
           OPENSSL_ROOT_DIR: ${{ env.OPENSSL_INSTALL_DIR }}
-          CXX: "clang"
+          CMAKE_CXX_FLAGS: "${{ matrix.CMAKE_CXX_FLAGS }} -O0"

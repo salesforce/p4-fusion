@@ -36,25 +36,29 @@ trap cleanup EXIT
 delete_perforce_client() {
   if p4 clients | awk '{print $2}' | grep -Fxq "${P4CLIENT}"; then
     # delete the client
-
     p4 client -f -Fs -d "${P4CLIENT}"
   fi
 }
 
-# ensure that user is logged into the Perforce server
-if ! p4 login -s &>/dev/null; then
-  handbook_link="https://handbook.sourcegraph.com/departments/ce-support/support/process/p4-enablement/#generate-a-session-ticket"
-  address="${P4USER}:${P4PORT}"
+echo "::group::{Ensure that Perforce credentials are valid}"
+{
+  if ! p4 login -s &>/dev/null; then
+    handbook_link="https://handbook.sourcegraph.com/departments/ce-support/support/process/p4-enablement/#generate-a-session-ticket"
+    address="${P4USER}:${P4PORT}"
 
-  cat <<END
+    cat <<END
 'p4 login -s' command failed. This indicates that you might not be logged into '$address'.
 Try using 'p4 -u ${P4USER} login -a' to generate a session ticket.
 See '${handbook_link}' for more information.
 END
 
-  exit 1
-fi
+    exit 1
+  fi
+}
 
+echo "::endgroup::"
+
+echo "::group::{Create temporary Perforce client}"
 {
   printf "(re)creating temporary client '%s'..." "$P4CLIENT"
 
@@ -65,42 +69,44 @@ fi
 
   printf "done\n"
 }
+echo "::endgroup::"
 
 echo "::group::{Build P4 Fusion}"
-
-time (./generate_cache.sh Debug && ./build.sh)
-
+{
+  time (./generate_cache.sh Debug && ./build.sh)
+}
 echo "::endgroup::"
 
 echo "::group::{Run p4-fusion against the downloaded depot}"
+{
+  time ./build/p4-fusion/p4-fusion \
+    --path "//${DEPOT_NAME}/..." \
+    --client "${P4CLIENT}" \
+    --user "$P4USER" \
+    --src "${GIT_DEPOT_DIR}" \
+    --networkThreads 64 \
+    --port "${P4PORT}" \
+    --lookAhead 15000 \
+    --printBatch 1000 \
+    --noBaseCommit true \
+    --retries 10 \
+    --refresh 1000 \
+    --maxChanges -1 \
+    --includeBinaries true \
+    --fsyncEnable true \
+    --noColor true 2>&1 | tee "${P4_FUSION_LOG}"
 
-time ./build/p4-fusion/p4-fusion \
-  --path "//${DEPOT_NAME}/..." \
-  --client "${P4CLIENT}" \
-  --user "$P4USER" \
-  --src "${GIT_DEPOT_DIR}" \
-  --networkThreads 64 \
-  --port "${P4PORT}" \
-  --lookAhead 15000 \
-  --printBatch 1000 \
-  --noBaseCommit true \
-  --retries 10 \
-  --refresh 1000 \
-  --maxChanges -1 \
-  --includeBinaries true \
-  --fsyncEnable true \
-  --noColor true 2>&1 | tee "${P4_FUSION_LOG}"
-
+}
 echo "::endgroup::"
 
 echo "::group::{Run validation on migrated data}"
-
-time ./validate-migration.sh \
-  --force \
-  --debug \
-  --logfile="${P4_FUSION_LOG}" \
-  --p4workdir="${DEPOT_DIR}" \
-  --gitdir="${GIT_DEPOT_DIR}" \
-  --datadir="${TMP}/datadir"
-
+{
+  time ./validate-migration.sh \
+    --force \
+    --debug \
+    --logfile="${P4_FUSION_LOG}" \
+    --p4workdir="${DEPOT_DIR}" \
+    --gitdir="${GIT_DEPOT_DIR}" \
+    --datadir="${TMP}/datadir"
+}
 echo "::endgroup::"
