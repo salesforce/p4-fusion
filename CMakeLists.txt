@@ -61,6 +61,6 @@ add_subdirectory(vendor)
 add_subdirectory(p4-fusion)
 
 if (BUILD_TESTS)
-    message(STATUS "Building tests ")
+    message(STATUS "Building tests")
     add_subdirectory(tests)
 endif ()
