@@ -1,5 +1,6 @@
 # Build binaries
-build/
+/build/
+/release/
 helix-core-api/
 
 # Misc.
