@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 SCRIPT_ROOT="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
-cd "${SCRIPT_ROOT}/../.."
+cd "${SCRIPT_ROOT}/../../.."
 
 export TEMPLATES="${SCRIPT_ROOT}/templates"
 
@@ -52,7 +52,7 @@ Try using 'p4 -u ${P4USER} login -a' to generate a session ticket.
 See '${handbook_link}' for more information.
 END
 
-    exit 1
+  exit 1
   fi
 }
 
@@ -79,24 +79,48 @@ echo "::endgroup::"
 
 echo "::group::{Run p4-fusion against the downloaded depot}"
 {
-  time ./build/p4-fusion/p4-fusion \
-    --path "//${DEPOT_NAME}/..." \
-    --client "${P4CLIENT}" \
-    --user "$P4USER" \
-    --src "${GIT_DEPOT_DIR}" \
-    --networkThreads 64 \
-    --port "${P4PORT}" \
-    --lookAhead 15000 \
-    --printBatch 1000 \
-    --noBaseCommit true \
-    --retries 10 \
-    --refresh 1000 \
-    --maxChanges -1 \
-    --includeBinaries true \
-    --fsyncEnable true \
-    --noColor true 2>&1 | tee "${P4_FUSION_LOG}"
+  P4_FUSION_ARGS=(
+    --path "//${DEPOT_NAME}/..."
+    --client "${P4CLIENT}"
+    --user "$P4USER"
+    --src "${GIT_DEPOT_DIR}"
+    --networkThreads 64
+    --port "${P4PORT}"
+    --lookAhead 15000
+    --printBatch 1000
+    --noBaseCommit true
+    --retries 10
+    --refresh 1000
+    --maxChanges -1
+    --includeBinaries true
+    --fsyncEnable true
+    --noColor true
+  )
 
+  if [[ "${USE_VALGRIND:-"false"}" == "true" ]]; then
+    # run p4-fusion under valgrind
+
+    VALGRIND_ARGS=(
+      --fair-sched=yes    # see https://valgrind.org/docs/manual/manual-core.html#manual-core.pthreads: unsure if this makes much of a difference in pratice
+      --error-exitcode=99 # tell valgrind to exit if it finds an issue
+      --verbose
+    )
+
+    # fill in extra flags provided by action runner
+    read -r -a extra_valgrind_args <<<"${VALGRIND_FLAGS:-}"
+    for flag in "${extra_valgrind_args[@]}"; do
+      if [[ -n "${flag}" ]]; then
+        VALGRIND_ARGS+=("$flag")
+      fi
+    done
+
+    time valgrind "${VALGRIND_ARGS[@]}" ./build/p4-fusion/p4-fusion "${P4_FUSION_ARGS[@]}" | tee "${P4_FUSION_LOG}"
+  else
+    # run p4-fusion normally
+    time ./build/p4-fusion/p4-fusion "${P4_FUSION_ARGS[@]}" | tee "${P4_FUSION_LOG}"
+  fi
 }
+
 echo "::endgroup::"
 
 echo "::group::{Run validation on migrated data}"

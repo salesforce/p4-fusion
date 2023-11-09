@@ -1,8 +1,10 @@
 #!/bin/bash
 
-mkdir build
-cd build
-rm CMakeCache.txt
+cd "$(dirname "${BASH_SOURCE[0]}")"
+set -exo pipefail
+
+mkdir build || true
+rm build/CMakeCache.txt || true
 
 cmakeArgs=(
   -DCMAKE_BUILD_TYPE=$1
@@ -42,5 +44,17 @@ else
   )
 fi
 
+if [[ -n "$CMAKE_C_COMPILER_LAUNCHER" ]]; then
+  cmakeArgs+=(
+    -DCMAKE_C_COMPILER_LAUNCHER="$CMAKE_C_COMPILER_LAUNCHER"
+  )
+fi
+
+if [[ -n "$CMAKE_CXX_COMPILER_LAUNCHER" ]]; then
+  cmakeArgs+=(
+    -DCMAKE_CXX_COMPILER_LAUNCHER="$CMAKE_CXX_COMPILER_LAUNCHER"
+  )
+fi
+
 echo "Using CMake arguments: \n${cmakeArgs[@]}"
-cmake .. "${cmakeArgs[@]}"
+cmake -S . -B build "${cmakeArgs[@]}"

@@ -2,17 +2,41 @@ name: validate-migration
 
 on: [ push ]
 
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
 env:
-  # Constants
+  # Setup: Constants for downloading and compiling dependencies
   P4_DOWNLOAD_URL: "https://www.perforce.com/downloads/perforce/r23.1/bin.linux26x86_64/p4api-glibc2.3-openssl1.0.2.tgz"
+
   OPENSSL_DOWNLOAD_URL: "https://www.openssl.org/source/openssl-1.0.2u.tar.gz"
+  OPENSSL_SOURCE_DIR: "/tmp/openssl-src"
   OPENSSL_INSTALL_DIR: "/tmp/openssl-install"
 
-  # Perforce credentials
+  VALGRIND_DOWNLOAD_URL: "https://sourceware.org/pub/valgrind/valgrind-3.22.0.tar.bz2"
+  VALGRIND_INSTALLATION_DIR: "/usr"
+  VALGRIND_SOURCE_DIR: "/tmp/valgrind-src"
+
+  # Setup: Perforce credentials
   P4PORT: "perforce.sgdev.org:1666" # the address of the Perforce server to connect to
   P4USER: "admin" # the name of the Perforce user
   P4PASSWD: ${{ secrets.P4PASSWD }} # the ticket for the Perforce user
 
+  # Setup: Enable sccache for faster builds
+  SCCACHE_GHA_ENABLED: "true"
+  CC: "sccache clang"
+  CXX: "sccache clang++"
+  CMAKE_C_COMPILER_LAUNCHER: "sccache"
+  CMAKE_CXX_COMPILER_LAUNCHER: "sccache"
+  CMAKE_CXX_COMPILER: "clang++"
+  CMAKE_C_COMPILER: "clang"
+
+  # Setup: Sanitizer flags
+  UBSAN_OPTIONS: "print_stacktrace=1" # print stack trace on undefined behavior
+  ASAN_OPTIONS: "check_initialization_order=1" # check initialization order of globals
+
+  # Test: Input parameters to the validate-migration test script
   DEPOT_NAME: "source/src-cli" # the name of the Perforce depot to validate the git migration against
 
 jobs:
@@ -20,33 +44,90 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitizer:
-          - addressSanitizer
-          - threadSanitizer
-          #          disabled until we figure out how to build with clang in github actions
-          #          - memorySanitizer
-          - leakSanitizer
-          - undefinedSanitizer
-          - noSanitizer
-        include:
-          - sanitizer: addressSanitizer
-            CMAKE_CXX_FLAGS: "-fsanitize=address -g"
-          - sanitizer: threadSanitizer
-            CMAKE_CXX_FLAGS: "-fsanitize=thread -g"
-          #          disabled until we figure out how to build with clang in github actions
-          #          - sanitizer: memorySanitizer
-          #            CMAKE_CXX_FLAGS: "-fsanitize=memory -g"
-          - sanitizer: leakSanitizer
-            CMAKE_CXX_FLAGS: "-fsanitize=leak -g"
-          - sanitizer: undefinedSanitizer
-            CMAKE_CXX_FLAGS: "-fsanitize=undefined -g"
-          - sanitizer: noSanitizer
-            CMAKE_CXX_FLAGS: ""
+        tool: # Note: If you add or change the name of tools here, you must also adjust the logic in the "Prepare environment for specific tool" step
+          - addressAndUndefinedSanitizer # https://github.com/google/sanitizers/wiki/AddressSanitizer and https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html
+          - threadSanitizer # https://github.com/google/sanitizers/wiki/ThreadSanitizerCppManual
+          - valgrindMemcheck # https://valgrind.org/info/tools.html#memcheck
+          - valgrindHelgrind # https://valgrind.org/info/tools.html#helgrind
+          - noTool
 
     runs-on: ubuntu-latest
 
     steps:
+      - name: "Prepare environment for specific tool"
+        run: |
+          # Set environment variables for future steps based on the tool being used. We can't refer to the matrix variables in the env section
+          # of the job, so we have to do it here.
+          #
+          # See https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-environment-variable 
+          # for more information on the method to set environment variables.
+          
+          bash <<"EOF"
+          
+          set -euxo pipefail
+        
+          case ${{ matrix.tool }} in
+          
+          noTool)
+            # No tool is being used, so we don't need to set any flags
+          ;;
+              
+          addressAndUndefinedSanitizer)
+            OPENSSL_FLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all"
+            CMAKE_CXX_FLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all"
+          ;;
+        
+          threadSanitizer)
+            OPENSSL_FLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+            CMAKE_CXX_FLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+          ;;
+        
+          valgrindMemcheck)
+            VALGRIND_FLAGS="--tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes"
+          ;;
+        
+          valgrindHelgrind)
+            VALGRIND_FLAGS="--tool=helgrind --track-lockorders=yes --history-level=full" 
+          ;;
+        
+          *)
+            echo "Unknown tool: ${{ matrix.tool }}"
+            exit 1
+          ;;
+        
+          esac
+      
+          {
+            # Set the flags for compiling C++
+            # 
+            # Note: Valgrind's documentation recommends compiling with -O0 to avoid compiler optimizations that can 
+            # lead to inaccurate line numbers. However, we've found that compiling with -O1 is much faster (~2x) and 
+            # "should work fairly well" according to the Valgrind documentation.
+            # 
+            # If you're getting inaccurate line numbers, try tweaking the optimization level to -O0 to see 
+            # that helps. 
+            #
+            # See https://valgrind.org/docs/manual/quick-start.html#quick-start.prepare for more information.
+            echo "CMAKE_CXX_FLAGS=-stdlib=libc++ -fno-omit-frame-pointer -g -O1 ${CMAKE_CXX_FLAGS:-""}"
+
+            # Set the flags for compiling Valgrind
+            echo "VALGRIND_FLAGS=${VALGRIND_FLAGS:-""}"
+
+            # Set the flags for compiling OpenSSL
+            echo "OPENSSL_FLAGS=${OPENSSL_FLAGS:-""}"
+
+            # Set the temporary Perforce client name to use while validating the git migration
+            echo "P4CLIENT=validate-migration-${{ github.ref_name }}-${{ github.sha }}-${{ github.run_number }}-${{ matrix.tool }}"
+          } >>"$GITHUB_ENV"
+            
+          EOF
+
       - uses: actions/checkout@v2
+
+      - name: "Run sscache"
+        uses: mozilla-actions/sccache-action@v0.0.3
+        with:
+          version: "v0.6.0"
 
       - name: "Install Perforce CLI"
         uses: perforce/setup-p4@1.0.2
@@ -54,10 +135,75 @@ jobs:
           command: "help"
           p4_version: 23.1
 
-      - name: "Install c++ compilation dependencies"
+      - name: "Install APT package dependencies"
         run: |
+          bash <<"EOF"
+          
+          set -euxo pipefail
+        
+          PACKAGES=(
+            # C++ compilation dependencies
+            git
+            make
+            cmake
+            gcc 
+            g++ 
+            clang
+            libc6-dbg
+            libc++-dev
+            libc++abi-dev
+            ninja-build
+        
+            # For llvm-symbolizer for symbolizing stack traces
+            llvm
+            
+            # For envsubst in the run-test.sh script
+            gettext # for envsubst
+          )
+        
           sudo apt-get update
-          sudo apt-get install git make cmake gcc g++ clang --yes # p4-fusion dependencies
+          sudo apt-get install --yes "${PACKAGES[@]}"
+          
+          # remove any existing Valgrind installation since we're compiling it from source
+          sudo apt remove valgrind --yes
+          
+          EOF
+
+      - name: "Cache Valgrind source"
+        if: ${{ env.VALGRIND_FLAGS != '' }}
+        id: cache-valgrind-source
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.VALGRIND_SOURCE_DIR }}
+          key: ${{ runner.os }}-valgrind--${{ env.VALGRIND_DOWNLOAD_URL }}
+
+      - name: "Download Valgrind source"
+        if : ${{ env.VALGRIND_FLAGS != '' && steps.cache-valgrind-source.outputs.cache-hit != 'true' }}
+        run: |
+          curl -L "${VALGRIND_DOWNLOAD_URL}" > valgrind.tar.bz2
+          mkdir -p "${VALGRIND_SOURCE_DIR}" || true
+          tar -C "${VALGRIND_SOURCE_DIR}" -xjf valgrind.tar.bz2 --strip-components 1
+          rm valgrind.tar.bz2 || true
+
+      - name: "Compile Valgrind"
+        if: ${{ env.VALGRIND_FLAGS != '' }}
+        run: |
+          # Note, we need to compile valgrind from source to work around this issue: 
+          # https://bugs.kde.org/show_bug.cgi?id=452758
+          
+          bash <<"EOF"
+          
+          set -euxo pipefail
+          
+          pushd "${VALGRIND_SOURCE_DIR}"
+  
+          ./configure --prefix="${VALGRIND_INSTALLATION_DIR}"
+          make --jobs="$(nproc)"
+          sudo make install
+          
+          popd
+          
+          EOF
 
       - name: "Cache Perforce API headers"
         id: cache-p4api
@@ -73,29 +219,57 @@ jobs:
           mkdir -p vendor/helix-core-api/linux
           tar -C vendor/helix-core-api/linux -xzf p4.tgz --strip 1
 
-      - name: "Cache OpenSSL"
+      - name: "Cache OpenSSL source"
+        id: cache-openssl-source
         uses: actions/cache@v2
-        id: cache-openssl
         with:
-          path: ${{ env.OPENSSL_INSTALL_DIR }}
-          key: ${{ runner.os }}-openssl-${{ env.OPENSSL_DOWNLOAD_URL }}
+          path: ${{ env.OPENSSL_SOURCE_DIR }}
+          key: ${{ runner.os }}-openssl-source-${{ env.OPENSSL_DOWNLOAD_URL }}
+
+      - name: "Download OpenSSL source"
+        if : ${{ steps.cache-openssl-source.outputs.cache-hit != 'true' }}
+        run: |
+          curl -L "${OPENSSL_DOWNLOAD_URL}" --output openssl.tgz
+          mkdir -p "${OPENSSL_SOURCE_DIR}" || true
+          tar -C "${OPENSSL_SOURCE_DIR}" -xzf openssl.tgz --strip-components 1
+          rm openssl.tgz || true
 
       - name: "Compile OpenSSL"
-        if: ${{ steps.cache-openssl.outputs.cache-hit != 'true' }}
         run: |
-          mkdir openssl-src
-          curl -L "${OPENSSL_DOWNLOAD_URL}" --output openssl.tgz
-          tar -C openssl-src -xzf openssl.tgz --strip 1
-          pushd openssl-src
-          ./config --prefix="${OPENSSL_INSTALL_DIR}" --static
-          make install
-          popd 
+          bash <<"EOF"
+          
+          set -euxo pipefail 
+          
+          pushd "${OPENSSL_SOURCE_DIR}"
+  
+          CONFIG_ARGS=(
+            --prefix="${OPENSSL_INSTALL_DIR}"
+          )
+          
+          read -r -a array <<<"${OPENSSL_FLAGS:-}"
+          for flag in "${array[@]}"; do
+            if [[ -n "${flag}" ]]; then
+              CONFIG_ARGS+=("$flag")
+            fi
+          done
+          
+          ./config "${CONFIG_ARGS[@]}"
+          make --jobs="$(nproc)"
+          
+          sudo make install
+          
+          popd
+          
+          EOF
 
-      - name: "Run validate migration script"
+      - name: "Build P4 Fusion and run validate migration script"
         run: |
-          sudo apt-get install gettext --yes # for envsubst 
-          .github/workflows/run-test.sh
+          .github/workflows/validate-migration-scripts/build-p4-fusion-and-run-validate-migration.sh
         env:
-          P4CLIENT: "validate-migration-${{ github.ref_name }}-${{ github.run_number }}-${{ matrix.sanitizer }}" # the temporary Perforce client name to use while validating the git migration
           OPENSSL_ROOT_DIR: ${{ env.OPENSSL_INSTALL_DIR }}
-          CMAKE_CXX_FLAGS: "${{ matrix.CMAKE_CXX_FLAGS }} -O0"
+          USE_VALGRIND: ${{ env.VALGRIND_FLAGS != '' }}
+
+      - name: "Ensure p4 client is deleted"
+        if: always()
+        run: |
+          timeout 30 p4 client -f -Fs -d "${P4CLIENT}" || true

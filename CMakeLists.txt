@@ -1,7 +1,21 @@
 cmake_minimum_required(VERSION 3.16)
+variable_watch(LIBCXX_INSTALL_DIR)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
+endif ()
+
+# include alternative libc installation iff LIBCXX_INSTALL_DIR is non empty
+if (DEFINED ENV{LIBCXX_INSTALL_DIR})
+    set(LIBCXX_INSTALL_DIR $ENV{LIBCXX_INSTALL_DIR})
+else ()
+    set(LIBCXX_INSTALL_DIR "")
+endif ()
+
+if (EXISTS ${LIBCXX_INSTALL_DIR})
+    message(STATUS, "Using libcxx from ${LIBCXX_INSTALL_DIR}")
+    include_directories(SYSTEM "${LIBCXX_INSTALL_DIR}/include/c++/v1")
+    link_directories("${LIBCXX_INSTALL_DIR}/lib")
 endif ()
 
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
@@ -21,14 +35,6 @@ if (NOT DEFINED OPENSSL_ROOT_DIR)
     endif ()
 endif ()
 
-if (NOT DEFINED CMAKE_C_COMPILER)
-    set(CMAKE_C_COMPILER "/usr/bin/gcc")
-endif ()
-
-if (NOT DEFINED CMAKE_CXX_COMPILER)
-    set(CMAKE_CXX_COMPILER "/usr/bin/g++")
-endif ()
-
 option(MTR_ENABLED "Enable minitrace profiling" OFF)
 option(BUILD_TESTS "Build tests" OFF)
 
@@ -40,6 +46,7 @@ set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 
 set(CMAKE_CXX_FLAGS "$ENV{CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS "$ENV{CMAKE_EXE_LINKER_FLAGS} ${CMAKE_EXE_LINKER_FLAGS}")
 
 project(
         p4-fusion

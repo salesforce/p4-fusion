@@ -1,5 +1,7 @@
 #!/bin/bash
 
-cd build/
+cd "$(dirname "${BASH_SOURCE[0]}")"
+set -euxo pipefail
+
 CORES=$(grep -c \^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu)
-cmake --build . -j$CORES --target all
+cmake --build build/ -j$CORES --target all
