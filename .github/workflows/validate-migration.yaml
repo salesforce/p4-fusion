@@ -9,28 +9,37 @@ concurrency:
 env:
   # Setup: Constants for downloading and compiling dependencies
   P4_DOWNLOAD_URL: "https://www.perforce.com/downloads/perforce/r23.1/bin.linux26x86_64/p4api-glibc2.3-openssl1.0.2.tgz"
+  P4_DOWNLOAD_DIR: "/tmp/p4-download"
 
   OPENSSL_DOWNLOAD_URL: "https://www.openssl.org/source/openssl-1.0.2u.tar.gz"
   OPENSSL_SOURCE_DIR: "/tmp/openssl-src"
   OPENSSL_INSTALL_DIR: "/tmp/openssl-install"
+  OPENSSL_DOWNLOAD_DIR: "/tmp/openssl-download"
+
+  LLVM_PROJECT_DOWNLOAD_URL: "https://github.com/llvm/llvm-project/archive/refs/tags/llvmorg-16.0.4.tar.gz"
+  LLVM_PROJECT_DOWNLOAD_DIR: "/tmp/llvm-project-download"
+  LLVM_PROJECT_SOURCE_DIR: "/tmp/llvm-project-src"
+  LLVM_PROJECT_INSTALL_DIR: "/tmp/llvm-project-install"
+  CLANG_INSTALL_DIR: "/tmp/clang-install"
 
   VALGRIND_DOWNLOAD_URL: "https://sourceware.org/pub/valgrind/valgrind-3.22.0.tar.bz2"
   VALGRIND_INSTALLATION_DIR: "/usr"
   VALGRIND_SOURCE_DIR: "/tmp/valgrind-src"
+  VALGRIND_DOWNLOAD_DIR: "/tmp/valgrind-download"
 
   # Setup: Perforce credentials
-  P4PORT: "perforce.sgdev.org:1666" # the address of the Perforce server to connect to
+  P4PORT: "ssl:perforce.sgdev.org:1666" # the address of the Perforce server to connect to
   P4USER: "admin" # the name of the Perforce user
   P4PASSWD: ${{ secrets.P4PASSWD }} # the ticket for the Perforce user
 
   # Setup: Enable sccache for faster builds
   SCCACHE_GHA_ENABLED: "true"
-  CC: "sccache clang"
-  CXX: "sccache clang++"
+  CC: "clang-16"
+  CXX: "clang++-16"
   CMAKE_C_COMPILER_LAUNCHER: "sccache"
   CMAKE_CXX_COMPILER_LAUNCHER: "sccache"
-  CMAKE_CXX_COMPILER: "clang++"
-  CMAKE_C_COMPILER: "clang"
+  CMAKE_CXX_COMPILER: "clang++-16"
+  CMAKE_C_COMPILER: "clang-16"
 
   # Setup: Sanitizer flags
   UBSAN_OPTIONS: "print_stacktrace=1" # print stack trace on undefined behavior
@@ -51,7 +60,7 @@ jobs:
           - valgrindHelgrind # https://valgrind.org/info/tools.html#helgrind
           - noTool
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: "Prepare environment for specific tool"
@@ -73,13 +82,17 @@ jobs:
           ;;
               
           addressAndUndefinedSanitizer)
-            OPENSSL_FLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all"
+            OPENSSL_FLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -nostdinc++ -nostdlib++ -stdlib=libc++ -fPIE"
             CMAKE_CXX_FLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all"
+            CMAKE_EXE_LINKER_FLAGS="-lc++ -lc++abi -lunwind -pie"
+            LLVM_USE_SANITIZER="Address;Undefined"
           ;;
         
           threadSanitizer)
-            OPENSSL_FLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+            OPENSSL_FLAGS="-fsanitize=thread -fno-sanitize-recover=all -nostdinc++ -nostdlib++ -stdlib=libc++"
             CMAKE_CXX_FLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+            CMAKE_EXE_LINKER_FLAGS="-lc++ -lc++abi -lunwind -pie"
+            LLVM_USE_SANITIZER="Thread"
           ;;
         
           valgrindMemcheck)
@@ -109,6 +122,10 @@ jobs:
             #
             # See https://valgrind.org/docs/manual/quick-start.html#quick-start.prepare for more information.
             echo "CMAKE_CXX_FLAGS=-stdlib=libc++ -fno-omit-frame-pointer -g -O1 ${CMAKE_CXX_FLAGS:-""}"
+          
+            echo "CMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS:-""}"
+          
+            echo "LLVM_USE_SANITIZER=${LLVM_USE_SANITIZER:-""}"
 
             # Set the flags for compiling Valgrind
             echo "VALGRIND_FLAGS=${VALGRIND_FLAGS:-""}"
@@ -132,7 +149,7 @@ jobs:
       - name: "Install Perforce CLI"
         uses: perforce/setup-p4@1.0.2
         with:
-          command: "help"
+          command: "trust -y -f"
           p4_version: 23.1
 
       - name: "Install APT package dependencies"
@@ -140,22 +157,28 @@ jobs:
           bash <<"EOF"
           
           set -euxo pipefail
-        
+          
+          # Add the LLVM apt repository
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo apt-add-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-16 main" 
+          
           PACKAGES=(
             # C++ compilation dependencies
             git
             make
             cmake
             gcc 
-            g++ 
-            clang
+            g++
             libc6-dbg
-            libc++-dev
-            libc++abi-dev
             ninja-build
+          
+            # Clang 16 dependencies
+            clang-16
+            libc++-16-dev
+            libc++abi-16-dev
         
             # For llvm-symbolizer for symbolizing stack traces
-            llvm
+            llvm-16
             
             # For envsubst in the run-test.sh script
             gettext # for envsubst
@@ -167,23 +190,96 @@ jobs:
           # remove any existing Valgrind installation since we're compiling it from source
           sudo apt remove valgrind --yes
           
+          
           EOF
 
-      - name: "Cache Valgrind source"
+      - name: "Cache LLVM project gzip"
+        id: cache-llvm-project-source
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.LLVM_PROJECT_DOWNLOAD_DIR }}
+          key: ${{ runner.os }}-llvm-project-gzip-${{ env.LLVM_PROJECT_DOWNLOAD_URL }}
+
+      - name: "Download LLVM project"
+        if: ${{ steps.cache-llvm-project-source.outputs.cache-hit != 'true' }}
+        run: |
+          mkdir -p "${LLVM_PROJECT_DOWNLOAD_DIR}" || true
+          pushd "${LLVM_PROJECT_DOWNLOAD_DIR}"
+          
+          curl -L "${LLVM_PROJECT_DOWNLOAD_URL}" --output llvm-project.tar.gz
+          popd
+
+      - name: "Unpack LLVM project"
+        run: |
+          mkdir -p "${LLVM_PROJECT_SOURCE_DIR}" || true
+          tar -C "${LLVM_PROJECT_SOURCE_DIR}" -xzf "${LLVM_PROJECT_DOWNLOAD_DIR}/llvm-project.tar.gz" --strip-components 1
+
+#      - name: "Install Clang"
+#        run: |
+#          bash <<"EOF"
+#
+#            set -euxo pipefail
+#
+#            pushd "${LLVM_PROJECT_SOURCE_DIR}"
+#
+#            mkdir build
+#            pushd build
+#
+#            cmake -DLLVM_ENABLE_PROJECTS=clang \
+#                  -DCMAKE_INSTALL_PREFIX="${CLANG_INSTALL_DIR}" \
+#                  -DCMAKE_BUILD_TYPE=Release \
+#                  -DCMAKE_C_COMPILER=clang \
+#                  -DCMAKE_CXX_COMPILER=clang++ \
+#                  -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+#                  -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
+#                  -G "Unix Makefiles" \
+#                  ../llvm
+#
+#            echo "$CLANG_INSTALL_DIR" >> "$GITHUB_PATH"
+#
+#            make --jobs="$(nproc)"
+#            sudo apt remove clang --yes
+#
+#            popd
+#            popd
+#
+#          EOF
+
+      - name: "Install LibCXX"
+        run: |          
+          pushd "${LLVM_PROJECT_SOURCE_DIR}"
+          
+          cmake -G Ninja -S runtimes -B build \
+            -DCMAKE_INSTALL_PREFIX="${LLVM_PROJECT_INSTALL_DIR}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind" \
+            -DCMAKE_C_COMPILER=clang-16 \
+            -DCMAKE_CXX_COMPILER=clang++-16 \
+            -DLLVM_USE_SANITIZER="${LLVM_USE_SANITIZER:-""}" \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+          ninja --verbose -C build cxx cxxabi unwind
+          ninja --verbose -C build install-cxx install-cxxabi install-unwind
+          
+          popd
+
+      - name: "Cache Valgrind bzip"
         if: ${{ env.VALGRIND_FLAGS != '' }}
         id: cache-valgrind-source
         uses: actions/cache@v2
         with:
-          path: ${{ env.VALGRIND_SOURCE_DIR }}
-          key: ${{ runner.os }}-valgrind--${{ env.VALGRIND_DOWNLOAD_URL }}
+          path: ${{ env.VALGRIND_DOWNLOAD_DIR }}
+          key: ${{ runner.os }}-valgrind-bzip-${{ env.VALGRIND_DOWNLOAD_URL }}
 
-      - name: "Download Valgrind source"
-        if : ${{ env.VALGRIND_FLAGS != '' && steps.cache-valgrind-source.outputs.cache-hit != 'true' }}
+      - name: "Download Valgrind bzip"
+        if: ${{ env.VALGRIND_FLAGS != '' && steps.cache-valgrind-source.outputs.cache-hit != 'true' }}
         run: |
-          curl -L "${VALGRIND_DOWNLOAD_URL}" > valgrind.tar.bz2
-          mkdir -p "${VALGRIND_SOURCE_DIR}" || true
-          tar -C "${VALGRIND_SOURCE_DIR}" -xjf valgrind.tar.bz2 --strip-components 1
-          rm valgrind.tar.bz2 || true
+          mkdir -p "${VALGRIND_DOWNLOAD_DIR}" || true
+          pushd "${VALGRIND_DOWNLOAD_DIR}"
+          
+          curl -L "${VALGRIND_DOWNLOAD_URL}" --output valgrind.tar.bz2
+          popd
 
       - name: "Compile Valgrind"
         if: ${{ env.VALGRIND_FLAGS != '' }}
@@ -195,6 +291,14 @@ jobs:
           
           set -euxo pipefail
           
+          # Unpack the Valgrind source
+          pushd "${VALGRIND_DOWNLOAD_DIR}"
+          
+          mkdir -p "${VALGRIND_SOURCE_DIR}" || true
+          tar -C "${VALGRIND_SOURCE_DIR}" -xjf valgrind.tar.bz2 --strip-components 1
+          
+          popd 
+          
           pushd "${VALGRIND_SOURCE_DIR}"
   
           ./configure --prefix="${VALGRIND_INSTALLATION_DIR}"
@@ -205,40 +309,57 @@ jobs:
           
           EOF
 
-      - name: "Cache Perforce API headers"
+      - name: "Cache Perforce API headers gzip"
         id: cache-p4api
         uses: actions/cache@v2
         with:
-          path: vendor/helix-core-api/linux
-          key: ${{ runner.os }}-p4api-${{ env.P4_DOWNLOAD_URL }}
+          path: ${{ env.P4_DOWNLOAD_DIR }}
+          key: ${{ runner.os }}-p4api-gzip-${{ env.P4_DOWNLOAD_URL }}
 
-      - name: "Download Perforce API headers"
+      - name: "Download Perforce API headers gzip"
         if: ${{ steps.cache-p4api.outputs.cache-hit != 'true' }}
         run: |
+          mkdir -p "${P4_DOWNLOAD_DIR}" || true
+          
+          pushd "${P4_DOWNLOAD_DIR}"
           curl -L "${P4_DOWNLOAD_URL}" --output p4.tgz
-          mkdir -p vendor/helix-core-api/linux
-          tar -C vendor/helix-core-api/linux -xzf p4.tgz --strip 1
+          
+          popd          
 
-      - name: "Cache OpenSSL source"
+      - name: "Unpack Perforce API headers"
+        run: |      
+          mkdir -p vendor/helix-core-api/linux
+          tar -C vendor/helix-core-api/linux -xzf "${P4_DOWNLOAD_DIR}/p4.tgz" --strip 1
+
+      - name: "Cache OpenSSL gzip"
         id: cache-openssl-source
         uses: actions/cache@v2
         with:
-          path: ${{ env.OPENSSL_SOURCE_DIR }}
-          key: ${{ runner.os }}-openssl-source-${{ env.OPENSSL_DOWNLOAD_URL }}
+          path: ${{ env.OPENSSL_DOWNLOAD_DIR }}
+          key: ${{ runner.os }}-openssl-source-gzip-v2-${{ env.OPENSSL_DOWNLOAD_URL }}
 
-      - name: "Download OpenSSL source"
+      - name: "Download OpenSSL gzip"
         if : ${{ steps.cache-openssl-source.outputs.cache-hit != 'true' }}
         run: |
+          mkdir -p "${OPENSSL_DOWNLOAD_DIR}" || true
+          pushd "${OPENSSL_DOWNLOAD_DIR}"
+          
           curl -L "${OPENSSL_DOWNLOAD_URL}" --output openssl.tgz
-          mkdir -p "${OPENSSL_SOURCE_DIR}" || true
-          tar -C "${OPENSSL_SOURCE_DIR}" -xzf openssl.tgz --strip-components 1
-          rm openssl.tgz || true
+          popd
 
       - name: "Compile OpenSSL"
         run: |
           bash <<"EOF"
           
           set -euxo pipefail 
+          
+          # unpack the OpenSSL source
+          pushd "${OPENSSL_DOWNLOAD_DIR}"
+          
+          mkdir -p "${OPENSSL_SOURCE_DIR}" || true 
+          tar -C "${OPENSSL_SOURCE_DIR}" -xzf openssl.tgz --strip-components 1
+          
+          popd
           
           pushd "${OPENSSL_SOURCE_DIR}"
   
@@ -268,6 +389,7 @@ jobs:
         env:
           OPENSSL_ROOT_DIR: ${{ env.OPENSSL_INSTALL_DIR }}
           USE_VALGRIND: ${{ env.VALGRIND_FLAGS != '' }}
+          LIBCXX_INSTALL_DIR: $${{ env.LLVM_PROJECT_INSTALL_DIR }}
 
       - name: "Ensure p4 client is deleted"
         if: always()

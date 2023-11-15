@@ -40,7 +40,7 @@ option(BUILD_TESTS "Build tests" OFF)
 
 set(REGEX_BACKEND "Regex backend" "builtin")
 set(CXX_STANDARD_REQUIRED true)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 
 set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")

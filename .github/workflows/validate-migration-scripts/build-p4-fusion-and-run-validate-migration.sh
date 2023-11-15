@@ -8,7 +8,7 @@ export TEMPLATES="${SCRIPT_ROOT}/templates"
 set -euxo pipefail
 
 export P4USER="${P4USER:-"admin"}"                   # the name of the Perforce superuser that the script will use to create the depot
-export P4PORT="${P4PORT:-"perforce.sgdev.org:1666"}" # the address of the Perforce server to connect to
+export P4PORT="${P4PORT:-"ssl:perforce.sgdev.org:1666"}" # the address of the Perforce server to connect to
 
 export DEPOT_NAME="${DEPOT_NAME:-"source/src-cli"}"      # the name of the depot that the script will create on the server
 export P4CLIENT="${P4CLIENT:-"integration-test-client"}" # the name of the temporary client that the script will use while it creates the depot
@@ -17,6 +17,9 @@ TMP="$(mktemp -d)"
 export DEPOT_DIR="${TMP}/${DEPOT_NAME}"
 export GIT_DEPOT_DIR="${TMP}/git-${DEPOT_NAME}"
 export P4_FUSION_LOG="${TMP}/p4-fusion.log"
+
+# Trust our perforce server.
+p4 trust -f -y
 
 cleanup() {
   # ensure that we don't leave a client behind (using up one of our licenses)
