@@ -20,7 +20,6 @@ env:
   LLVM_PROJECT_DOWNLOAD_DIR: "/tmp/llvm-project-download"
   LLVM_PROJECT_SOURCE_DIR: "/tmp/llvm-project-src"
   LLVM_PROJECT_INSTALL_DIR: "/tmp/llvm-project-install"
-  CLANG_INSTALL_DIR: "/tmp/clang-install"
 
   VALGRIND_DOWNLOAD_URL: "https://sourceware.org/pub/valgrind/valgrind-3.22.0.tar.bz2"
   VALGRIND_INSTALLATION_DIR: "/usr"
@@ -213,37 +212,6 @@ jobs:
         run: |
           mkdir -p "${LLVM_PROJECT_SOURCE_DIR}" || true
           tar -C "${LLVM_PROJECT_SOURCE_DIR}" -xzf "${LLVM_PROJECT_DOWNLOAD_DIR}/llvm-project.tar.gz" --strip-components 1
-
-#      - name: "Install Clang"
-#        run: |
-#          bash <<"EOF"
-#
-#            set -euxo pipefail
-#
-#            pushd "${LLVM_PROJECT_SOURCE_DIR}"
-#
-#            mkdir build
-#            pushd build
-#
-#            cmake -DLLVM_ENABLE_PROJECTS=clang \
-#                  -DCMAKE_INSTALL_PREFIX="${CLANG_INSTALL_DIR}" \
-#                  -DCMAKE_BUILD_TYPE=Release \
-#                  -DCMAKE_C_COMPILER=clang \
-#                  -DCMAKE_CXX_COMPILER=clang++ \
-#                  -DCMAKE_C_COMPILER_LAUNCHER=sccache \
-#                  -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
-#                  -G "Unix Makefiles" \
-#                  ../llvm
-#
-#            echo "$CLANG_INSTALL_DIR" >> "$GITHUB_PATH"
-#
-#            make --jobs="$(nproc)"
-#            sudo apt remove clang --yes
-#
-#            popd
-#            popd
-#
-#          EOF
 
       - name: "Install LibCXX"
         run: |          
