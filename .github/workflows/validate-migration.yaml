@@ -189,7 +189,6 @@ jobs:
           # remove any existing Valgrind installation since we're compiling it from source
           sudo apt remove valgrind --yes
           
-          
           EOF
 
       - name: "Cache LLVM project gzip"
@@ -353,7 +352,7 @@ jobs:
 
       - name: "Build P4 Fusion and run validate migration script"
         run: |
-          .github/workflows/validate-migration-scripts/build-p4-fusion-and-run-validate-migration.sh
+          timeout --verbose 1h .github/workflows/validate-migration-scripts/build-p4-fusion-and-run-validate-migration.sh
         env:
           OPENSSL_ROOT_DIR: ${{ env.OPENSSL_INSTALL_DIR }}
           USE_VALGRIND: ${{ env.VALGRIND_FLAGS != '' }}
@@ -362,4 +361,4 @@ jobs:
       - name: "Ensure p4 client is deleted"
         if: always()
         run: |
-          timeout 30 p4 client -f -Fs -d "${P4CLIENT}" || true
+          timeout --verbose 30s .github/workflows/validate-migration-scripts/delete-perforce-client.sh
