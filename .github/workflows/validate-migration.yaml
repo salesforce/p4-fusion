@@ -8,10 +8,10 @@ concurrency:
 
 env:
   # Setup: Constants for downloading and compiling dependencies
-  P4_DOWNLOAD_URL: "https://www.perforce.com/downloads/perforce/r23.1/bin.linux26x86_64/p4api-glibc2.3-openssl1.0.2.tgz"
+  P4_DOWNLOAD_URL: "https://cdist2.perforce.com/perforce/r23.1/bin.linux26x86_64/p4api-glibc2.3-openssl1.1.1.tgz"
   P4_DOWNLOAD_DIR: "/tmp/p4-download"
 
-  OPENSSL_DOWNLOAD_URL: "https://www.openssl.org/source/openssl-1.0.2u.tar.gz"
+  OPENSSL_DOWNLOAD_URL: "https://www.openssl.org/source/openssl-1.1.1w.tar.gz"
   OPENSSL_SOURCE_DIR: "/tmp/openssl-src"
   OPENSSL_INSTALL_DIR: "/tmp/openssl-install"
   OPENSSL_DOWNLOAD_DIR: "/tmp/openssl-download"
@@ -20,12 +20,6 @@ env:
   LLVM_PROJECT_DOWNLOAD_DIR: "/tmp/llvm-project-download"
   LLVM_PROJECT_SOURCE_DIR: "/tmp/llvm-project-src"
   LLVM_PROJECT_INSTALL_DIR: "/tmp/llvm-project-install"
-  CLANG_INSTALL_DIR: "/tmp/clang-install"
-
-  VALGRIND_DOWNLOAD_URL: "https://sourceware.org/pub/valgrind/valgrind-3.22.0.tar.bz2"
-  VALGRIND_INSTALLATION_DIR: "/usr"
-  VALGRIND_SOURCE_DIR: "/tmp/valgrind-src"
-  VALGRIND_DOWNLOAD_DIR: "/tmp/valgrind-download"
 
   # Setup: Perforce credentials
   P4PORT: "ssl:perforce.sgdev.org:1666" # the address of the Perforce server to connect to
@@ -34,12 +28,8 @@ env:
 
   # Setup: Enable sccache for faster builds
   SCCACHE_GHA_ENABLED: "true"
-  CC: "clang-16"
-  CXX: "clang++-16"
   CMAKE_C_COMPILER_LAUNCHER: "sccache"
   CMAKE_CXX_COMPILER_LAUNCHER: "sccache"
-  CMAKE_CXX_COMPILER: "clang++-16"
-  CMAKE_C_COMPILER: "clang-16"
 
   # Setup: Sanitizer flags
   UBSAN_OPTIONS: "print_stacktrace=1" # print stack trace on undefined behavior
@@ -78,29 +68,39 @@ jobs:
           case ${{ matrix.tool }} in
           
           noTool)
-            # No tool is being used, so we don't need to set any flags
+            CMAKE_CXX_FLAGS="-stdlib=libc++"
           ;;
               
           addressAndUndefinedSanitizer)
-            OPENSSL_FLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -nostdinc++ -nostdlib++ -stdlib=libc++ -fPIE"
-            CMAKE_CXX_FLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all"
+            BUILD_LIBCXX="true"
+            OPENSSL_FLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -nostdinc++ -nostdlib++ -stdlib=libc++ -fPIE -DPEDANTIC"
+            CMAKE_CXX_FLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -nostdinc++ -nostdlib++ -stdlib=libc++ -fPIE"
             CMAKE_EXE_LINKER_FLAGS="-lc++ -lc++abi -lunwind -pie"
             LLVM_USE_SANITIZER="Address;Undefined"
           ;;
         
           threadSanitizer)
-            OPENSSL_FLAGS="-fsanitize=thread -fno-sanitize-recover=all -nostdinc++ -nostdlib++ -stdlib=libc++"
-            CMAKE_CXX_FLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+            BUILD_LIBCXX="true"
+            OPENSSL_FLAGS="-fsanitize=thread -fno-sanitize-recover=all -nostdinc++ -nostdlib++ -fPIE -stdlib=libc++"
+            CMAKE_CXX_FLAGS="-fsanitize=thread -fno-sanitize-recover=all -nostdinc++ -nostdlib++ -fPIE -stdlib=libc++"
             CMAKE_EXE_LINKER_FLAGS="-lc++ -lc++abi -lunwind -pie"
             LLVM_USE_SANITIZER="Thread"
           ;;
         
           valgrindMemcheck)
+            OPENSSL_FLAGS="-DPURIFY" # See https://github.com/openssl/openssl/blob/OpenSSL_1_1_1-stable/Configure#L113-L124
             VALGRIND_FLAGS="--tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes"
+          
+            # Use GCC instead of Clang for Valgrind since Ubuntu ships with suppression files for glibc
+            USE_GCC="true"
           ;;
         
           valgrindHelgrind)
-            VALGRIND_FLAGS="--tool=helgrind --track-lockorders=yes --history-level=full" 
+            OPENSSL_FLAGS="-DPURIFY" # See https://github.com/openssl/openssl/blob/OpenSSL_1_1_1-stable/Configure#L113-L124
+            VALGRIND_FLAGS="--tool=helgrind --track-lockorders=yes --history-level=full"           
+            
+            # Use GCC instead of Clang for Valgrind since Ubuntu ships with suppression files for glibc
+            USE_GCC="true"
           ;;
         
           *)
@@ -121,9 +121,13 @@ jobs:
             # that helps. 
             #
             # See https://valgrind.org/docs/manual/quick-start.html#quick-start.prepare for more information.
-            echo "CMAKE_CXX_FLAGS=-stdlib=libc++ -fno-omit-frame-pointer -g -O1 ${CMAKE_CXX_FLAGS:-""}"
+            echo "CMAKE_CXX_FLAGS=-fno-omit-frame-pointer -g -O1 ${CMAKE_CXX_FLAGS:-""}"
           
             echo "CMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS:-""}"
+          
+            # Set the number of parallel jobs to use when compiling
+            # See https://cmake.org/cmake/help/latest/envvar/CMAKE_BUILD_PARALLEL_LEVEL.html for more information
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(($(nproc) + 1))"
           
             echo "LLVM_USE_SANITIZER=${LLVM_USE_SANITIZER:-""}"
 
@@ -132,7 +136,25 @@ jobs:
 
             # Set the flags for compiling OpenSSL
             echo "OPENSSL_FLAGS=${OPENSSL_FLAGS:-""}"
+          
+            # Indicate whether we should build libc++ or not
+            echo "BUILD_LIBCXX=${BUILD_LIBCXX:-"false"}"
+          
+            # Configure the C/C++ compilers
 
+            if [[ "${USE_GCC:-"false"}" == "true" ]]; then
+              echo 'CC=sccache gcc'
+              echo 'CXX=sccache g++'
+              echo 'CMAKE_C_COMPILER=gcc'
+              echo 'CMAKE_CXX_COMPILER=g++'
+            else
+              # use clang 
+              echo 'CC=sccache clang-16'
+              echo 'CXX=sccache clang++-16'
+              echo 'CMAKE_C_COMPILER=clang-16'
+              echo 'CMAKE_CXX_COMPILER=clang++-16'
+            fi 
+        
             # Set the temporary Perforce client name to use while validating the git migration
             echo "P4CLIENT=validate-migration-${{ github.ref_name }}-${{ github.sha }}-${{ github.run_number }}-${{ matrix.tool }}"
           } >>"$GITHUB_ENV"
@@ -141,7 +163,7 @@ jobs:
 
       - uses: actions/checkout@v2
 
-      - name: "Run sscache"
+      - name: "Run sccache"
         uses: mozilla-actions/sccache-action@v0.0.3
         with:
           version: "v0.6.0"
@@ -171,6 +193,7 @@ jobs:
             g++
             libc6-dbg
             ninja-build
+            valgrind
           
             # Clang 16 dependencies
             clang-16
@@ -187,13 +210,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes "${PACKAGES[@]}"
           
-          # remove any existing Valgrind installation since we're compiling it from source
-          sudo apt remove valgrind --yes
-          
-          
           EOF
 
       - name: "Cache LLVM project gzip"
+        if : ${{ env.BUILD_LIBCXX == 'true' }}
         id: cache-llvm-project-source
         uses: actions/cache@v2
         with:
@@ -201,7 +221,7 @@ jobs:
           key: ${{ runner.os }}-llvm-project-gzip-${{ env.LLVM_PROJECT_DOWNLOAD_URL }}
 
       - name: "Download LLVM project"
-        if: ${{ steps.cache-llvm-project-source.outputs.cache-hit != 'true' }}
+        if: ${{ env.BUILD_LIBCXX == 'true' && steps.cache-llvm-project-source.outputs.cache-hit != 'true' }}
         run: |
           mkdir -p "${LLVM_PROJECT_DOWNLOAD_DIR}" || true
           pushd "${LLVM_PROJECT_DOWNLOAD_DIR}"
@@ -210,100 +230,32 @@ jobs:
           popd
 
       - name: "Unpack LLVM project"
+        if: ${{ env.BUILD_LIBCXX == 'true' }}
         run: |
           mkdir -p "${LLVM_PROJECT_SOURCE_DIR}" || true
           tar -C "${LLVM_PROJECT_SOURCE_DIR}" -xzf "${LLVM_PROJECT_DOWNLOAD_DIR}/llvm-project.tar.gz" --strip-components 1
 
-#      - name: "Install Clang"
-#        run: |
-#          bash <<"EOF"
-#
-#            set -euxo pipefail
-#
-#            pushd "${LLVM_PROJECT_SOURCE_DIR}"
-#
-#            mkdir build
-#            pushd build
-#
-#            cmake -DLLVM_ENABLE_PROJECTS=clang \
-#                  -DCMAKE_INSTALL_PREFIX="${CLANG_INSTALL_DIR}" \
-#                  -DCMAKE_BUILD_TYPE=Release \
-#                  -DCMAKE_C_COMPILER=clang \
-#                  -DCMAKE_CXX_COMPILER=clang++ \
-#                  -DCMAKE_C_COMPILER_LAUNCHER=sccache \
-#                  -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
-#                  -G "Unix Makefiles" \
-#                  ../llvm
-#
-#            echo "$CLANG_INSTALL_DIR" >> "$GITHUB_PATH"
-#
-#            make --jobs="$(nproc)"
-#            sudo apt remove clang --yes
-#
-#            popd
-#            popd
-#
-#          EOF
-
       - name: "Install LibCXX"
+        if: ${{ env.BUILD_LIBCXX == 'true' }}
         run: |          
+          bash <<"EOF"
+          
+          set -euxo pipefail
+          
           pushd "${LLVM_PROJECT_SOURCE_DIR}"
           
           cmake -G Ninja -S runtimes -B build \
             -DCMAKE_INSTALL_PREFIX="${LLVM_PROJECT_INSTALL_DIR}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind" \
-            -DCMAKE_C_COMPILER=clang-16 \
-            -DCMAKE_CXX_COMPILER=clang++-16 \
+            -DCMAKE_C_COMPILER="${CMAKE_C_COMPILER}" \
+            -DCMAKE_CXX_COMPILER="${CMAKE_CXX_COMPILER}" \
             -DLLVM_USE_SANITIZER="${LLVM_USE_SANITIZER:-""}" \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
           ninja --verbose -C build cxx cxxabi unwind
           ninja --verbose -C build install-cxx install-cxxabi install-unwind
-          
-          popd
-
-      - name: "Cache Valgrind bzip"
-        if: ${{ env.VALGRIND_FLAGS != '' }}
-        id: cache-valgrind-source
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.VALGRIND_DOWNLOAD_DIR }}
-          key: ${{ runner.os }}-valgrind-bzip-${{ env.VALGRIND_DOWNLOAD_URL }}
-
-      - name: "Download Valgrind bzip"
-        if: ${{ env.VALGRIND_FLAGS != '' && steps.cache-valgrind-source.outputs.cache-hit != 'true' }}
-        run: |
-          mkdir -p "${VALGRIND_DOWNLOAD_DIR}" || true
-          pushd "${VALGRIND_DOWNLOAD_DIR}"
-          
-          curl -L "${VALGRIND_DOWNLOAD_URL}" --output valgrind.tar.bz2
-          popd
-
-      - name: "Compile Valgrind"
-        if: ${{ env.VALGRIND_FLAGS != '' }}
-        run: |
-          # Note, we need to compile valgrind from source to work around this issue: 
-          # https://bugs.kde.org/show_bug.cgi?id=452758
-          
-          bash <<"EOF"
-          
-          set -euxo pipefail
-          
-          # Unpack the Valgrind source
-          pushd "${VALGRIND_DOWNLOAD_DIR}"
-          
-          mkdir -p "${VALGRIND_SOURCE_DIR}" || true
-          tar -C "${VALGRIND_SOURCE_DIR}" -xjf valgrind.tar.bz2 --strip-components 1
-          
-          popd 
-          
-          pushd "${VALGRIND_SOURCE_DIR}"
-  
-          ./configure --prefix="${VALGRIND_INSTALLATION_DIR}"
-          make --jobs="$(nproc)"
-          sudo make install
           
           popd
           
@@ -365,6 +317,7 @@ jobs:
   
           CONFIG_ARGS=(
             --prefix="${OPENSSL_INSTALL_DIR}"
+            --openssldir="${OPENSSL_INSTALL_DIR}" 
           )
           
           read -r -a array <<<"${OPENSSL_FLAGS:-}"
@@ -375,9 +328,9 @@ jobs:
           done
           
           ./config "${CONFIG_ARGS[@]}"
-          make --jobs="$(nproc)"
+          make --jobs="$(($(nproc) + 1))"
           
-          sudo make install
+          sudo make install 
           
           popd
           
@@ -385,13 +338,21 @@ jobs:
 
       - name: "Build P4 Fusion and run validate migration script"
         run: |
-          .github/workflows/validate-migration-scripts/build-p4-fusion-and-run-validate-migration.sh
+          bash <<"EOF"
+          
+          set -euxo pipefail
+          
+          export NUM_NETWORK_THREADS="$(($(nproc) + 1))" # use one more than the number of cores
+          
+          timeout --verbose 30m .github/workflows/validate-migration-scripts/build-p4-fusion-and-run-validate-migration.sh
+          
+          EOF
         env:
           OPENSSL_ROOT_DIR: ${{ env.OPENSSL_INSTALL_DIR }}
           USE_VALGRIND: ${{ env.VALGRIND_FLAGS != '' }}
-          LIBCXX_INSTALL_DIR: $${{ env.LLVM_PROJECT_INSTALL_DIR }}
+          LIBCXX_INSTALL_DIR: ${{ env.LLVM_PROJECT_INSTALL_DIR }}
 
       - name: "Ensure p4 client is deleted"
         if: always()
         run: |
-          timeout 30 p4 client -f -Fs -d "${P4CLIENT}" || true
+          timeout --verbose 30s .github/workflows/validate-migration-scripts/delete-perforce-client.sh
