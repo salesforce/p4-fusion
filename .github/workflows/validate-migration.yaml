@@ -156,7 +156,9 @@ jobs:
             fi 
         
             # Set the temporary Perforce client name to use while validating the git migration
-            echo "P4CLIENT=validate-migration-${{ github.ref_name }}-${{ github.sha }}-${{ github.run_number }}-${{ matrix.tool }}"
+            # P4Clients may not contain slashes, so eliminate them first.
+            normalized_ref="$(echo "${{ github.ref_name }}" | sed 's/\//-/g')"
+            echo "P4CLIENT=validate-migration-${normalized_ref}-${{ github.sha }}-${{ github.run_number }}-${{ matrix.tool }}"
           } >>"$GITHUB_ENV"
             
           EOF
