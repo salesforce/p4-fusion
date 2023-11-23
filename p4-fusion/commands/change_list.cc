@@ -25,44 +25,6 @@ ChangeList::ChangeList(const int& clNumber, std::string&& clDescription, std::st
 {
 }
 
-void ChangeList::PrepareDownload(P4API& p4, const BranchSet& branchSet)
-{
-	MTR_SCOPE("ChangeList", __func__);
-
-	if (branchSet.HasMergeableBranch())
-	{
-		// If we care about branches, we need to run filelog to get where the file came from.
-		// Note that the filelog won't include the source changelist, but
-		// that doesn't give us too much information; even a full branch
-		// copy will have the target files listing the from-file with
-		// different changelists than the point-in-time source branch's
-		// changelist.
-		const FileLogResult& filelog = p4.FileLog(number);
-		if (filelog.HasError())
-		{
-			throw std::runtime_error(filelog.PrintError());
-		}
-		changedFileGroups = branchSet.ParseAffectedFiles(filelog.GetFileData());
-	}
-	else
-	{
-		// If we don't care about branches, then p4->Describe is much faster.
-		const DescribeResult& describe = p4.Describe(number);
-		if (describe.HasError())
-		{
-			ERR("Failed to describe changelist: " << describe.PrintError())
-			throw std::runtime_error(describe.PrintError());
-		}
-		changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData());
-	}
-
-	{
-		std::unique_lock<std::mutex> lock(*downloadPreparedMutex);
-		*downloadPrepared = true;
-		downloadPreparedCV->notify_all();
-	}
-}
-
 void flush(P4API& p4, GitAPI& git, const std::vector<std::shared_ptr<FileData>>& printBatchFileData)
 {
 	MTR_SCOPE("ChangeList", __func__);
@@ -126,16 +88,35 @@ void flush(P4API& p4, GitAPI& git, const std::vector<std::shared_ptr<FileData>>&
 	}
 }
 
-void ChangeList::StartDownload(P4API& p4, GitAPI& git, const int& printBatch)
+void ChangeList::StartDownload(P4API& p4, GitAPI& git, const BranchSet& branchSet, const int& printBatch)
 {
 	MTR_SCOPE("ChangeList", __func__);
 
-	// wait for prepare to be finished.
-
+	if (branchSet.HasMergeableBranch())
 	{
-		std::unique_lock<std::mutex> lock(*downloadPreparedMutex);
-		downloadPreparedCV->wait(lock, [this]()
-		    { return downloadPrepared->load(); });
+		// If we care about branches, we need to run filelog to get where the file came from.
+		// Note that the filelog won't include the source changelist, but
+		// that doesn't give us too much information; even a full branch
+		// copy will have the target files listing the from-file with
+		// different changelists than the point-in-time source branch's
+		// changelist.
+		const FileLogResult& filelog = p4.FileLog(number);
+		if (filelog.HasError())
+		{
+			throw std::runtime_error(filelog.PrintError());
+		}
+		changedFileGroups = branchSet.ParseAffectedFiles(filelog.GetFileData());
+	}
+	else
+	{
+		// If we don't care about branches, then p4->Describe is much faster.
+		const DescribeResult& describe = p4.Describe(number);
+		if (describe.HasError())
+		{
+			ERR("Failed to describe changelist: " << describe.PrintError())
+			throw std::runtime_error(describe.PrintError());
+		}
+		changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData());
 	}
 
 	std::vector<std::shared_ptr<FileData>> printBatchFileData;

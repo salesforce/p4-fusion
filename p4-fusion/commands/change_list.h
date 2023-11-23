@@ -33,8 +33,7 @@ struct ChangeList
 	ChangeList(ChangeList&&) = default;
 	ChangeList& operator=(ChangeList&&) = default;
 
-	void PrepareDownload(P4API& p4, const BranchSet& branchSet);
-	void StartDownload(P4API& p4, GitAPI& git, const int& printBatch);
+	void StartDownload(P4API& p4, GitAPI& git, const BranchSet& branchSet, const int& printBatch);
 	void WaitForDownload();
 	void Clear();
 
@@ -42,7 +41,4 @@ private:
 	std::shared_ptr<std::mutex> commitMutex = std::make_shared<std::mutex>();
 	std::shared_ptr<std::atomic<bool>> downloadJobsCompleted = std::make_shared<std::atomic<bool>>(false);
 	std::shared_ptr<std::condition_variable> commitCV = std::make_shared<std::condition_variable>();
-	std::shared_ptr<std::atomic<bool>> downloadPrepared = std::make_shared<std::atomic<bool>>(false);
-	std::shared_ptr<std::mutex> downloadPreparedMutex = std::make_shared<std::mutex>();
-	std::shared_ptr<std::condition_variable> downloadPreparedCV = std::make_shared<std::condition_variable>();
 };

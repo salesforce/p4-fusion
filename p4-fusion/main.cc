@@ -152,6 +152,13 @@ int Main(int argc, char** argv)
 		}
 		changes = std::move(changesRes.GetChanges());
 	}
+	// Return early if we have no work to do
+	if (changes.empty())
+	{
+		SUCCESS("Repository is up to date. Exiting.")
+		return 0;
+	}
+	SUCCESS("Found " << changes.size() << " uncloned CLs starting from CL " << changes.front().number << " to CL " << changes.back().number)
 
 	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, arguments.GetBranches(), arguments.GetIncludeBinaries());
 	if (branchSet.Count() > 0)
@@ -169,14 +176,6 @@ int Main(int argc, char** argv)
 	}
 	const std::unordered_map<UsersResult::UserID, UsersResult::UserData>& users = usersRes.GetUserEmails();
 	SUCCESS("Received " << users.size() << " userbase details from the Perforce server")
-
-	// Return early if we have no work to do
-	if (changes.empty())
-	{
-		SUCCESS("Repository is up to date. Exiting.")
-		return 0;
-	}
-	SUCCESS("Found " << changes.size() << " uncloned CLs starting from CL " << changes.front().number << " to CL " << changes.back().number)
 
 	// Create the thread pool
 	int networkThreads = arguments.GetNetworkThreads();
@@ -202,17 +201,9 @@ int Main(int argc, char** argv)
 	{
 		ChangeList& cl = changes.at(currentCL);
 
-		pool.AddJob([&cl, &branchSet](P4API& p4, GitAPI& git)
-		    { cl.PrepareDownload(p4, branchSet); });
-	}
-
-	for (size_t currentCL = 0; currentCL < startupDownloadsCount; currentCL++)
-	{
-		ChangeList& cl = changes.at(currentCL);
-
-		pool.AddJob([&downloaded, &cl, printBatch](P4API& p4, GitAPI& git)
+		pool.AddJob([&downloaded, &cl, &branchSet, printBatch](P4API& p4, GitAPI& git)
 		    {
-			cl.StartDownload(p4, git, printBatch);
+			cl.StartDownload(p4, git, branchSet, printBatch);
 			// Mark download as done.
 			downloaded++; });
 	}
@@ -291,8 +282,7 @@ int Main(int argc, char** argv)
 			ChangeList& downloadCL = changes.at(next);
 			pool.AddJob([&downloaded, &downloadCL, &branchSet, printBatch](P4API& p4, GitAPI& git)
 			    {
-				downloadCL.PrepareDownload(p4, branchSet);
-				downloadCL.StartDownload(p4, git, printBatch);
+				downloadCL.StartDownload(p4, git, branchSet, printBatch);
 				// Mark download as done.
 				downloaded++; });
 		}
