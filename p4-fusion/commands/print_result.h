@@ -7,24 +7,30 @@
 #pragma once
 
 #include <vector>
-
+#include <functional>
 #include "common.h"
 #include "result.h"
 
 class PrintResult : public Result
 {
-public:
-	struct PrintData
-	{
-		std::vector<char> contents;
-	};
-
 private:
-	std::vector<PrintData> m_Data;
+	std::function<void()> onNextFile;
+	std::function<void(const char*, int)> onFileContentChunk;
 
 public:
-	const std::vector<PrintData>& GetPrintData() const { return m_Data; }
-
+	PrintResult() = delete;
+	/*
+	 * PrintResult is passed to the P4 API to get the contents of files. The two passed
+	 * callbacks can be used to retrieve these files data.
+	 * The files are printed by the server in the order in they appear when talking to the
+	 * helix API.
+	 *
+	 * Before each file, the onNextFile callback will be called.
+	 * Then, onFileContentChunk is called until the whole file is printed.
+	 * Once done, no more invocations are done.
+	 * Think of this like a tar archive reader: File Header, Content, File Header, Content, end.
+	 */
+	PrintResult(std::function<void()> onNextFile, std::function<void(const char*, int)> onFileContentChunk);
 	void OutputStat(StrDict* varList) override;
 	void OutputText(const char* data, int length) override;
 	void OutputBinary(const char* data, int length) override;

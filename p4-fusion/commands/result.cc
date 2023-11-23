@@ -10,6 +10,6 @@ void Result::HandleError(Error* e)
 {
 	StrBuf str;
 	e->Fmt(&str);
-	ERR("Received error: " << e->FmtSeverity() << " " << str.Text());
+	ERR("Received error: " << e->FmtSeverity() << " " << str.Text())
 	m_Error = *e;
 }

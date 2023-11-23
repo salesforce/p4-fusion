@@ -18,6 +18,8 @@ core
 # Test output.
 /verify/
 
+/release/
+
 # Ignore secert and env files
 **/**/*.secrets
 **/**/*.env

@@ -6,6 +6,18 @@
  */
 #include "filelog_result.h"
 
+FileLogResult& FileLogResult::operator=(const FileLogResult& other)
+{
+	if (this == &other)
+	{
+		// guard...
+		return *this;
+	}
+
+	m_FileData = other.m_FileData;
+	return *this;
+}
+
 // Should be called once per varlist.  Each filelog file
 //   is its own entry.
 void FileLogResult::OutputStat(StrDict* varList)
@@ -23,14 +35,14 @@ void FileLogResult::OutputStat(StrDict* varList)
 	std::string revision = varList->GetVar("rev0")->Text();
 	std::string action = varList->GetVar("action0")->Text();
 
-	m_FileData.push_back(FileData(depotFileStr, revision, action, type));
+	m_FileData.emplace_back(depotFileStr, revision, action, type);
 	FileData& fileData = m_FileData.back();
 
 	// Could optimize here by only performing this loop if the action type is
 	//   an integration style action (entry->isIntegration == true).
 	//   That needs testing, though.
 	int i = 0;
-	StrPtr* how = nullptr;
+	StrPtr* how;
 	while (true)
 	{
 		std::string indexString = std::to_string(i++);

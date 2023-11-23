@@ -6,11 +6,9 @@
  */
 #include "git_api.h"
 
-#include <cstring>
 #include <cstdlib>
 
 #include "git2.h"
-#include "git2/sys/repository.h"
 #include "minitrace.h"
 #include "utils/std_helpers.h"
 
@@ -26,8 +24,13 @@
 		}                                                                      \
 	} while (false)
 
-GitAPI::GitAPI(const bool fsyncEnable, const int tz)
+GitAPI::GitAPI(const std::string& _repoPath, const int tz)
     : timezoneMinutes(tz)
+    , repoPath(_repoPath)
+{
+}
+
+void GitAPI::Init(const bool fsyncEnable)
 {
 	git_libgit2_init();
 	GIT2(git_libgit2_opts(GIT_OPT_ENABLE_FSYNC_GITDIR, (int)fsyncEnable));
@@ -35,6 +38,13 @@ GitAPI::GitAPI(const bool fsyncEnable, const int tz)
 
 GitAPI::~GitAPI()
 {
+	std::unordered_map<std::string, git_index*>::iterator it;
+	for (it = lastBranchTree.begin(); it != lastBranchTree.end(); it++)
+	{
+		git_index_free(it->second);
+	}
+	lastBranchTree.clear();
+
 	if (m_Repo)
 	{
 		git_repository_free(m_Repo);
@@ -63,20 +73,25 @@ bool GitAPI::IsRepositoryClonedFrom(const std::string& depotPath) const
 	return repoDepotPath == depotPath;
 }
 
-bool GitAPI::InitializeRepository(const std::string& srcPath, const bool noCreateBaseCommit)
+void GitAPI::OpenRepository()
 {
-	if (git_repository_open_bare(&m_Repo, srcPath.c_str()) < 0)
+	GIT2(git_repository_open_bare(&m_Repo, repoPath.c_str()));
+}
+
+void GitAPI::InitializeRepository(const bool noCreateBaseCommit)
+{
+	if (git_repository_open_bare(&m_Repo, repoPath.c_str()) < 0)
 	{
 		git_repository_init_options opts = GIT_REPOSITORY_INIT_OPTIONS_INIT;
 		opts.flags = GIT_REPOSITORY_INIT_MKPATH | GIT_REPOSITORY_INIT_BARE;
 		opts.initial_head = "main";
 
-		GIT2(git_repository_init_ext(&m_Repo, srcPath.c_str(), &opts));
-		SUCCESS("Initialized Git repository at " << srcPath);
+		GIT2(git_repository_init_ext(&m_Repo, repoPath.c_str(), &opts));
+		SUCCESS("Initialized Git repository at " << repoPath)
 	}
 	else
 	{
-		SUCCESS("Opened existing Git repository at " << srcPath);
+		SUCCESS("Opened existing Git repository at " << repoPath)
 	}
 
 	// Now that we have a bare repo (potentially empty), we can go ahead and determine
@@ -84,19 +99,19 @@ bool GitAPI::InitializeRepository(const std::string& srcPath, const bool noCreat
 	// If HEAD exists, we use the root commit of the branch HEAD is pointing to.
 	if (IsHEADExists())
 	{
-		PRINT("Finding root commit for HEAD");
+		PRINT("Finding root commit for HEAD")
 
 		// Walk the graph to find the root commit of the HEAD branch.
 		git_revwalk* walk;
-		git_revwalk_new(&walk, m_Repo);
-		git_revwalk_sorting(walk, GIT_SORT_TOPOLOGICAL);
-		git_revwalk_push_head(walk);
+		GIT2(git_revwalk_new(&walk, m_Repo));
+		GIT2(git_revwalk_sorting(walk, GIT_SORT_TOPOLOGICAL));
+		GIT2(git_revwalk_push_head(walk));
 		while (git_revwalk_next(&m_FirstCommitOid, walk) != GIT_ITEROVER)
 		{
 		}
 		git_revwalk_free(walk);
 
-		SUCCESS("Starting from commit " << git_oid_tostr_s(&m_FirstCommitOid));
+		SUCCESS("Starting from commit " << git_oid_tostr_s(&m_FirstCommitOid))
 	}
 	else if (!noCreateBaseCommit)
 	{
@@ -121,7 +136,7 @@ bool GitAPI::InitializeRepository(const std::string& srcPath, const bool noCreat
 		git_tree_free(commitTree);
 		git_index_free(idx);
 
-		WARN("No HEAD commit was found. Created fresh index " << git_oid_tostr_s(&m_FirstCommitOid) << ".");
+		WARN("No HEAD commit was found. Created fresh index " << git_oid_tostr_s(&m_FirstCommitOid) << ".")
 	}
 	else
 	{
@@ -130,8 +145,6 @@ bool GitAPI::InitializeRepository(const std::string& srcPath, const bool noCreat
 		// This empty oid will pass the git_oid_is_zero check.
 		m_FirstCommitOid = git_oid {};
 	}
-
-	return true;
 }
 
 bool GitAPI::IsHEADExists() const
@@ -184,99 +197,109 @@ const std::string GitAPI::DetectLatestCL() const
 }
 
 std::string GitAPI::WriteChangelistBranch(
-    const std::string depotPath,
+    const std::string& depotPath,
     const ChangeList& cl,
     std::vector<FileData>& files,
-    const std::string targetBranch,
-    const std::string authorName,
-    const std::string authorEmail,
-    const std::string mergeFrom) const
+    const std::string& targetBranch,
+    const std::string& authorName,
+    const std::string& authorEmail,
+    const std::string& mergeFrom)
 {
+	MTR_SCOPE("Git", __func__);
+
 	std::string targetBranchRef = "HEAD";
 	git_index* idx;
 
-	if (!targetBranch.empty())
+	if (lastBranchTree.find(targetBranch) != lastBranchTree.end())
 	{
-		// targetBranchRef = "refs/heads/" + targetBranch;
-		// // Look up the branch.
-		// git_reference* branch;
-		// int errorCode = git_reference_lookup(&branch, m_Repo, targetBranchRef.c_str());
-		// if (errorCode != 0 && errorCode != GIT_ENOTFOUND)
-		// {
-		// 	// Unexpected error.
-		// 	GIT2(errorCode);
-		// }
-		// if (errorCode == GIT_ENOTFOUND)
-		// {
-		// 	// Ref doesn't exist yet, so we need to create a new branch. If the
-		// 	// no branch option is set, we create a new root commit, otherwise
-		// 	// we branch off of the known last commit.
-		// 	// If this is a new export, the last known commit is the empty commit
-		// 	// we create to have a common merge-base.
-		// 	// Otherwise, it is the commit HEAD was pointing at when the process
-		// 	// started.
-
-		// 	// Create the branch from the first index.
-		// 	git_commit* firstCommit = nullptr;
-		// 	// TODO: m_FirstCommitOid can be empty if we didn't create a base commit.
-		// 	// In that case, we should probably create a root commit?
-		// 	GIT2(git_commit_lookup(&firstCommit, m_Repo, &m_FirstCommitOid));
-		// 	GIT2(git_branch_create(&branch, m_Repo, branchName.c_str(), firstCommit, 0));
-		// 	git_commit_free(firstCommit);
-		// }
-
-		// targetBranchRef = git_reference_name(branch);
-
-		// // Make head point to the branch.
-		// git_reference* head;
-		// GIT2(git_reference_symbolic_create(&head, m_Repo, "HEAD", git_reference_name(branch), 1, branchName.c_str()));
-		// git_reference_free(head);
-		// git_reference_free(branch);
-
-		// // Now update the files in the index to match the content of the commit pointed at by HEAD.
-		// git_oid oidParentCommit;
-		// GIT2(git_reference_name_to_id(&oidParentCommit, m_Repo, "HEAD"));
-
-		// git_commit* headCommit = nullptr;
-		// GIT2(git_commit_lookup(&headCommit, m_Repo, &oidParentCommit));
-
-		// git_tree* headCommitTree = nullptr;
-		// GIT2(git_commit_tree(&headCommitTree, headCommit));
-
-		// GIT2(git_index_read_tree(m_Index, headCommitTree));
-
-		// git_tree_free(headCommitTree);
-		// git_commit_free(headCommit);
+		idx = lastBranchTree[targetBranch];
 	}
 	else
 	{
-		// Create a new in-memory index for current HEAD.
-		GIT2(git_index_new(&idx));
-		git_oid headCommitSHA;
-		int exitCode = git_reference_name_to_id(&headCommitSHA, m_Repo, "HEAD");
-		if (exitCode != 0 && exitCode != GIT_ENOTFOUND)
+		// Branch not seen yet, we need to load the index into memory.
+		if (!targetBranch.empty())
 		{
-			GIT2(exitCode);
+			// targetBranchRef = "refs/heads/" + targetBranch;
+			// // Look up the branch.
+			// git_reference* branch;
+			// int errorCode = git_reference_lookup(&branch, m_Repo, targetBranchRef.c_str());
+			// if (errorCode != 0 && errorCode != GIT_ENOTFOUND)
+			// {
+			// 	// Unexpected error.
+			// 	GIT2(errorCode);
+			// }
+			// if (errorCode == GIT_ENOTFOUND)
+			// {
+			// 	// Ref doesn't exist yet, so we need to create a new branch. If the
+			// 	// no branch option is set, we create a new root commit, otherwise
+			// 	// we branch off of the known last commit.
+			// 	// If this is a new export, the last known commit is the empty commit
+			// 	// we create to have a common merge-base.
+			// 	// Otherwise, it is the commit HEAD was pointing at when the process
+			// 	// started.
+
+			// 	// Create the branch from the first index.
+			// 	git_commit* firstCommit = nullptr;
+			// 	// TODO: m_FirstCommitOid can be empty if we didn't create a base commit.
+			// 	// In that case, we should probably create a root commit?
+			// 	GIT2(git_commit_lookup(&firstCommit, m_Repo, &m_FirstCommitOid));
+			// 	GIT2(git_branch_create(&branch, m_Repo, branchName.c_str(), firstCommit, 0));
+			// 	git_commit_free(firstCommit);
+			// }
+
+			// targetBranchRef = git_reference_name(branch);
+
+			// // Make head point to the branch.
+			// git_reference* head;
+			// GIT2(git_reference_symbolic_create(&head, m_Repo, "HEAD", git_reference_name(branch), 1, branchName.c_str()));
+			// git_reference_free(head);
+			// git_reference_free(branch);
+
+			// // Now update the files in the index to match the content of the commit pointed at by HEAD.
+			// git_oid oidParentCommit;
+			// GIT2(git_reference_name_to_id(&oidParentCommit, m_Repo, "HEAD"));
+
+			// git_commit* headCommit = nullptr;
+			// GIT2(git_commit_lookup(&headCommit, m_Repo, &oidParentCommit));
+
+			// git_tree* headCommitTree = nullptr;
+			// GIT2(git_commit_tree(&headCommitTree, headCommit));
+
+			// GIT2(git_index_read_tree(m_Index, headCommitTree));
+
+			// git_tree_free(headCommitTree);
+			// git_commit_free(headCommit);
 		}
-		// If the HEAD doesn't exist yet, nothing we need to do. Otherwise, we load
-		// it's current tree into our index.
-		if (exitCode != GIT_ENOTFOUND)
+		else
 		{
-			git_commit* headCommit;
-			GIT2(git_commit_lookup(&headCommit, m_Repo, &headCommitSHA));
-			git_tree* headTree;
-			GIT2(git_commit_tree(&headTree, headCommit));
-			// Load the current tree into the index.
-			GIT2(git_index_read_tree(idx, headTree));
-			git_tree_free(headTree);
-			git_commit_free(headCommit);
+			// Create a new in-memory index for current HEAD.
+			GIT2(git_index_new(&idx));
+			git_oid headCommitSHA;
+			int exitCode = git_reference_name_to_id(&headCommitSHA, m_Repo, "HEAD");
+			if (exitCode != 0 && exitCode != GIT_ENOTFOUND)
+			{
+				GIT2(exitCode);
+			}
+			// If the HEAD doesn't exist yet, nothing we need to do. Otherwise, we load
+			// it's current tree into our index.
+			if (exitCode != GIT_ENOTFOUND)
+			{
+				git_commit* headCommit;
+				GIT2(git_commit_lookup(&headCommit, m_Repo, &headCommitSHA));
+				git_tree* headTree;
+				GIT2(git_commit_tree(&headTree, headCommit));
+				// Load the current tree into the index.
+				GIT2(git_index_read_tree(idx, headTree));
+				git_tree_free(headTree);
+				git_commit_free(headCommit);
+			}
+			// Now we have an in-memory index with the current contents of HEAD.
 		}
-		// Now we have an in-memory index with the current contents of HEAD.
+		lastBranchTree[targetBranch] = idx;
 	}
 
 	for (auto& file : files)
 	{
-		auto& contents = file.GetContents();
 		if (file.IsDeleted())
 		{
 			GIT2(git_index_remove_bypath(idx, file.GetRelativePath().c_str()));
@@ -286,16 +309,15 @@ std::string GitAPI::WriteChangelistBranch(
 			git_index_entry entry = {
 				.mode = GIT_FILEMODE_BLOB,
 				.path = file.GetRelativePath().c_str(),
-				// .file_size = contents.size(),
 			};
+
+			auto& blobOID = file.GetBlobOID();
+			GIT2(git_oid_fromstr(&entry.id, blobOID.c_str()));
+
 			if (file.IsExecutable())
 			{
 				entry.mode = GIT_FILEMODE_BLOB_EXECUTABLE; // 0100755
 			}
-
-			git_oid objId;
-			GIT2(git_blob_create_from_buffer(&objId, m_Repo, contents.data(), contents.size()));
-			GIT2(git_oid_cpy(&entry.id, &objId));
 
 			GIT2(git_index_add(idx, &entry));
 		}
@@ -318,7 +340,7 @@ std::string GitAPI::WriteChangelistBranch(
 		GIT2(git_signature_new(&author, authorName.c_str(), authorEmail.c_str(), cl.timestamp, timezoneMinutes));
 
 		// -3 to remove the trailing "..."
-		std::string commitMsg = cl.number + " - " + cl.description + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl.number + "]";
+		std::string commitMsg = std::to_string(cl.number) + " - " + cl.description + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + std::to_string(cl.number) + "]";
 
 		// Find the parent commits.
 		// Order is very important.
@@ -369,7 +391,60 @@ std::string GitAPI::WriteChangelistBranch(
 		commitSHA = git_oid_tostr_s(&commitID);
 	}
 
-	git_index_free(idx);
-
 	return commitSHA;
+}
+
+BlobWriter::BlobWriter(git_repository* gitRepo)
+    : repo(gitRepo)
+    , writer(nullptr)
+    , state(State::Uninitialized)
+{
+}
+
+BlobWriter GitAPI::WriteBlob() const
+{
+	if (m_Repo == nullptr)
+	{
+		throw std::runtime_error("created blob writer before opening repository");
+	}
+
+	return { m_Repo };
+}
+
+void BlobWriter::Write(const char* contents, int length)
+{
+	MTR_SCOPE("BlobWriter", __func__);
+
+	if (state == State::Closed)
+	{
+		throw std::runtime_error("Called BlobWriter::Write after Close");
+	}
+
+	if (state == State::Uninitialized)
+	{
+		GIT2(git_blob_create_from_stream(&writer, repo, nullptr));
+		state = State::ReadyToWrite;
+	}
+	GIT2(writer->write(writer, contents, length));
+}
+
+std::string BlobWriter::Close()
+{
+	MTR_SCOPE("BlobWriter", __func__);
+
+	if (state == State::Uninitialized)
+	{
+		// If nothing was written yet, it's most likely an empty file is written, so
+		// create a new stream and commit it right away.
+		Write("", 0);
+	}
+
+	if (state == State::Closed)
+	{
+		throw std::runtime_error("Called BlobWriter::Close again");
+	}
+
+	git_oid objId;
+	GIT2(git_blob_create_from_stream_commit(&objId, writer));
+	return git_oid_tostr_s(&objId);
 }

@@ -34,6 +34,6 @@ public:
 		}
 		StrBuf str;
 		m_Error.Fmt(&str);
-		return std::string(str.Text());
+		return { str.Text() };
 	}
 };

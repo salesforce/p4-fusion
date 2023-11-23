@@ -20,7 +20,7 @@ FileMap::FileMap(const FileMap& src)
 	src.copyMapApiInto(m_map);
 }
 
-bool FileMap::IsInLeft(const std::string fileRevision) const
+bool FileMap::IsInLeft(const std::string& fileRevision) const
 {
 	std::unique_lock<std::mutex> lock(*mu);
 
@@ -53,10 +53,8 @@ void FileMap::insertMapping(const std::string& left, const std::string& right, c
 
 void FileMap::InsertTranslationMapping(const std::vector<std::string>& mapping)
 {
-	for (int i = 0; i < mapping.size(); i++)
+	for (const auto& view : mapping)
 	{
-		const std::string& view = mapping.at(i);
-
 		size_t left = view.find('/');
 
 		MapType mapType = MapType::MapInclude;
@@ -79,7 +77,7 @@ void FileMap::InsertTranslationMapping(const std::vector<std::string>& mapping)
 		size_t right = view.find("//", 3);
 		if (right == std::string::npos)
 		{
-			WARN("Found a one-sided mapping, ignoring...");
+			WARN("Found a one-sided mapping, ignoring...")
 			continue;
 		}
 
@@ -101,7 +99,7 @@ void FileMap::copyMapApiInto(MapApi& map) const
 	std::unique_lock<std::mutex> lock(*mu);
 
 	// MapAPI is poorly written and doesn't declare things as const when it should.
-	MapApi* ref = const_cast<MapApi*>(&m_map);
+	auto* ref = const_cast<MapApi*>(&m_map);
 
 	map.Clear();
 	map.SetCaseSensitivity(m_sensitivity);

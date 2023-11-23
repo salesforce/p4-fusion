@@ -9,7 +9,7 @@
 void ChangesResult::OutputStat(StrDict* varList)
 {
 	m_Changes.emplace_back(
-	    varList->GetVar("change")->Text(),
+	    varList->GetVar("change")->Atoi(),
 	    varList->GetVar("desc")->Text(),
 	    varList->GetVar("user")->Text(),
 	    varList->GetVar("time")->Atoi64());

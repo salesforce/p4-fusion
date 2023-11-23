@@ -47,7 +47,6 @@ public:
 	std::string GetSourcePath() const { return GetParameter("--src"); };
 	std::string GetClient() const { return GetParameter("--client"); };
 	int GetNetworkThreads() const { return GetParameterInt("--networkThreads"); };
-	int GetFileSystemThreads() const { return GetParameterInt("--fileSystemThreads"); };
 	int GetPrintBatch() const { return GetParameterInt("--printBatch"); };
 	int GetLookAhead() const { return GetParameterInt("--lookAhead"); };
 	int GetRetries() const { return GetParameterInt("--retries"); };

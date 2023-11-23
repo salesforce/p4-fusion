@@ -26,9 +26,6 @@ struct BranchedFileGroup
 	std::string targetBranch;
 	bool hasSource;
 	std::vector<FileData> files;
-
-	// Get all the relative file names from each of the file data.
-	std::vector<std::string> GetRelativeFileNames();
 };
 
 struct ChangedFileGroups
@@ -55,7 +52,7 @@ public:
 	const std::string depotBranchPath;
 	const std::string gitAlias;
 
-	Branch(const std::string& branch, const std::string& alias);
+	Branch(std::string branch, std::string alias);
 
 	// splitBranchPath If the relativeDepotPath matches, returns {branch alias, branch file path}.
 	//   Otherwise, returns {"", ""}
@@ -81,12 +78,12 @@ private:
 	std::array<std::string, 2> splitBranchPath(const std::string& relativeDepotPath) const;
 
 public:
-	BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const bool includeBinaries);
+	BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, bool includeBinaries);
 
 	// HasMergeableBranch is there a branch model that requires integration history?
 	bool HasMergeableBranch() const { return !m_branches.empty(); };
 
-	int Count() const { return m_branches.size(); };
+	size_t Count() const { return m_branches.size(); };
 
 	// ParseAffectedFiles create collections of merges and commits.
 	// Breaks up the files into those that are within the view, with each item in the

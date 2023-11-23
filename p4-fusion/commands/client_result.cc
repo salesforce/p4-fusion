@@ -11,7 +11,7 @@ void ClientResult::OutputStat(StrDict* varList)
 	m_Data.client = varList->GetVar("Client")->Text();
 
 	int i = 0;
-	StrPtr* view = nullptr;
+	StrPtr* view;
 
 	while (true)
 	{
@@ -23,6 +23,6 @@ void ClientResult::OutputStat(StrDict* varList)
 			break;
 		}
 
-		m_Data.mapping.push_back(view->Text());
+		m_Data.mapping.emplace_back(view->Text());
 	}
 }

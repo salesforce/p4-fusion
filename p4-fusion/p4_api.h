@@ -24,9 +24,14 @@
 
 class P4API
 {
+private:
+	// Helix Core C++ API doesn't seem to be fully thread-safe when creating a new
+	// client with SSL, so let's initialize them in sequence.
+	static std::mutex InitializationMutex;
+
 	ClientApi m_ClientAPI;
 	FileMap m_ClientMapping;
-	int m_Usage;
+	int m_Usage = 0;
 
 	bool Initialize();
 	bool Deinitialize();
@@ -34,9 +39,9 @@ class P4API
 	bool CheckErrors(Error& e, StrBuf& msg);
 
 	template <class T>
-	T Run(const char* command, const std::vector<std::string>& stringArguments);
+	T Run(const char* command, const std::vector<std::string>& stringArguments, const std::function<T()>& creatorFunc);
 	template <class T>
-	T RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries);
+	T RunEx(const char* command, const std::vector<std::string>& stringArguments, int commandRetries, const std::function<T()>& creatorFunc);
 	void AddClientSpecView(const std::vector<std::string>& viewStrings);
 
 public:
@@ -47,9 +52,6 @@ public:
 	static int CommandRetries;
 	static int CommandRefreshThreshold;
 
-	// Helix Core C++ API seems to crash while making connections parallely.
-	// static std::mutex InitializationMutex;
-
 	static bool InitializeLibraries();
 	static bool ShutdownLibraries();
 
@@ -59,32 +61,34 @@ public:
 	bool IsDepotPathValid(const std::string& depotPath);
 	bool IsDepotPathUnderClientSpec(const std::string& depotPath);
 
-	TestResult TestConnection(const int retries);
+	TestResult TestConnection(int retries);
 	ChangesResult Changes(const std::string& path, const std::string& from, int32_t maxCount);
-	DescribeResult Describe(const std::string& cl);
-	FileLogResult FileLog(const std::string& changelist);
-	PrintResult PrintFiles(const std::vector<std::string>& fileRevisions);
+	DescribeResult Describe(int cl);
+	FileLogResult FileLog(int changelist);
+	PrintResult PrintFiles(const std::vector<std::string>& fileRevisions, const std::function<void()>& onStat, const std::function<void(const char*, int)>& onOutput);
 	ClientResult Client();
 	UsersResult Users();
 	InfoResult Info();
 };
 
 template <class T>
-inline T P4API::RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries)
+inline T P4API::RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries, const std::function<T()>& creatorFunc)
 {
 	std::string argsString;
 	for (const std::string& stringArg : stringArguments)
 	{
-		argsString = argsString + " " + stringArg;
+		argsString.append(" ");
+		argsString.append(stringArg);
 	}
 
 	std::vector<char*> argsCharArray;
+	argsCharArray.reserve(stringArguments.size());
 	for (const std::string& arg : stringArguments)
 	{
 		argsCharArray.push_back((char*)arg.c_str());
 	}
 
-	T clientUser;
+	T clientUser = creatorFunc();
 
 	m_ClientAPI.SetArgv(argsCharArray.size(), argsCharArray.data());
 	m_ClientAPI.Run(command, &clientUser);
@@ -97,21 +101,21 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 			break;
 		}
 
-		ERR("Connection dropped or command errored, retrying in 5 seconds.");
+		ERR("Connection dropped or command errored, retrying in 5 seconds.")
 		std::this_thread::sleep_for(std::chrono::seconds(5));
 
 		if (Reinitialize())
 		{
-			SUCCESS("Reinitialized P4API");
+			SUCCESS("Reinitialized P4API")
 		}
 		else
 		{
-			ERR("Could not reinitialize P4API");
+			ERR("Could not reinitialize P4API")
 		}
 
-		WARN("Retrying: p4 " << command << argsString);
+		WARN("Retrying: p4 " << command << argsString)
 
-		clientUser = T();
+		clientUser = std::move(creatorFunc());
 
 		m_ClientAPI.SetArgv(argsCharArray.size(), argsCharArray.data());
 		m_ClientAPI.Run(command, &clientUser);
@@ -121,7 +125,7 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 
 	if (m_ClientAPI.Dropped() || clientUser.GetError().IsFatal())
 	{
-		ERR("Exiting due to receiving errors even after retrying " << CommandRetries << " times");
+		ERR("Exiting due to receiving errors even after retrying " << CommandRetries << " times")
 		Deinitialize();
 		std::exit(1);
 	}
@@ -132,13 +136,13 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 		int refreshRetries = CommandRetries;
 		while (refreshRetries > 0)
 		{
-			WARN("Trying to refresh the connection due to age (" << m_Usage << " > " << CommandRefreshThreshold << ").");
+			WARN("Trying to refresh the connection due to age (" << m_Usage << " > " << CommandRefreshThreshold << ").")
 			if (Reinitialize())
 			{
-				SUCCESS("Connection was refreshed");
+				SUCCESS("Connection was refreshed")
 				break;
 			}
-			ERR("Could not refresh connection due to old age. Retrying in 5 seconds");
+			ERR("Could not refresh connection due to old age. Retrying in 5 seconds")
 			std::this_thread::sleep_for(std::chrono::seconds(5));
 
 			refreshRetries--;
@@ -146,7 +150,7 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 
 		if (refreshRetries == 0)
 		{
-			ERR("Could not refresh the connection after " << CommandRetries << " retries. Exiting.");
+			ERR("Could not refresh the connection after " << CommandRetries << " retries. Exiting.")
 			std::exit(1);
 		}
 	}
@@ -155,7 +159,7 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 }
 
 template <class T>
-inline T P4API::Run(const char* command, const std::vector<std::string>& stringArguments)
+inline T P4API::Run(const char* command, const std::vector<std::string>& stringArguments, const std::function<T()>& creatorFunc)
 {
-	return RunEx<T>(command, stringArguments, CommandRetries);
+	return RunEx<T>(command, stringArguments, CommandRetries, creatorFunc);
 }

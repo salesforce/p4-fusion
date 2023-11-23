@@ -6,15 +6,22 @@
  */
 #include "print_result.h"
 
+#include <utility>
+
+PrintResult::PrintResult(std::function<void()> _onNextFile, std::function<void(const char*, int)> _onFileContentChunk)
+    : onNextFile(std::move(_onNextFile))
+    , onFileContentChunk(std::move(_onFileContentChunk))
+{
+}
+
 void PrintResult::OutputStat(StrDict* varList)
 {
-	m_Data.push_back(PrintData {});
+	onNextFile();
 }
 
 void PrintResult::OutputText(const char* data, int length)
 {
-	std::vector<char>& fileContent = m_Data.back().contents;
-	fileContent.insert(fileContent.end(), data, data + length);
+	onFileContentChunk(data, length);
 }
 
 void PrintResult::OutputBinary(const char* data, int length)

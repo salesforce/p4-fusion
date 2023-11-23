@@ -14,6 +14,6 @@ InfoResult::InfoResult()
 
 void InfoResult::OutputStat(StrDict* varList)
 {
-	std::string serverDate = varList->GetVar("serverDate")->Text();
+	std::string serverDate(varList->GetVar("serverDate")->Text());
 	m_TimezoneMinutes = Time::GetTimezoneMinutes(serverDate);
 }

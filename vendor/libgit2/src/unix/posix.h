@@ -46,7 +46,6 @@ extern char *p_realpath(const char *, char *);
 
 GIT_INLINE(int) p_fsync(int fd)
 {
-	p_fsync__cnt++;
 	return fsync(fd);
 }
 

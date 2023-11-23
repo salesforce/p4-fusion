@@ -7,19 +7,7 @@
 #include "branch_set.h"
 #include "minitrace.h"
 #include <map>
-
-static const std::string EMPTY_STRING = "";
-static const std::array<std::string, 2> INVALID_BRANCH_PATH { EMPTY_STRING, EMPTY_STRING };
-
-std::vector<std::string> BranchedFileGroup::GetRelativeFileNames()
-{
-	std::vector<std::string> ret;
-	for (auto& fileData : files)
-	{
-		ret.push_back(fileData.GetRelativePath());
-	}
-	return ret;
-}
+#include <utility>
 
 ChangedFileGroups::ChangedFileGroups()
     : totalFileCount(0)
@@ -47,9 +35,9 @@ void ChangedFileGroups::Clear()
 	totalFileCount = 0;
 }
 
-Branch::Branch(const std::string& branch, const std::string& alias)
-    : depotBranchPath(branch)
-    , gitAlias(alias)
+Branch::Branch(std::string branch, std::string alias)
+    : depotBranchPath(std::move(branch))
+    , gitAlias(std::move(alias))
 {
 	if (depotBranchPath.empty())
 	{
@@ -94,12 +82,13 @@ Branch createBranchFromPath(const std::string& depotBranchPath)
 
 	STDHelpers::StripSurrounding(branchPath, '/');
 	STDHelpers::StripSurrounding(alias, '/');
-	return Branch(branchPath, alias);
+	return { branchPath, alias };
 }
 
 std::vector<Branch> createBranchesFromPaths(const std::vector<std::string>& branches)
 {
 	std::vector<Branch> parsed;
+	parsed.reserve(branches.size());
 	for (auto& branch : branches)
 	{
 		parsed.push_back(createBranchFromPath(branch));
@@ -153,7 +142,7 @@ std::string BranchSet::stripBasePath(const std::string& depotPath) const
 		// strip off the leading '/', too.
 		return depotPath.substr(m_basePath.size());
 	}
-	return EMPTY_STRING;
+	return "";
 }
 
 struct branchIntegrationMap
@@ -162,8 +151,8 @@ struct branchIntegrationMap
 	std::unordered_map<std::string, int> branchIndicies;
 	int fileCount = 0;
 
-	void addMerge(const std::string& sourceBranch, const std::string& targetBranch, const FileData& rev);
-	void addTarget(const std::string& targetBranch, const FileData& rev);
+	void addMerge(const std::string& sourceBranch, const std::string& targetBranch, const FileData& fileData);
+	void addTarget(const std::string& targetBranch, const FileData& fileData);
 
 	// note: not const, because it cleans out the branchGroups.
 	std::unique_ptr<ChangedFileGroups> createChangedFileGroups() { return std::unique_ptr<ChangedFileGroups>(new ChangedFileGroups(branchGroups, fileCount)); };
@@ -171,7 +160,7 @@ struct branchIntegrationMap
 
 void branchIntegrationMap::addTarget(const std::string& targetBranch, const FileData& fileData)
 {
-	addMerge(EMPTY_STRING, targetBranch, fileData);
+	addMerge("", targetBranch, fileData);
 }
 
 void branchIntegrationMap::addMerge(const std::string& sourceBranch, const std::string& targetBranch, const FileData& fileData)
@@ -183,9 +172,9 @@ void branchIntegrationMap::addMerge(const std::string& sourceBranch, const std::
 	const auto entry = branchIndicies.find(mapKey);
 	if (entry == branchIndicies.end())
 	{
-		const int index = branchGroups.size();
+		const size_t index = branchGroups.size();
 		branchIndicies.insert(std::make_pair(mapKey, index));
-		branchGroups.push_back(BranchedFileGroup());
+		branchGroups.emplace_back();
 		BranchedFileGroup& bfg = branchGroups[index];
 		bfg.sourceBranch = sourceBranch;
 		bfg.targetBranch = targetBranch;
@@ -207,15 +196,13 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 	branchIntegrationMap branchMap;
 	for (auto& clFileData : cl)
 	{
-		FileData fileData(clFileData);
-
 		// First, filter out files we don't want.
-		const std::string& depotFile = fileData.GetDepotFile();
+		const std::string& depotFile = clFileData.GetDepotFile();
 		if (
 		    // depot file should always be present.
 		    // The left side of the client view is the depot side.
 		    !m_view.IsInLeft(depotFile)
-		    || (!m_includeBinaries && fileData.IsBinary())
+		    || (!m_includeBinaries && clFileData.IsBinary())
 		    || STDHelpers::Contains(depotFile, "/.git/") // To avoid adding .git/ files in the Perforce history if any
 		    || STDHelpers::EndsWith(depotFile, "/.git") // To avoid adding a .git submodule file in the Perforce history if any
 		)
@@ -230,6 +217,8 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 			// TODO: Should this throw an error then?
 			continue;
 		}
+
+		FileData fileData(clFileData);
 
 		// If we have branches, then possibly sort the file into a branch group.
 		if (HasMergeableBranch())
@@ -278,7 +267,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 			// It's a non-branching setup.
 			// Make sure the relative path is set.
 			fileData.SetRelativePath(relativeDepotPath);
-			branchMap.addTarget(EMPTY_STRING, fileData);
+			branchMap.addTarget("", fileData);
 		}
 	}
 	return branchMap.createChangedFileGroups();

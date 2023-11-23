@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="p4-fusion" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="--path //source/sourcegraph/... --client '' --user admin --src &quot;$ProjectFileDir$/verify/gitout&quot; --networkThreads 64 --port ssl:perforce.sgdev.org:1666 --lookAhead 15000 --printBatch 1000 --noBaseCommit true --retries 10 --refresh 1000 --maxChanges -1 --includeBinaries true --fsyncEnable true --noColor true --flushRate 40" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$ProjectFileDir$/verify" PASS_PARENT_ENVS_2="true" PROJECT_NAME="p4-fusion" TARGET_NAME="p4-fusion" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="p4-fusion" RUN_TARGET_NAME="p4-fusion">
+    <method v="2">
+      <option name="ToolBeforeRunTask" enabled="true" actionId="Tool_External Tools_Ensure output dir exists" />
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>

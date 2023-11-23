@@ -19,14 +19,14 @@ private:
 	MapCase m_sensitivity;
 	std::shared_ptr<std::mutex> mu = std::make_shared<std::mutex>();
 
-	void insertMapping(const std::string& left, const std::string& right, const MapType mapType);
+	void insertMapping(const std::string& left, const std::string& right, MapType mapType);
 	void copyMapApiInto(MapApi& map) const;
 
 public:
 	FileMap();
 	FileMap(const FileMap& src);
 
-	bool IsInLeft(const std::string fileRevision) const;
+	bool IsInLeft(const std::string& fileRevision) const;
 
 	MapCase GetCaseSensitivity() const { return m_sensitivity; };
 

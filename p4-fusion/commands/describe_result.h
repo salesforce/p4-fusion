@@ -19,6 +19,7 @@ private:
 	std::vector<FileData> m_FileData;
 
 public:
+	DescribeResult& operator=(const DescribeResult& other);
 	const std::vector<FileData>& GetFileData() const { return m_FileData; }
 
 	void OutputStat(StrDict* varList) override;
