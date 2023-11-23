@@ -6,7 +6,7 @@
  */
 #pragma once
 
-#include <vector>
+#include <queue>
 
 #include "common.h"
 
@@ -16,10 +16,10 @@
 class ChangesResult : public Result
 {
 private:
-	std::vector<ChangeList> m_Changes;
+	std::deque<ChangeList> m_Changes;
 
 public:
-	std::vector<ChangeList>& GetChanges() { return m_Changes; }
+	std::deque<ChangeList>& GetChanges() { return m_Changes; }
 
 	void OutputStat(StrDict* varList) override;
 };

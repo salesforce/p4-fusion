@@ -62,8 +62,6 @@ struct FileDataStore
 	FileDataStore(const FileDataStore& copy) = delete;
 
 	void SetAction(std::string action);
-
-	void Clear();
 };
 
 // For memory efficiency; the underlying data is passed around a bunch.
@@ -108,6 +106,4 @@ public:
 
 	[[nodiscard]] bool IsBinary() const { return m_data->isBinary; };
 	[[nodiscard]] bool IsExecutable() const { return m_data->isExecutable; };
-
-	void Clear() { m_data->Clear(); };
 };

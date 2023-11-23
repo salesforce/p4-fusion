@@ -98,7 +98,7 @@ int Main(int argc, char** argv)
 	auto srcPath = arguments.GetSourcePath();
 	auto printBatch = arguments.GetPrintBatch();
 
-	if (!p4.IsDepotPathValid(depotPath))
+	if (!P4API::IsDepotPathValid(depotPath))
 	{
 		ERR("Depot path should begin with \"//\" and end with \"/...\". Please pass in the proper depot path and try again.")
 		return 1;
@@ -142,7 +142,7 @@ int Main(int argc, char** argv)
 
 	// Request changelists.
 	PRINT("Requesting changelists to convert from the Perforce server")
-	std::vector<ChangeList> changes;
+	std::deque<ChangeList> changes;
 	{
 		ChangesResult changesRes = p4.Changes(depotPath, resumeFromCL, arguments.GetMaxChanges());
 		if (changesRes.HasError())
@@ -188,6 +188,7 @@ int Main(int argc, char** argv)
 	SUCCESS("Created " << pool.GetThreadCount() << " threads in thread pool")
 
 	// Go in the chronological order.
+	std::atomic<int> nextToEnqueue;
 	std::atomic<int> downloaded;
 	downloaded.store(0);
 	size_t startupDownloadsCount = arguments.GetLookAhead();
@@ -201,6 +202,8 @@ int Main(int argc, char** argv)
 	{
 		ChangeList& cl = changes.at(currentCL);
 
+		nextToEnqueue++;
+
 		pool.AddJob([&downloaded, &cl, &branchSet, printBatch](P4API& p4, GitAPI& git)
 		    {
 			cl.StartDownload(p4, git, branchSet, printBatch);
@@ -213,14 +216,22 @@ int Main(int argc, char** argv)
 	// Commit procedure start
 	Timer commitTimer;
 
+	auto totalChanges = changes.size();
 	auto noMerge = arguments.GetNoMerge();
-	for (size_t i = 0; i < changes.size(); i++)
+	int i(0);
+	while (!changes.empty())
 	{
-		ChangeList& cl = changes.at(i);
-
 		// Ensure the files are downloaded before committing them to the repository
-		PRINT("Waiting for download of CL " << cl.number << " to complete")
-		cl.WaitForDownload();
+		PRINT("Waiting for download of CL " << changes.front().number << " to complete")
+		// First, wait until downloaded so the changelist is no longer referenced
+		// in worker threads.
+		changes.front().WaitForDownload();
+
+		// Now move the changelist and pop it off the queue.
+		// Once this iteration is over, it will be destructed
+		// and memory is freed.
+		ChangeList cl = std::move(changes.front());
+		changes.pop_front();
 
 		std::string fullName(cl.user);
 		std::string email("deleted@user");
@@ -267,19 +278,19 @@ int Main(int argc, char** argv)
 		}
 		SUCCESS(
 		    "CL " << cl.number << " with "
-		          << cl.changedFileGroups->totalFileCount << " files (" << i + 1 << "/" << changes.size()
+		          << cl.changedFileGroups->totalFileCount << " files (" << i + 1 << "/" << totalChanges
 		          << "|" << downloaded
 		          << "). Elapsed " << commitTimer.GetTimeS() / 60.0f << " mins. "
-		          << ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (changes.size() - i - 1) << " mins left.")
-		// Clear out finished changelist.
-		cl.Clear();
+		          << ((commitTimer.GetTimeS() / 60.0f) / (float)(i + 1)) * (totalChanges - i - 1) << " mins left.")
+
+		i++;
 
 		// Once a cl has been downloaded, we check if we can enqueue a new job
-		// right away.
-		size_t next = startupDownloadsCount + i;
-		if (next < changes.size())
+		// for background downloading.
+		if (changes.size() > (nextToEnqueue - i))
 		{
-			ChangeList& downloadCL = changes.at(next);
+			ChangeList& downloadCL = changes.at(nextToEnqueue - i);
+			nextToEnqueue++;
 			pool.AddJob([&downloaded, &downloadCL, &branchSet, printBatch](P4API& p4, GitAPI& git)
 			    {
 				downloadCL.StartDownload(p4, git, branchSet, printBatch);
@@ -288,7 +299,7 @@ int Main(int argc, char** argv)
 		}
 	}
 
-	SUCCESS("Completed conversion of " << changes.size() << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes, taking " << commitTimer.GetTimeS() / 60.0f << " to commit CLs")
+	SUCCESS("Completed conversion of " << totalChanges << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes, taking " << commitTimer.GetTimeS() / 60.0f << " to commit CLs")
 
 	return 0;
 }

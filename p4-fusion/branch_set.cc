@@ -21,21 +21,6 @@ ChangedFileGroups::ChangedFileGroups(std::vector<BranchedFileGroup>& groups, int
 	branchedFileGroups = std::move(groups);
 }
 
-void ChangedFileGroups::Clear()
-{
-	for (auto& fileGroup : branchedFileGroups)
-	{
-		for (auto& file : fileGroup.files)
-		{
-			file.Clear();
-		}
-		fileGroup.files.clear();
-		fileGroup.sourceBranch.clear();
-		fileGroup.targetBranch.clear();
-	}
-	totalFileCount = 0;
-}
-
 Branch::Branch(std::string branch, std::string alias)
     : depotBranchPath(std::move(branch))
     , gitAlias(std::move(alias))

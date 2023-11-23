@@ -173,12 +173,3 @@ void ChangeList::WaitForDownload()
 	commitCV->wait(lock, [this]()
 	    { return downloadJobsCompleted->load(); });
 }
-
-void ChangeList::Clear()
-{
-	user.clear();
-	description.clear();
-
-	commitMutex.reset();
-	commitCV.reset();
-}

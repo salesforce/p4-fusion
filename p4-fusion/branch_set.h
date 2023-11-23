@@ -36,11 +36,7 @@ private:
 public:
 	std::vector<BranchedFileGroup> branchedFileGroups;
 	int totalFileCount;
-
-	// When all the file groups have finished being used,
-	// only then can we safely clear out the data.
-	void Clear();
-
+	
 	ChangedFileGroups(std::vector<BranchedFileGroup>& groups, int totalFileCount);
 
 	static std::unique_ptr<ChangedFileGroups> Empty() { return std::unique_ptr<ChangedFileGroups>(new ChangedFileGroups); };

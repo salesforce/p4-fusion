@@ -34,7 +34,6 @@ struct ChangeList
 
 	void StartDownload(P4API& p4, GitAPI& git, const BranchSet& branchSet, const int& printBatch);
 	void WaitForDownload();
-	void Clear();
 
 private:
 	std::shared_ptr<std::mutex> commitMutex = std::make_shared<std::mutex>();

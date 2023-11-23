@@ -114,16 +114,6 @@ void FileDataStore::SetAction(std::string fileAction)
 	}
 }
 
-void FileDataStore::Clear()
-{
-	depotFile.clear();
-	revision.clear();
-	fromDepotFile.clear();
-	fromRevision.clear();
-	blobOID = nullptr;
-	relativePath.clear();
-}
-
 FileAction extrapolateFileAction(std::string& action)
 {
 	if ("add" == action)
