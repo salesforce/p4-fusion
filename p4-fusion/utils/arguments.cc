@@ -27,7 +27,7 @@ Arguments::Arguments(int argc, char** argv)
 	OptionalParameter("--refresh", "100", "Specify how many times a connection should be reused before it is refreshed.");
 	OptionalParameter("--fsyncEnable", "false", "Enable fsync() while writing objects to disk to ensure they get written to permanent storage immediately instead of being cached. This is to mitigate data loss in events of hardware failure.");
 	OptionalParameter("--includeBinaries", "false", "Do not discard binary files while downloading changelists.");
-	OptionalParameter("--flushRate", "1000", "Rate at which profiling data is flushed on the disk.");
+	OptionalParameter("--flushRate", "30", "Interval in seconds at which the profiling data is flushed to the disk.");
 	OptionalParameter("--noColor", "false", "Disable colored output.");
 
 	for (int i = 1; i < argc - 1; i += 2)
@@ -45,6 +45,48 @@ Arguments::Arguments(int argc, char** argv)
 			WARN("Unknown argument: " << name);
 		}
 	}
+}
+
+void Arguments::Print()
+{
+	auto noMerge = GetNoMerge();
+	auto depotPath = GetDepotPath();
+	auto srcPath = GetSourcePath();
+	auto fsyncEnable = GetFsyncEnable();
+	auto includeBinaries = GetIncludeBinaries();
+	auto maxChanges = GetMaxChanges();
+	auto flushRate = GetFlushRate();
+	auto branchNames = GetBranches();
+	auto noColor = GetNoColor();
+	auto P4PORT = GetPort();
+	auto P4USER = GetUsername();
+	auto P4CLIENT = GetClient();
+	auto CommandRetries = GetRetries();
+	auto CommandRefreshThreshold = GetRefresh();
+	auto networkThreads = GetNetworkThreads();
+	auto printBatch = GetPrintBatch();
+	auto lookAhead = GetLookAhead();
+	bool profiling = false;
+#if MTR_ENABLED
+	profiling = true;
+#endif
+	const std::string tracePath = (srcPath + (srcPath.back() == '/' ? "" : "/") + "trace.json");
+
+	PRINT("Perforce Port: " << P4PORT)
+	PRINT("Perforce User: " << P4USER)
+	PRINT("Perforce Client: " << P4CLIENT)
+	PRINT("Depot Path: " << depotPath)
+	PRINT("Network Threads: " << networkThreads)
+	PRINT("Print Batch: " << printBatch)
+	PRINT("Look Ahead: " << lookAhead)
+	PRINT("Max Retries: " << CommandRetries)
+	PRINT("Max Changes: " << maxChanges)
+	PRINT("Refresh Threshold: " << CommandRefreshThreshold)
+	PRINT("Fsync Enable: " << fsyncEnable)
+	PRINT("Include Binaries: " << includeBinaries)
+	PRINT("Profiling: " << profiling << " (" << tracePath << ")")
+	PRINT("Profiling Flush Rate: " << flushRate)
+	PRINT("No Colored Output: " << noColor)
 }
 
 std::string Arguments::GetParameter(const std::string& argName) const

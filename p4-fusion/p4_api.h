@@ -6,9 +6,10 @@
  */
 #pragma once
 
-#include <thread>
 #include <chrono>
 #include <cstdint>
+#include <sstream>
+#include <thread>
 
 #include "common.h"
 
@@ -21,6 +22,17 @@
 #include "commands/info_result.h"
 #include "commands/client_result.h"
 #include "commands/test_result.h"
+
+/*
+ * class P4LibrariesRAII can be used in the main function of the program
+ * to initialize and destruct the P4 API in a RAII fashion.
+ */
+class P4LibrariesRAII
+{
+public:
+	P4LibrariesRAII();
+	~P4LibrariesRAII();
+};
 
 class P4API
 {
@@ -51,9 +63,6 @@ public:
 	static ClientResult::ClientSpecData ClientSpec;
 	static int CommandRetries;
 	static int CommandRefreshThreshold;
-
-	static bool InitializeLibraries();
-	static bool ShutdownLibraries();
 
 	P4API();
 	~P4API();
@@ -125,9 +134,10 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 
 	if (m_ClientAPI.Dropped() || clientUser.GetError().IsFatal())
 	{
-		ERR("Exiting due to receiving errors even after retrying " << CommandRetries << " times")
 		Deinitialize();
-		std::exit(1);
+		std::ostringstream oss;
+		oss << "P4 client: Received errors even after retrying " << CommandRetries << " times";
+		throw std::runtime_error(oss.str());
 	}
 
 	m_Usage++;
@@ -150,8 +160,9 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 
 		if (refreshRetries == 0)
 		{
-			ERR("Could not refresh the connection after " << CommandRetries << " retries. Exiting.")
-			std::exit(1);
+			std::ostringstream oss;
+			oss << "Could not refresh the connection after " << CommandRetries << " retries. Exiting.";
+			throw std::runtime_error(oss.str());
 		}
 	}
 

@@ -42,16 +42,28 @@ public:
 	std::string Close();
 };
 
+/*
+ * class Libgit2RAII can be used in the main function of the program
+ * to initialize and destruct the libgit2 API in a RAII fashion.
+ */
+class Libgit2RAII
+{
+public:
+	Libgit2RAII() = delete;
+	Libgit2RAII(int fsyncEnable);
+	~Libgit2RAII();
+};
+
 class GitAPI
 {
 	git_repository* m_Repo = nullptr;
-	git_oid m_FirstCommitOid;
+	git_oid m_FirstCommitOid {};
 	std::string repoPath;
 	int timezoneMinutes;
 	std::unordered_map<std::string, git_index*> lastBranchTree;
 
 public:
-	GitAPI(const std::string& repoPath, int timezoneMinutes);
+	GitAPI(std::string repoPath, int timezoneMinutes);
 	GitAPI() = delete;
 	~GitAPI();
 
@@ -59,8 +71,6 @@ public:
 	// blob to the repository's ODB.
 	BlobWriter WriteBlob() const;
 
-	// Init initializes the underlying libgit2 library.
-	void Init(const bool fsyncEnable);
 	void InitializeRepository(bool noCreateBaseCommit);
 	void OpenRepository();
 	bool IsHEADExists() const;

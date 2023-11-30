@@ -57,6 +57,9 @@ struct FileDataStore
 
 	FileDataStore() = delete;
 	FileDataStore(std::string& _depotFile, std::string& _revision, std::string& action, std::string& type);
+	// Delete copy constructor to not accidentally move the file data around in memory. It should
+	// always be shared, for example through a std::shared_ptr.
+	FileDataStore(const FileDataStore& copy) = delete;
 
 	void SetAction(std::string action);
 
@@ -72,7 +75,7 @@ private:
 public:
 	FileData() = delete;
 	FileData(std::string& depotFile, std::string& revision, std::string& action, std::string& type);
-	FileData(const FileData& copy);
+	FileData(const FileData& copy) = default;
 	FileData& operator=(const FileData& other);
 
 	void SetFromDepotFile(const std::string& fromDepotFile, const std::string& fromRevision);

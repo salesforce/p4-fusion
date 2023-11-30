@@ -22,11 +22,6 @@ FileData::FileData(std::string& depotFile, std::string& revision, std::string& a
 {
 }
 
-FileData::FileData(const FileData& copy)
-    : m_data(copy.m_data)
-{
-}
-
 FileData& FileData::operator=(const FileData& other)
 {
 	if (this == &other)

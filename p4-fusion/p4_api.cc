@@ -19,6 +19,41 @@ int P4API::CommandRetries = 1;
 int P4API::CommandRefreshThreshold = 1;
 std::mutex P4API::InitializationMutex;
 
+P4LibrariesRAII::P4LibrariesRAII()
+{
+	Error e;
+	P4Libraries::Initialize(P4LIBRARIES_INIT_ALL, &e);
+	if (e.Test())
+	{
+		StrBuf msg;
+		e.Fmt(&msg);
+		ERR(msg.Text())
+		throw std::runtime_error("failed to initialize P4Libraries");
+	}
+
+	// We disable the default signaler to stop it from deleting memory from the wrong heap
+	// https://www.perforce.com/manuals/p4api/Content/P4API/chapter.clientprogramming.signaler.html
+	std::signal(SIGINT, SIG_DFL);
+	signaler.Disable();
+
+	SUCCESS("Initialized P4Libraries successfully")
+}
+
+P4LibrariesRAII::~P4LibrariesRAII()
+{
+	Error e;
+	P4Libraries::Shutdown(P4LIBRARIES_INIT_ALL, &e);
+	if (e.Test())
+	{
+		StrBuf msg;
+		e.Fmt(&msg);
+		ERR("Failed to shut down P4Libraries gracefully")
+		ERR(msg.Text())
+		return;
+	}
+	SUCCESS("Shut down P4Libraries successfully")
+}
+
 P4API::P4API()
 {
 	if (!Initialize())
@@ -97,42 +132,6 @@ bool P4API::CheckErrors(Error& e, StrBuf& msg)
 	{
 		e.Fmt(&msg);
 		ERR(msg.Text());
-		return false;
-	}
-	return true;
-}
-
-bool P4API::InitializeLibraries()
-{
-	Error e;
-	P4Libraries::Initialize(P4LIBRARIES_INIT_ALL, &e);
-	if (e.Test())
-	{
-		StrBuf msg;
-		e.Fmt(&msg);
-		ERR(msg.Text());
-		ERR("Failed to initialize P4Libraries")
-		return false;
-	}
-
-	// We disable the default signaler to stop it from deleting memory from the wrong heap
-	// https://www.perforce.com/manuals/p4api/Content/P4API/chapter.clientprogramming.signaler.html
-	std::signal(SIGINT, SIG_DFL);
-	signaler.Disable();
-
-	SUCCESS("Initialized P4Libraries successfully")
-	return true;
-}
-
-bool P4API::ShutdownLibraries()
-{
-	Error e;
-	P4Libraries::Shutdown(P4LIBRARIES_INIT_ALL, &e);
-	if (e.Test())
-	{
-		StrBuf msg;
-		e.Fmt(&msg);
-		ERR(msg.Text())
 		return false;
 	}
 	return true;

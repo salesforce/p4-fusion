@@ -8,7 +8,9 @@
 #include "common.h"
 #include "p4_api.h"
 #include "minitrace.h"
+#include "thread.h"
 #include "git_api.h"
+#include "signal.h"
 
 void ThreadPool::AddJob(Job&& function)
 {
@@ -51,51 +53,60 @@ void ThreadPool::RaiseCaughtExceptions()
 
 void ThreadPool::ShutDown()
 {
-	std::lock_guard<std::mutex> shutdownLock(m_ShutdownMutex); // Prevent multiple threads from shutting down the pool.
-	if (m_HasShutDownBeenCalled) // We've already shut down.
+	auto stop = [this]()
 	{
-		return;
-	}
-
-	// Signal that we want to shut down.
-	{
-		std::lock_guard<std::mutex> lock(m_JobsMutex);
-		m_HasShutDownBeenCalled = true;
-	}
-
-	m_CV.notify_all(); // Tell all the worker threads to stop waiting for new jobs.
-	m_ThreadExceptionCV.notify_all(); // Tell the exception handler to stop waiting for new exceptions.
-
-	// Wait for all worker threads to finish, then release them.
-	{
-		std::lock_guard<std::mutex> lock(m_ThreadMutex);
-
-		for (auto& thread : m_Threads)
+		// Signal that we want to shut down.
 		{
-			thread.join();
+			std::lock_guard<std::mutex> lock(m_JobsMutex);
+			m_HasShutDownBeenCalled = true;
 		}
 
-		m_Threads.clear();
-	}
+		m_CV.notify_all(); // Tell all the worker threads to stop waiting for new jobs.
 
-	// Clear the job queue.
-	{
-		std::lock_guard<std::mutex> lock(m_JobsMutex);
-		m_Jobs.clear();
-	}
+		// Wait for all worker threads to finish, then release them.
+		{
+			std::lock_guard<std::mutex> lock(m_ThreadMutex);
 
-	// Clear the exception queue.
-	{
-		std::lock_guard<std::mutex> lock(m_ThreadExceptionsMutex);
-		m_ThreadExceptions.clear();
-	}
+			for (auto& thread : m_Threads)
+			{
+				thread.join();
+			}
 
-	SUCCESS("Thread pool shut down successfully")
+			m_Threads.clear();
+		}
+
+		// Clear the job queue.
+		{
+			std::lock_guard<std::mutex> lock(m_JobsMutex);
+			m_Jobs.clear();
+		}
+
+		SUCCESS("Thread pool shut down successfully")
+
+		// Now as the last step, stop the exception handling thread:
+
+		m_ThreadExceptionCV.notify_all(); // Tell the exception handler to stop waiting for new exceptions.
+
+		// Clear the exception queue.
+		{
+			std::lock_guard<std::mutex> lock(m_ThreadExceptionsMutex);
+			m_ThreadExceptions.clear();
+		}
+
+		// Shutdown the signal handler thread.
+		shutdownSignalHandlingThread();
+	};
+
+	std::call_once(m_ShutdownFlag, stop);
 }
 
 ThreadPool::ThreadPool(const int size, const std::string& repoPath, const int tz)
     : m_HasShutDownBeenCalled(false)
 {
+
+	startSignalHandlingThread();
+	startExceptionHandlingThread();
+
 	// Initialize the thread handlers
 	std::lock_guard<std::mutex> threadsLock(m_ThreadMutex);
 
@@ -148,6 +159,113 @@ ThreadPool::ThreadPool(const int size, const std::string& repoPath, const int tz
 					}
 				} });
 	}
+}
+
+void ThreadPool::startSignalHandlingThread()
+{
+	auto start = [this]()
+	{
+		// Block signals from being handled by the main thread, and all future threads.
+		//
+		// - SIGINT, SIGTERM, SIGHUP: thread pool will be shutdown and std::exit will be called
+		// - SIGUSR1: only sent by ~SignalHandler() to tell the signal handler thread to exit
+		sigset_t blockedSignals;
+		sigemptyset(&blockedSignals);
+		for (auto sig : { SIGINT, SIGTERM, SIGHUP, SIGUSR1 })
+		{
+			sigaddset(&blockedSignals, sig);
+		}
+
+		int rc = pthread_sigmask(SIG_BLOCK, &blockedSignals, nullptr);
+		if (rc != 0)
+		{
+			std::ostringstream oss;
+			oss << "(signal handler) failed to block signals: (" << errno << ") " << strerror(errno);
+			throw std::runtime_error(oss.str());
+		}
+
+		sigset_t signalsToWaitOn = blockedSignals;
+		// Spawn a thread to handle signals.
+		// The thread will block and wait for signals to arrive and then shutdown the thread pool, unless it receives SIGUSR1,
+		// in which case it will just exit (since main() is handling the shutdown).
+		//
+		// Using a separate thread for purely signal handling allows us to use non-reentrant functions
+		// (such as std::cout, condition variables, etc.) in the signal handler.
+		signalHandlingThread = ThreadRAII(std::thread(
+		    [signalsToWaitOn, this]()
+		    {
+			    // Wait for signals to arrive.
+			    int sig;
+			    int rc = sigwait(&signalsToWaitOn, &sig);
+			    if (rc != 0)
+			    {
+				    ERR("(signal handler) failed to wait for signals: (" << errno << ") " << strerror(errno))
+				    ShutDown();
+				    std::exit(errno);
+			    }
+
+			    // Did main() tell us to shutdown?
+			    if (sig == SIGUSR1)
+			    {
+				    // Yes, so no need to print anything - just exit.
+				    return;
+			    }
+
+			    // Otherwise, we received a signal from the OS - print a message and shutdown.
+			    if (!sigismember(&signalsToWaitOn, sig))
+			    {
+				    ERR("(signal handler): WARNING: received signal (" << sig << ") \"" << strsignal(sig) << "\" that is not blocked, this should not happen and indicates a logic error in the signal handler.")
+			    }
+
+			    ERR("(signal handler) received signal (" << sig << ") \"" << strsignal(sig) << "\", shutting down")
+			    ShutDown();
+			    std::exit(sig);
+		    }));
+	};
+
+	std::call_once(m_startSignalHandlingThread_Flag, start);
+}
+
+void ThreadPool::shutdownSignalHandlingThread()
+{
+	auto stop = [this]()
+	{
+		auto errcode = pthread_kill(signalHandlingThread.get().native_handle(), SIGUSR1);
+		if (errcode != 0)
+		{
+			ERR("(signal handler) failed to shut down signal handling thread: (" << errcode << ") " << strerror(errcode))
+			return;
+		}
+
+		SUCCESS("Signal handler shut down successfully")
+		return;
+	};
+
+	return std::call_once(m_shutdownSignalHandlingThread_Flag, stop);
+}
+
+void ThreadPool::startExceptionHandlingThread()
+{
+	auto start = [this]()
+	{
+		exceptionHandlingThread = ThreadRAII(std::thread([this]()
+		    {
+			// See if the threadpool encountered any exceptions.
+			try
+			{
+				RaiseCaughtExceptions();
+			}
+			catch (const std::exception& e)
+			{
+				// This is unrecoverable
+				ERR("Threadpool encountered an exception: " << e.what())
+				ShutDown();
+				std::exit(1);
+			}
+			SUCCESS("Exception handler finished") }));
+	};
+
+	std::call_once(startExceptionHandlingThread_Flag, start);
 }
 
 ThreadPool::~ThreadPool()

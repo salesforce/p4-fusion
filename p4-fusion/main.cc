@@ -8,8 +8,6 @@
 #include <atomic>
 #include <sstream>
 #include <typeinfo>
-#include <csignal>
-#include <cerrno>
 
 #include "common.h"
 
@@ -20,19 +18,18 @@
 #include "p4_api.h"
 #include "git_api.h"
 #include "branch_set.h"
+#include "tracer.h"
 
 #include "p4/p4libs.h"
-#include "minitrace.h"
 
 #define P4_FUSION_VERSION "v1.13.2-sg"
 
-void shutdown(ThreadPool& pool);
-
 int Main(int argc, char** argv)
 {
+	// Initialize a program timer to track total execution time.
 	Timer programTimer;
 
-	PRINT("p4-fusion " P4_FUSION_VERSION)
+	PRINT("p4-fusion " << P4_FUSION_VERSION << " running from " << argv[0])
 
 	Arguments arguments(argc, argv);
 	if (!arguments.IsValid())
@@ -40,52 +37,32 @@ int Main(int argc, char** argv)
 		PRINT("Usage:" + arguments.Help())
 		return 1;
 	}
-
-	const bool noColor = arguments.GetNoColor();
-	if (noColor)
+	if (arguments.GetNoColor())
 	{
 		Log::DisableColoredOutput();
 	}
 
-	const bool noMerge = arguments.GetNoMerge();
-	const std::string depotPath = arguments.GetDepotPath();
-	const std::string srcPath = arguments.GetSourcePath();
-	const bool fsyncEnable = arguments.GetFsyncEnable();
-	const bool includeBinaries = arguments.GetIncludeBinaries();
-	const int maxChanges = arguments.GetMaxChanges();
-	const int flushRate = arguments.GetFlushRate();
-	const std::vector<std::string> branchNames = arguments.GetBranches();
+	arguments.Print();
 
-	PRINT("Running p4-fusion from: " << argv[0])
+	// Initialize a minitrace based tracer.
+	Tracer tracer(arguments.GetSourcePath(), arguments.GetFlushRate());
 
-	if (!P4API::InitializeLibraries())
-	{
-		return 1;
-	}
+	// Initialize the P4Libraries API.
+	// It will be uninitialized once this function returns.
+	P4LibrariesRAII lib;
 
-	// Block signals from being handled by the main thread, and all future threads.
-	//
-	// - SIGINT, SIGTERM, SIGHUP: thread pool will be shutdown and std::exit will be called
-	// - SIGUSR1: only sent by main() to tell the signal handler thread to exit
-	sigset_t blockedSignals;
-	sigemptyset(&blockedSignals);
-	for (auto sig : { SIGINT, SIGTERM, SIGHUP, SIGUSR1 })
-	{
-		sigaddset(&blockedSignals, sig);
-	}
+	// Initialize libgit2.
+	// It will be uninitialized once this function returns.
+	Libgit2RAII libgit2(arguments.GetFsyncEnable());
 
-	int rc = pthread_sigmask(SIG_BLOCK, &blockedSignals, nullptr);
-	if (rc != 0)
-	{
-		ERR("(signal handler) failed to block signals: (" << errno << ") " << strerror(errno));
-		return 1;
-	}
-
+	// Setup global config for P4API.
 	P4API::P4PORT = arguments.GetPort();
 	P4API::P4USER = arguments.GetUsername();
 	P4API::CommandRetries = arguments.GetRetries();
 	P4API::CommandRefreshThreshold = arguments.GetRefresh();
+	P4API::P4CLIENT = arguments.GetClient();
 
+	// Create the p4 API for the main thread.
 	P4API p4;
 
 	{
@@ -100,7 +77,6 @@ int Main(int argc, char** argv)
 	}
 
 	{
-		P4API::P4CLIENT = arguments.GetClient();
 		ClientResult clientRes = p4.Client();
 		if (clientRes.HasError())
 		{
@@ -118,17 +94,9 @@ int Main(int argc, char** argv)
 		PRINT("Updated client workspace view " << P4API::ClientSpec.client << " with " << P4API::ClientSpec.mapping.size() << " mappings")
 	}
 
-	int timezoneMinutes;
-	{
-		InfoResult p4infoRes = p4.Info();
-		if (p4infoRes.HasError())
-		{
-			ERR("Failed to fetch Perforce server timezone: " << p4infoRes.PrintError())
-			return 1;
-		}
-		timezoneMinutes = p4infoRes.GetServerTimezoneMinutes();
-		SUCCESS("Perforce server timezone is " << timezoneMinutes << " minutes")
-	}
+	auto depotPath = arguments.GetDepotPath();
+	auto srcPath = arguments.GetSourcePath();
+	auto printBatch = arguments.GetPrintBatch();
 
 	if (!p4.IsDepotPathValid(depotPath))
 	{
@@ -142,90 +110,22 @@ int Main(int argc, char** argv)
 		return 1;
 	}
 
+	int timezoneMinutes;
+	{
+		InfoResult p4infoRes = p4.Info();
+		if (p4infoRes.HasError())
+		{
+			ERR("Failed to fetch Perforce server timezone: " << p4infoRes.PrintError())
+			return 1;
+		}
+		timezoneMinutes = p4infoRes.GetServerTimezoneMinutes();
+		SUCCESS("Perforce server timezone is " << timezoneMinutes << " minutes")
+	}
+
 	GitAPI git(srcPath, timezoneMinutes);
-	// Initialize libgit2.
-	git.Init(fsyncEnable);
 
-	// This throws on error.
+	// This throws on error. It should be called before the ThreadPool is created.
 	git.InitializeRepository(arguments.GetNoBaseCommit());
-
-	// Create the thread pool
-	int networkThreads = arguments.GetNetworkThreads();
-	PRINT("Creating " << networkThreads << " network threads")
-	ThreadPool pool(networkThreads, srcPath, timezoneMinutes);
-	SUCCESS("Created " << pool.GetThreadCount() << " threads in thread pool")
-
-	sigset_t signalsToWaitOn = blockedSignals;
-	// Spawn a thread to handle signals.
-	// The thread will block and wait for signals to arrive and then shutdown the thread pool, unless it receives SIGUSR1,
-	// in which case it will just exit (since main() is handling the shutdown).
-	//
-	// Using a separate thread for purely signal handling allows us to use non-reentrant functions
-	// (such as std::cout, condition variables, etc.) in the signal handler.
-	auto signalHandlingThread = std::thread(
-	    [signalsToWaitOn, &pool]()
-	    {
-		    // Wait for signals to arrive.
-		    int sig;
-		    int rc = sigwait(&signalsToWaitOn, &sig);
-		    if (rc != 0)
-		    {
-			    ERR("(signal handler) failed to wait for signals: (" << errno << ") " << strerror(errno))
-			    shutdown(pool);
-			    std::exit(errno);
-		    }
-
-		    // Did main() tell us to shutdown?
-		    if (sig == SIGUSR1)
-		    {
-			    // Yes, so no need to print anything - just exit.
-			    return;
-		    }
-
-		    // Otherwise, we received a signal from the OS - print a message and shutdown.
-		    if (!sigismember(&signalsToWaitOn, sig))
-		    {
-			    ERR("(signal handler): WARNING: received signal (" << sig << ") \"" << strsignal(sig) << "\" that is not blocked, this should not happen and indicates a logic error in the signal handler.")
-		    }
-
-		    ERR("(signal handler) received signal (" << sig << ") \"" << strsignal(sig) << "\", shutting down")
-		    shutdown(pool);
-		    std::exit(sig);
-	    });
-
-	int printBatch = arguments.GetPrintBatch();
-	int lookAhead = arguments.GetLookAhead();
-	bool profiling = false;
-#if MTR_ENABLED
-	profiling = true;
-#endif
-	const std::string tracePath = (srcPath + (srcPath.back() == '/' ? "" : "/") + "trace.json");
-
-	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, includeBinaries);
-
-	PRINT("Perforce Port: " << P4API::P4PORT)
-	PRINT("Perforce User: " << P4API::P4USER)
-	PRINT("Perforce Client: " << P4API::P4CLIENT)
-	PRINT("Depot Path: " << depotPath)
-	PRINT("Network Threads: " << networkThreads)
-	PRINT("Print Batch: " << printBatch)
-	PRINT("Look Ahead: " << lookAhead)
-	PRINT("Max Retries: " << P4API::CommandRetries)
-	PRINT("Max Changes: " << maxChanges)
-	PRINT("Refresh Threshold: " << P4API::CommandRefreshThreshold)
-	PRINT("Fsync Enable: " << fsyncEnable)
-	PRINT("Include Binaries: " << includeBinaries)
-	PRINT("Profiling: " << profiling << " (" << tracePath << ")")
-	PRINT("Profiling Flush Rate: " << flushRate)
-	PRINT("No Colored Output: " << noColor)
-	PRINT("Inspecting " << branchSet.Count() << " branches")
-
-	// Setup trace file generation. This HAS to happen after initializing the
-	// repository, only then the tracePath will be ensured to exist.
-	mtr_init(tracePath.c_str());
-	MTR_META_PROCESS_NAME("p4-fusion");
-	MTR_META_THREAD_NAME("Main Thread");
-	MTR_META_THREAD_SORT_INDEX(0);
 
 	std::string resumeFromCL;
 	if (git.IsHEADExists())
@@ -236,8 +136,27 @@ int Main(int argc, char** argv)
 			return 1;
 		}
 
-		resumeFromCL = git.DetectLatestCL();
+		resumeFromCL = std::move(git.DetectLatestCL());
 		SUCCESS("Detected last CL committed as CL " << resumeFromCL)
+	}
+
+	// Request changelists.
+	PRINT("Requesting changelists to convert from the Perforce server")
+	std::vector<ChangeList> changes;
+	{
+		ChangesResult changesRes = p4.Changes(depotPath, resumeFromCL, arguments.GetMaxChanges());
+		if (changesRes.HasError())
+		{
+			ERR("Failed to list changes: " << changesRes.PrintError())
+			return 1;
+		}
+		changes = std::move(changesRes.GetChanges());
+	}
+
+	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, arguments.GetBranches(), arguments.GetIncludeBinaries());
+	if (branchSet.Count() > 0)
+	{
+		PRINT("Inspecting " << branchSet.Count() << " branches")
 	}
 
 	// Load mapping data from usernames to emails.
@@ -251,19 +170,6 @@ int Main(int argc, char** argv)
 	const std::unordered_map<UsersResult::UserID, UsersResult::UserData>& users = usersRes.GetUserEmails();
 	SUCCESS("Received " << users.size() << " userbase details from the Perforce server")
 
-	// Request changelists.
-	PRINT("Requesting changelists to convert from the Perforce server")
-	std::vector<ChangeList> changes;
-	{
-		ChangesResult changesRes = p4.Changes(depotPath, resumeFromCL, maxChanges);
-		if (changesRes.HasError())
-		{
-			ERR("Failed to list changes: " << changesRes.PrintError())
-			return 1;
-		}
-		changes = std::move(changesRes.GetChanges());
-	}
-
 	// Return early if we have no work to do
 	if (changes.empty())
 	{
@@ -272,26 +178,21 @@ int Main(int argc, char** argv)
 	}
 	SUCCESS("Found " << changes.size() << " uncloned CLs starting from CL " << changes.front().number << " to CL " << changes.back().number)
 
-	auto exceptionHandlingThread = std::thread([&pool]()
-	    {
-			// See if the threadpool encountered any exceptions.
-			try
-			{
-				pool.RaiseCaughtExceptions();
-			}
-			catch (const std::exception& e)
-			{
-				// This is unrecoverable
-				ERR("Threadpool encountered an exception: " << e.what())
-				pool.ShutDown();
-				std::exit(1);
-			} });
+	// Create the thread pool
+	int networkThreads = arguments.GetNetworkThreads();
+	if (networkThreads > changes.size())
+	{
+		networkThreads = changes.size();
+	}
+	PRINT("Creating " << networkThreads << " network threads")
+	ThreadPool pool(networkThreads, srcPath, timezoneMinutes);
+	SUCCESS("Created " << pool.GetThreadCount() << " threads in thread pool")
 
 	// Go in the chronological order.
 	std::atomic<int> downloaded;
 	downloaded.store(0);
-	size_t startupDownloadsCount = lookAhead;
-	if (lookAhead > changes.size())
+	size_t startupDownloadsCount = arguments.GetLookAhead();
+	if (startupDownloadsCount > changes.size())
 	{
 		startupDownloadsCount = changes.size();
 	}
@@ -321,6 +222,7 @@ int Main(int argc, char** argv)
 	// Commit procedure start
 	Timer commitTimer;
 
+	auto noMerge = arguments.GetNoMerge();
 	for (size_t i = 0; i < changes.size(); i++)
 	{
 		ChangeList& cl = changes.at(i);
@@ -358,16 +260,19 @@ int Main(int argc, char** argv)
 
 			// For scripting/testing purposes...
 			PRINT("COMMIT:" << commitSHA << ":" << cl.number << ":" << branchGroup.targetBranch << ":")
-			SUCCESS(
-			    "CL " << cl.number << " --> Commit " << commitSHA
-			          << " with " << branchGroup.files.size() << " files"
-			          << (branchGroup.targetBranch.empty()
-			                     ? ""
-			                     : (" to branch " + branchGroup.targetBranch))
-			          << (branchGroup.sourceBranch.empty()
-			                     ? ""
-			                     : (" from branch " + branchGroup.sourceBranch))
-			          << ".")
+			if (branchSet.Count() > 0)
+			{
+				SUCCESS(
+				    "CL " << cl.number << " --> Commit " << commitSHA
+				          << " with " << branchGroup.files.size() << " files"
+				          << (branchGroup.targetBranch.empty()
+				                     ? ""
+				                     : (" to branch " + branchGroup.targetBranch))
+				          << (branchGroup.sourceBranch.empty()
+				                     ? ""
+				                     : (" from branch " + branchGroup.sourceBranch))
+				          << ".")
+			}
 		}
 		SUCCESS(
 		    "CL " << cl.number << " with "
@@ -391,39 +296,11 @@ int Main(int argc, char** argv)
 				// Mark download as done.
 				downloaded++; });
 		}
-
-		// Occasionally flush the profiling data
-		if ((i % flushRate) == 0)
-		{
-			mtr_flush();
-		}
 	}
 
 	SUCCESS("Completed conversion of " << changes.size() << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes, taking " << commitTimer.GetTimeS() / 60.0f << " to commit CLs")
 
-	shutdown(pool); // Shut down thread pool, P4API, and tracing.
-
-	rc = pthread_kill(signalHandlingThread.native_handle(), SIGUSR1); // Tell the signal handler thread to exit.
-	if (rc != 0)
-	{
-		ERR("(signal handler) failed to shut down signal handling thread: (" << errno << ") " << strerror(errno));
-		return errno;
-	}
-
-	signalHandlingThread.join(); // Wait for the signal handler thread to exit.
-	exceptionHandlingThread.join(); // Wait for the exception handling thread to exit.
-
 	return 0;
-}
-
-void shutdown(ThreadPool& pool)
-{
-	pool.ShutDown();
-
-	P4API::ShutdownLibraries();
-
-	mtr_flush();
-	mtr_shutdown();
 }
 
 int main(int argc, char** argv)
@@ -436,7 +313,7 @@ int main(int argc, char** argv)
 	}
 	catch (const std::exception& e)
 	{
-		ERR("Exception occurred: " << typeid(e).name() << ": " << e.what())
+		ERR("Exception occurred: " << e.what())
 		return 1;
 	}
 

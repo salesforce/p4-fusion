@@ -33,6 +33,7 @@ public:
 	Arguments(int argc, char** argv);
 	Arguments() = delete;
 
+	void Print();
 	void RequiredParameter(const std::string& name, const std::string& helpText);
 	void OptionalParameter(const std::string& name, const std::string& defaultValue, const std::string& helpText);
 	void OptionalParameterList(const std::string& name, const std::string& helpText);
