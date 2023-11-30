@@ -59,9 +59,8 @@ void ThreadPool::ShutDown()
 		{
 			std::lock_guard<std::mutex> lock(m_JobsMutex);
 			m_HasShutDownBeenCalled = true;
+			m_CV.notify_all(); // Tell all the worker threads to stop waiting for new jobs.
 		}
-
-		m_CV.notify_all(); // Tell all the worker threads to stop waiting for new jobs.
 
 		// Wait for all worker threads to finish, then release them.
 		{
@@ -84,12 +83,10 @@ void ThreadPool::ShutDown()
 		SUCCESS("Thread pool shut down successfully")
 
 		// Now as the last step, stop the exception handling thread:
-
-		m_ThreadExceptionCV.notify_all(); // Tell the exception handler to stop waiting for new exceptions.
-
 		// Clear the exception queue.
 		{
 			std::lock_guard<std::mutex> lock(m_ThreadExceptionsMutex);
+			m_ThreadExceptionCV.notify_all(); // Tell the exception handler to stop waiting for new exceptions.
 			m_ThreadExceptions.clear();
 		}
 
@@ -112,13 +109,13 @@ ThreadPool::ThreadPool(const int size, const std::string& repoPath, const int tz
 
 	for (int i = 0; i < size; i++)
 	{
-		m_Threads.emplace_back([this, i, repoPath, tz]()
+		// Initialize P4API here so we synchronously create them.
+		std::shared_ptr<P4API> p4 = std::make_shared<P4API>();
+		m_Threads.emplace_back([this, i, repoPath, p4, tz]()
 		    {
 				// Add some human-readable info to the tracing.
 				MTR_META_THREAD_NAME(("Worker #" + std::to_string(i)).c_str());
 
-			    // Initialize p4 API.
-			    P4API p4;
 			    // We initialize a separate GitAPI per thread, otherwise
 			    // internal locks will prevent the threads from working independently.
 			    // We only write blob objects to the ODB, which according to libgit2/libgit2#2491
@@ -143,19 +140,17 @@ ThreadPool::ThreadPool(const int size, const std::string& repoPath, const int tz
 							break;
 						}
 
-						job = m_Jobs.front();
+						job = std::move(m_Jobs.front());
 						m_Jobs.pop_front();
 					}
 
 					try
 					{
-						job(p4, git);
+						job(*p4, git);
 					}
 					catch (const std::exception& e)
 					{
-						std::unique_lock<std::mutex> lock(m_ThreadExceptionsMutex);
-						m_ThreadExceptions.push_back(std::current_exception());
-						m_ThreadExceptionCV.notify_all();
+						ForwardException(e);
 					}
 				} });
 	}
@@ -266,6 +261,13 @@ void ThreadPool::startExceptionHandlingThread()
 	};
 
 	std::call_once(startExceptionHandlingThread_Flag, start);
+}
+
+void ThreadPool::ForwardException(const std::exception& e)
+{
+	std::unique_lock<std::mutex> lock(m_ThreadExceptionsMutex);
+	m_ThreadExceptions.push_back(std::make_exception_ptr(e));
+	m_ThreadExceptionCV.notify_all();
 }
 
 ThreadPool::~ThreadPool()

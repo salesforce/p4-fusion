@@ -56,6 +56,12 @@ P4LibrariesRAII::~P4LibrariesRAII()
 
 P4API::P4API()
 {
+	{
+		// Acquire InitializationMutex lock to ensure thread-safe initialization:
+		std::lock_guard<std::mutex> lock(P4API::InitializationMutex);
+		m_ClientAPI = std::make_unique<ClientApi>();
+	}
+
 	if (!Initialize())
 	{
 		ERR("Could not initialize P4API")
@@ -69,20 +75,20 @@ bool P4API::Initialize()
 {
 	MTR_SCOPE("P4", __func__);
 
+	// Acquire InitializationMutex lock to ensure thread-safe initialization:
+	std::lock_guard<std::mutex> lock(P4API::InitializationMutex);
+
+	m_Usage = 0;
+
+	m_ClientAPI->SetPort(P4PORT.c_str());
+	m_ClientAPI->SetUser(P4USER.c_str());
+	m_ClientAPI->SetClient(P4CLIENT.c_str());
+	m_ClientAPI->SetProtocol("tag", "");
+
 	Error e;
-	StrBuf msg;
+	m_ClientAPI->Init(&e);
 
-	{
-		std::lock_guard<std::mutex> lock(InitializationMutex);
-		m_Usage = 0;
-		m_ClientAPI.SetPort(P4PORT.c_str());
-		m_ClientAPI.SetUser(P4USER.c_str());
-		m_ClientAPI.SetClient(P4CLIENT.c_str());
-		m_ClientAPI.SetProtocol("tag", "");
-		m_ClientAPI.Init(&e);
-	}
-
-	if (!CheckErrors(e, msg))
+	if (!CheckErrors(e))
 	{
 		ERR("Could not initialize Helix Core C/C++ API")
 		return false;
@@ -94,10 +100,8 @@ bool P4API::Initialize()
 bool P4API::Deinitialize()
 {
 	Error e;
-	StrBuf msg;
-
-	m_ClientAPI.Final(&e);
-	return CheckErrors(e, msg);
+	m_ClientAPI->Final(&e);
+	return CheckErrors(e);
 }
 
 bool P4API::Reinitialize()
@@ -112,7 +116,7 @@ P4API::~P4API()
 {
 	if (!Deinitialize())
 	{
-		ERR("P4API context was not destroyed successfully");
+		ERR("P4API context was not destroyed successfully")
 	}
 }
 
@@ -126,10 +130,11 @@ bool P4API::IsDepotPathUnderClientSpec(const std::string& depotPath)
 	return m_ClientMapping.IsInLeft(depotPath);
 }
 
-bool P4API::CheckErrors(Error& e, StrBuf& msg)
+bool P4API::CheckErrors(Error& e)
 {
 	if (e.Test())
 	{
+		StrBuf msg;
 		e.Fmt(&msg);
 		ERR(msg.Text());
 		return false;

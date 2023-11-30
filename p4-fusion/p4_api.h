@@ -41,14 +41,14 @@ private:
 	// client with SSL, so let's initialize them in sequence.
 	static std::mutex InitializationMutex;
 
-	ClientApi m_ClientAPI;
+	std::unique_ptr<ClientApi> m_ClientAPI;
 	FileMap m_ClientMapping;
 	int m_Usage = 0;
 
 	bool Initialize();
 	bool Deinitialize();
 	bool Reinitialize();
-	bool CheckErrors(Error& e, StrBuf& msg);
+	bool CheckErrors(Error& e);
 
 	template <class T>
 	T Run(const char* command, const std::vector<std::string>& stringArguments, const std::function<T()>& creatorFunc);
@@ -99,11 +99,11 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 
 	T clientUser = creatorFunc();
 
-	m_ClientAPI.SetArgv(argsCharArray.size(), argsCharArray.data());
-	m_ClientAPI.Run(command, &clientUser);
+	m_ClientAPI->SetArgv(argsCharArray.size(), argsCharArray.data());
+	m_ClientAPI->Run(command, &clientUser);
 
 	int retries = commandRetries;
-	while (m_ClientAPI.Dropped() || clientUser.GetError().IsError())
+	while (m_ClientAPI->Dropped() || clientUser.GetError().IsError())
 	{
 		if (retries == 0)
 		{
@@ -126,13 +126,13 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 
 		clientUser = std::move(creatorFunc());
 
-		m_ClientAPI.SetArgv(argsCharArray.size(), argsCharArray.data());
-		m_ClientAPI.Run(command, &clientUser);
+		m_ClientAPI->SetArgv(argsCharArray.size(), argsCharArray.data());
+		m_ClientAPI->Run(command, &clientUser);
 
 		retries--;
 	}
 
-	if (m_ClientAPI.Dropped() || clientUser.GetError().IsFatal())
+	if (m_ClientAPI->Dropped() || clientUser.GetError().IsFatal())
 	{
 		Deinitialize();
 		std::ostringstream oss;

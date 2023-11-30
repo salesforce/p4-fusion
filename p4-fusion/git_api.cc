@@ -88,13 +88,20 @@ bool GitAPI::IsRepositoryClonedFrom(const std::string& depotPath) const
 	return repoDepotPath == depotPath;
 }
 
+// Concurrent calls to git_repository_open_bare cause a data race that helgrind complains
+// about so we guard against that.
+std::mutex GitAPI::repoMutex;
+
 void GitAPI::OpenRepository()
 {
+	std::lock_guard<std::mutex> lock(repoMutex);
 	checkGit2Error(git_repository_open_bare(&m_Repo, repoPath.c_str()));
 }
 
 void GitAPI::InitializeRepository(const bool noCreateBaseCommit)
 {
+	std::lock_guard<std::mutex> lock(repoMutex);
+
 	if (git_repository_open_bare(&m_Repo, repoPath.c_str()) < 0)
 	{
 		git_repository_init_options opts = GIT_REPOSITORY_INIT_OPTIONS_INIT;
@@ -458,5 +465,7 @@ std::string BlobWriter::Close()
 
 	git_oid objId;
 	checkGit2Error(git_blob_create_from_stream_commit(&objId, writer));
-	return git_oid_tostr_s(&objId);
+	auto oid = git_oid_tostr_s(&objId);
+	std::string strOID(oid);
+	return strOID;
 }

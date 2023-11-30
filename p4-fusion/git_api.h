@@ -61,6 +61,7 @@ class GitAPI
 	std::string repoPath;
 	int timezoneMinutes;
 	std::unordered_map<std::string, git_index*> lastBranchTree;
+	static std::mutex repoMutex;
 
 public:
 	GitAPI(std::string repoPath, int timezoneMinutes);

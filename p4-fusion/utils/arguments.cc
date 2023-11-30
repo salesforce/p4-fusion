@@ -66,7 +66,7 @@ void Arguments::Print()
 	auto networkThreads = GetNetworkThreads();
 	auto printBatch = GetPrintBatch();
 	auto lookAhead = GetLookAhead();
-	bool profiling = false;
+	bool profiling(false);
 #if MTR_ENABLED
 	profiling = true;
 #endif

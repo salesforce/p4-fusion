@@ -23,6 +23,7 @@ struct ChangeList
 	std::string user;
 	std::string description;
 	int64_t timestamp = 0;
+	bool waiting;
 	std::unique_ptr<ChangedFileGroups> changedFileGroups = ChangedFileGroups::Empty();
 
 	ChangeList(const int& clNumber, std::string&& clDescription, std::string&& userID, const int64_t& clTimestamp);

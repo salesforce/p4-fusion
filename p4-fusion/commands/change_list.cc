@@ -21,6 +21,7 @@ ChangeList::ChangeList(const int& clNumber, std::string&& clDescription, std::st
     , description(std::move(clDescription))
     , timestamp(clTimestamp)
     , changedFileGroups(ChangedFileGroups::Empty())
+    , waiting(false)
 {
 }
 
@@ -62,7 +63,7 @@ void ChangeList::PrepareDownload(P4API& p4, const BranchSet& branchSet)
 	}
 }
 
-void flush(P4API& p4, GitAPI& git, const std::vector<FileData*>& printBatchFileData)
+void flush(P4API& p4, GitAPI& git, const std::vector<std::shared_ptr<FileData>>& printBatchFileData)
 {
 	MTR_SCOPE("ChangeList", __func__);
 
@@ -74,7 +75,7 @@ void flush(P4API& p4, GitAPI& git, const std::vector<FileData*>& printBatchFileD
 
 	std::vector<std::string> fileRevisions;
 	fileRevisions.reserve(printBatchFileData.size());
-	for (auto fileData : printBatchFileData)
+	for (auto& fileData : printBatchFileData)
 	{
 		std::string fileSpec = fileData->GetDepotFile();
 		fileSpec.append("#");
@@ -137,7 +138,7 @@ void ChangeList::StartDownload(P4API& p4, GitAPI& git, const int& printBatch)
 		    { return downloadPrepared->load(); });
 	}
 
-	std::vector<FileData*> printBatchFileData;
+	std::vector<std::shared_ptr<FileData>> printBatchFileData;
 	// Only perform the group inspection if there are files.
 	if (changedFileGroups->totalFileCount > 0)
 	{
@@ -149,7 +150,7 @@ void ChangeList::StartDownload(P4API& p4, GitAPI& git, const int& printBatch)
 				if (fileData.IsDownloadNeeded())
 				{
 					fileData.SetPendingDownload();
-					printBatchFileData.push_back(&fileData);
+					printBatchFileData.push_back(std::make_shared<FileData>(fileData));
 
 					// Clear the batches if it fits
 					if (printBatchFileData.size() >= printBatch)
@@ -168,8 +169,14 @@ void ChangeList::StartDownload(P4API& p4, GitAPI& git, const int& printBatch)
 	// Flush any remaining files that were smaller in number than the total batch size.
 	// Additionally, signal the batch processing end.
 	flush(p4, git, printBatchFileData);
-	*downloadJobsCompleted = true;
-	commitCV->notify_all();
+	{
+		std::unique_lock<std::mutex> lock(*commitMutex);
+		*downloadJobsCompleted = true;
+		if (waiting)
+		{
+			commitCV->notify_all();
+		}
+	}
 }
 
 void ChangeList::WaitForDownload()
@@ -177,6 +184,7 @@ void ChangeList::WaitForDownload()
 	MTR_SCOPE("ChangeList", __func__);
 
 	std::unique_lock<std::mutex> lock(*commitMutex);
+	waiting = true;
 	commitCV->wait(lock, [this]()
 	    { return downloadJobsCompleted->load(); });
 }
