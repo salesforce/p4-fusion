@@ -222,7 +222,6 @@ int Main(int argc, char** argv)
 	while (!changes.empty())
 	{
 		// Ensure the files are downloaded before committing them to the repository
-		PRINT("Waiting for download of CL " << changes.front().number << " to complete")
 		// First, wait until downloaded so the changelist is no longer referenced
 		// in worker threads.
 		changes.front().WaitForDownload();
@@ -260,8 +259,10 @@ int Main(int argc, char** argv)
 			    email,
 			    mergeFrom);
 
+#ifdef PRINT_TEST_OUTPUT
 			// For scripting/testing purposes...
 			PRINT("COMMIT:" << commitSHA << ":" << cl.number << ":" << branchGroup.targetBranch << ":")
+#endif
 			if (branchSet.Count() > 0)
 			{
 				SUCCESS(

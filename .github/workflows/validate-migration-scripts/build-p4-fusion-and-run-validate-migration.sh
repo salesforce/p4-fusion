@@ -63,6 +63,9 @@ echo "::group::{Create temporary Perforce client}"
 }
 echo "::endgroup::"
 
+# Enable test output that helps this script understand what was written.
+export PRINT_TEST_OUTPUT=true
+
 echo "::group::{Build P4 Fusion}"
 {
   time (./generate_cache.sh Debug && ./build.sh)

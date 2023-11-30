@@ -36,7 +36,7 @@ private:
 public:
 	std::vector<BranchedFileGroup> branchedFileGroups;
 	int totalFileCount;
-	
+
 	ChangedFileGroups(std::vector<BranchedFileGroup>& groups, int totalFileCount);
 
 	static std::unique_ptr<ChangedFileGroups> Empty() { return std::unique_ptr<ChangedFileGroups>(new ChangedFileGroups); };

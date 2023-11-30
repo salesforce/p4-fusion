@@ -26,6 +26,7 @@ option(THREADSAFE "Threadsafe" ON)
 option(USE_SSH "Use SSH" OFF)
 option(USE_HTTPS "Use HTTPS" OFF)
 option(USE_THREADS "Use threads" ON)
+option(PRINT_TEST_OUTPUT "Print additional lines used for the validate-migration script" OFF)
 
 if (NOT DEFINED OPENSSL_ROOT_DIR)
     if (APPLE)
@@ -47,6 +48,12 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 
 set(CMAKE_CXX_FLAGS "$ENV{CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS "$ENV{CMAKE_EXE_LINKER_FLAGS} ${CMAKE_EXE_LINKER_FLAGS}")
+
+set(PRINT_TEST_OUTPUT $ENV{PRINT_TEST_OUTPUT})
+
+if (PRINT_TEST_OUTPUT)
+    add_definitions(-DPRINT_TEST_OUTPUT)
+endif ()
 
 project(
         p4-fusion

@@ -46,6 +46,9 @@ mkdir -p "${ROOT}/verify/p4home"
 mkdir -p "${ROOT}/verify/datadir"
 mkdir -p "${ROOT}/verify/p4datadir"
 
+# Enable test output that helps this script understand what was written.
+export PRINT_TEST_OUTPUT=true
+
 ./generate_cache.sh Debug
 
 ./build.sh
