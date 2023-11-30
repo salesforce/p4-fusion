@@ -20,6 +20,7 @@ ChangeList::ChangeList(const int& clNumber, std::string&& clDescription, std::st
     , user(std::move(userID))
     , description(std::move(clDescription))
     , timestamp(clTimestamp)
+    , changedFileGroups(ChangedFileGroups::Empty())
     , waiting(false)
 {
 }
@@ -91,9 +92,6 @@ void ChangeList::StartDownload(P4API& p4, GitAPI& git, const BranchSet& branchSe
 {
 	MTR_SCOPE("ChangeList", __func__);
 
-	// First, we need to figure out which files we need to download.
-	std::unique_ptr<ChangedFileGroups> changedFileGroups = ChangedFileGroups::Empty();
-
 	if (branchSet.HasMergeableBranch())
 	{
 		// If we care about branches, we need to run filelog to get where the file came from.
@@ -120,8 +118,6 @@ void ChangeList::StartDownload(P4API& p4, GitAPI& git, const BranchSet& branchSe
 		}
 		changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData());
 	}
-
-	// Now, we download the files in batches.
 
 	std::vector<std::shared_ptr<FileData>> printBatchFileData;
 	// Only perform the group inspection if there are files.
