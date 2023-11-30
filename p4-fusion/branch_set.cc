@@ -7,6 +7,7 @@
 #include "branch_set.h"
 #include "minitrace.h"
 #include <map>
+#include <memory>
 #include <utility>
 
 ChangedFileGroups::ChangedFileGroups()
@@ -155,7 +156,7 @@ struct branchIntegrationMap
 	void addTarget(const std::string& targetBranch, const FileData& fileData);
 
 	// note: not const, because it cleans out the branchGroups.
-	std::unique_ptr<ChangedFileGroups> createChangedFileGroups() { return std::unique_ptr<ChangedFileGroups>(new ChangedFileGroups(branchGroups, fileCount)); };
+	std::unique_ptr<ChangedFileGroups> createChangedFileGroups() { return std::make_unique<ChangedFileGroups>(branchGroups, fileCount); };
 };
 
 void branchIntegrationMap::addTarget(const std::string& targetBranch, const FileData& fileData)

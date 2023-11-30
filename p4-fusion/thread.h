@@ -16,7 +16,7 @@ class ThreadRAII
 {
 public:
 	ThreadRAII() = default;
-	ThreadRAII(std::thread&& t)
+	explicit ThreadRAII(std::thread&& t)
 	    : t(std::move(t))
 	{
 	}

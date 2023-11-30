@@ -84,16 +84,16 @@ public:
 
 	void SetBlobOID(std::string&& blobOID);
 	void SetPendingDownload();
-	bool IsDownloadNeeded() const
+	[[nodiscard]] bool IsDownloadNeeded() const
 	{
 		std::lock_guard<std::mutex> lock(m_data->blobOIDMu);
 		return m_data->blobOID == nullptr && !m_data->isContentsPendingDownload;
 	};
 
-	const std::string& GetDepotFile() const { return m_data->depotFile; };
-	const std::string& GetRevision() const { return m_data->revision; };
-	const std::string& GetRelativePath() const { return m_data->relativePath; };
-	const std::string& GetBlobOID() const
+	[[nodiscard]] const std::string& GetDepotFile() const { return m_data->depotFile; };
+	[[nodiscard]] const std::string& GetRevision() const { return m_data->revision; };
+	[[nodiscard]] const std::string& GetRelativePath() const { return m_data->relativePath; };
+	[[nodiscard]] const std::string& GetBlobOID() const
 	{
 		std::lock_guard<std::mutex> lock(m_data->blobOIDMu);
 		if (m_data->blobOID == nullptr)
@@ -102,12 +102,12 @@ public:
 		}
 		return *m_data->blobOID;
 	};
-	bool IsDeleted() const { return m_data->isDeleted; };
-	bool IsIntegrated() const { return m_data->isIntegrated; };
-	const std::string& GetFromDepotFile() const { return m_data->fromDepotFile; };
+	[[nodiscard]] bool IsDeleted() const { return m_data->isDeleted; };
+	[[nodiscard]] bool IsIntegrated() const { return m_data->isIntegrated; };
+	[[nodiscard]] const std::string& GetFromDepotFile() const { return m_data->fromDepotFile; };
 
-	bool IsBinary() const { return m_data->isBinary; };
-	bool IsExecutable() const { return m_data->isExecutable; };
+	[[nodiscard]] bool IsBinary() const { return m_data->isBinary; };
+	[[nodiscard]] bool IsExecutable() const { return m_data->isExecutable; };
 
 	void Clear() { m_data->Clear(); };
 };

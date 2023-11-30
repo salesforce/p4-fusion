@@ -85,15 +85,6 @@ void FileMap::InsertTranslationMapping(const std::vector<std::string>& mapping)
 	}
 }
 
-const std::vector<std::string> PATH_PREFIX_DESCRIPTIONS = {
-	// Order is important.
-	"share ",
-	"isolate ",
-	"import+ ",
-	"import ",
-	"exclude "
-};
-
 void FileMap::copyMapApiInto(MapApi& map) const
 {
 	std::unique_lock<std::mutex> lock(*mu);

@@ -23,7 +23,7 @@ private:
 
 public:
 	FileLogResult& operator=(const FileLogResult& other);
-	const std::vector<FileData>& GetFileData() const { return m_FileData; }
+	[[nodiscard]] const std::vector<FileData>& GetFileData() const { return m_FileData; }
 
 	void OutputStat(StrDict* varList) override;
 };

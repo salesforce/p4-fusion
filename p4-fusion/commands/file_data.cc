@@ -5,7 +5,8 @@
  * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 #include "file_data.h"
-#include "git_api.h"
+
+FileAction extrapolateFileAction(std::string& action);
 
 FileDataStore::FileDataStore(std::string& _depotFile, std::string& _revision, std::string& action, std::string& type)
     : depotFile(_depotFile)
@@ -13,6 +14,7 @@ FileDataStore::FileDataStore(std::string& _depotFile, std::string& _revision, st
     , isBinary(STDHelpers::Contains(type, "binary"))
     , isExecutable(STDHelpers::Contains(type, "+x"))
     , isContentsPendingDownload(false)
+    , actionCategory(extrapolateFileAction(action))
 {
 	SetAction(action);
 }
@@ -75,8 +77,6 @@ void FileData::SetRelativePath(std::string& relativePath)
 {
 	m_data->relativePath = relativePath;
 }
-
-FileAction extrapolateFileAction(std::string& action);
 
 void FileDataStore::SetAction(std::string fileAction)
 {

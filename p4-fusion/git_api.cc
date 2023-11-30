@@ -7,7 +7,6 @@
 #include "git_api.h"
 
 #include <sstream>
-#include <cstdlib>
 
 #include "git2.h"
 #include "minitrace.h"
@@ -182,7 +181,7 @@ bool GitAPI::IsHEADExists() const
 	return errorCode != GIT_ENOTFOUND;
 }
 
-const std::string GitAPI::DetectLatestCL() const
+std::string GitAPI::DetectLatestCL() const
 {
 	MTR_SCOPE("Git", __func__);
 
@@ -427,7 +426,7 @@ BlobWriter GitAPI::WriteBlob() const
 		throw std::runtime_error("created blob writer before opening repository");
 	}
 
-	return { m_Repo };
+	return BlobWriter(m_Repo);
 }
 
 void BlobWriter::Write(const char* contents, int length)

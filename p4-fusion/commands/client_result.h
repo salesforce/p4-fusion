@@ -25,7 +25,7 @@ private:
 	ClientSpecData m_Data;
 
 public:
-	const ClientSpecData& GetClientSpec() const { return m_Data; }
+	[[nodiscard]] const ClientSpecData& GetClientSpec() const { return m_Data; }
 
 	void OutputStat(StrDict* varList) override;
 };

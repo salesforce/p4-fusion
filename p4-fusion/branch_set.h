@@ -56,7 +56,7 @@ public:
 
 	// splitBranchPath If the relativeDepotPath matches, returns {branch alias, branch file path}.
 	//   Otherwise, returns {"", ""}
-	std::array<std::string, 2> SplitBranchPath(const std::string& relativeDepotPath) const;
+	[[nodiscard]] std::array<std::string, 2> SplitBranchPath(const std::string& relativeDepotPath) const;
 };
 
 // A singular view on the branches and a base view (acts as a filter to trim down affected files).
@@ -71,19 +71,19 @@ private:
 	FileMap m_view;
 
 	// stripBasePath remove the base path from the depot path, or "" if not in the base path.
-	std::string stripBasePath(const std::string& depotPath) const;
+	[[nodiscard]] std::string stripBasePath(const std::string& depotPath) const;
 
 	// splitBranchPath extract the branch name and path under the branch (no leading '/' on the path)
 	//    relativeDepotPath - already stripped from running stripBasePath.
-	std::array<std::string, 2> splitBranchPath(const std::string& relativeDepotPath) const;
+	[[nodiscard]] std::array<std::string, 2> splitBranchPath(const std::string& relativeDepotPath) const;
 
 public:
 	BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, bool includeBinaries);
 
 	// HasMergeableBranch is there a branch model that requires integration history?
-	bool HasMergeableBranch() const { return !m_branches.empty(); };
+	[[nodiscard]] bool HasMergeableBranch() const { return !m_branches.empty(); };
 
-	size_t Count() const { return m_branches.size(); };
+	[[nodiscard]] size_t Count() const { return m_branches.size(); };
 
 	// ParseAffectedFiles create collections of merges and commits.
 	// Breaks up the files into those that are within the view, with each item in the
@@ -91,5 +91,5 @@ public:
 	// This also has the side-effect of populating the relative path value in the file data.
 	//   ... the FileData object is copied, but it's underlying shared data is shared.  So, this
 	//       breaks the const.
-	std::unique_ptr<ChangedFileGroups> ParseAffectedFiles(const std::vector<FileData>& cl) const;
+	[[nodiscard]] std::unique_ptr<ChangedFileGroups> ParseAffectedFiles(const std::vector<FileData>& cl) const;
 };

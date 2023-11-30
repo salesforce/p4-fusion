@@ -5,7 +5,6 @@
  * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 #include "describe_result.h"
-#include "git_api.h"
 
 DescribeResult& DescribeResult::operator=(const DescribeResult& other)
 {
@@ -14,7 +13,7 @@ DescribeResult& DescribeResult::operator=(const DescribeResult& other)
 		return *this;
 	}
 
-	m_FileData = std::move(other.m_FileData);
+	m_FileData = other.m_FileData;
 
 	return *this;
 }

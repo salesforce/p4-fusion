@@ -48,7 +48,7 @@ private:
 	bool Initialize();
 	bool Deinitialize();
 	bool Reinitialize();
-	bool CheckErrors(Error& e);
+	static bool CheckErrors(Error& e);
 
 	template <class T>
 	T Run(const char* command, const std::vector<std::string>& stringArguments, const std::function<T()>& creatorFunc);
@@ -67,7 +67,7 @@ public:
 	P4API();
 	~P4API();
 
-	bool IsDepotPathValid(const std::string& depotPath);
+	static bool IsDepotPathValid(const std::string& depotPath);
 	bool IsDepotPathUnderClientSpec(const std::string& depotPath);
 
 	TestResult TestConnection(int retries);

@@ -136,7 +136,7 @@ int Main(int argc, char** argv)
 			return 1;
 		}
 
-		resumeFromCL = std::move(git.DetectLatestCL());
+		resumeFromCL = git.DetectLatestCL();
 		SUCCESS("Detected last CL committed as CL " << resumeFromCL)
 	}
 
@@ -182,7 +182,7 @@ int Main(int argc, char** argv)
 	int networkThreads = arguments.GetNetworkThreads();
 	if (networkThreads > changes.size())
 	{
-		networkThreads = changes.size();
+		networkThreads = int(changes.size());
 	}
 	PRINT("Creating " << networkThreads << " network threads")
 	ThreadPool pool(networkThreads, srcPath, timezoneMinutes);

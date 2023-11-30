@@ -36,20 +36,19 @@ Arguments::Arguments(int argc, char** argv)
 
 		if (m_Parameters.find(name) != m_Parameters.end())
 		{
-			m_Parameters.at(name).valueList.push_back(argv[i + 1]);
+			m_Parameters.at(name).valueList.emplace_back(argv[i + 1]);
 			m_Parameters.at(name).isSet = true;
 		}
 		else
 		{
 			// TODO: Throw?
-			WARN("Unknown argument: " << name);
+			WARN("Unknown argument: " << name)
 		}
 	}
 }
 
-void Arguments::Print()
+void Arguments::Print() const
 {
-	auto noMerge = GetNoMerge();
 	auto depotPath = GetDepotPath();
 	auto srcPath = GetSourcePath();
 	auto fsyncEnable = GetFsyncEnable();

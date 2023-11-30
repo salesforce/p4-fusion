@@ -26,9 +26,9 @@ public:
 	FileMap();
 	FileMap(const FileMap& src);
 
-	bool IsInLeft(const std::string& fileRevision) const;
+	[[nodiscard]] bool IsInLeft(const std::string& fileRevision) const;
 
-	MapCase GetCaseSensitivity() const { return m_sensitivity; };
+	[[nodiscard]] MapCase GetCaseSensitivity() const { return m_sensitivity; };
 
 	// "//a/... b/..." format
 	void InsertTranslationMapping(const std::vector<std::string>& mapping);

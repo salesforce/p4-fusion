@@ -136,7 +136,7 @@ bool P4API::CheckErrors(Error& e)
 	{
 		StrBuf msg;
 		e.Fmt(&msg);
-		ERR(msg.Text());
+		ERR(msg.Text())
 		return false;
 	}
 	return true;

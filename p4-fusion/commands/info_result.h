@@ -16,7 +16,7 @@ class InfoResult : public Result
 public:
 	InfoResult();
 
-	int GetServerTimezoneMinutes() const { return m_TimezoneMinutes; };
+	[[nodiscard]] int GetServerTimezoneMinutes() const { return m_TimezoneMinutes; };
 
 	void OutputStat(StrDict* varList) override;
 };

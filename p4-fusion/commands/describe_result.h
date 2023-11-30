@@ -20,7 +20,7 @@ private:
 
 public:
 	DescribeResult& operator=(const DescribeResult& other);
-	const std::vector<FileData>& GetFileData() const { return m_FileData; }
+	[[nodiscard]] const std::vector<FileData>& GetFileData() const { return m_FileData; }
 
 	void OutputStat(StrDict* varList) override;
 	int OutputStatPartial(StrDict* varList) override;

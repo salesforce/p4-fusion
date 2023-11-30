@@ -32,7 +32,7 @@ private:
 
 public:
 	BlobWriter() = delete;
-	BlobWriter(git_repository* repo);
+	explicit BlobWriter(git_repository* repo);
 
 	// Write creates a new ODB entry on the first call and continuous calls keep
 	// writing more data to it.
@@ -50,7 +50,7 @@ class Libgit2RAII
 {
 public:
 	Libgit2RAII() = delete;
-	Libgit2RAII(int fsyncEnable);
+	explicit Libgit2RAII(int fsyncEnable);
 	~Libgit2RAII();
 };
 
@@ -70,14 +70,14 @@ public:
 
 	// WriteBlob returns a new BlobWriter instance that allows to write a single
 	// blob to the repository's ODB.
-	BlobWriter WriteBlob() const;
+	[[nodiscard]] BlobWriter WriteBlob() const;
 
 	void InitializeRepository(bool noCreateBaseCommit);
 	void OpenRepository();
-	bool IsHEADExists() const;
-	bool IsRepositoryClonedFrom(const std::string& depotPath) const;
+	[[nodiscard]] bool IsHEADExists() const;
+	[[nodiscard]] bool IsRepositoryClonedFrom(const std::string& depotPath) const;
 	/* Checks if a previous commit was made and extracts the corresponding changelist number. */
-	const std::string DetectLatestCL() const;
+	[[nodiscard]] std::string DetectLatestCL() const;
 
 	/* files are cleared as they are visited. Empty targetBranch means HEAD. Only use this method on the main thread! */
 	std::string WriteChangelistBranch(

@@ -24,7 +24,7 @@ private:
 	std::unordered_map<UserID, UserData> m_Users;
 
 public:
-	const std::unordered_map<UserID, UserData>& GetUserEmails() const { return m_Users; }
+	[[nodiscard]] const std::unordered_map<UserID, UserData>& GetUserEmails() const { return m_Users; }
 
 	void OutputStat(StrDict* varList) override;
 };
