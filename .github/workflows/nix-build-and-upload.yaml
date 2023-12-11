@@ -36,7 +36,7 @@ jobs:
       - uses: google-github-actions/upload-cloud-storage@v1
         # github.head_ref is only available for pull requests
         # if the event type is not pull_requet we have to use github.ref_name
-        if: ${{ github.ref_name == 'main' }}
+        if: ${{ github.ref_name == 'master' }}
         with:
           path: './dist/'
           destination: 'p4-fusion/x86_64-darwin/'
@@ -70,7 +70,7 @@ jobs:
       - uses: google-github-actions/upload-cloud-storage@v1
         # github.head_ref is only available for pull requests
         # if the event type is not pull_requet we have to use github.ref_name
-        if: ${{ github.ref_name == 'main' }}
+        if: ${{ github.ref_name == 'master' }}
         with:
           path: './dist/'
           destination: 'p4-fusion/aarch64-darwin/'
@@ -100,7 +100,7 @@ jobs:
       - uses: google-github-actions/upload-cloud-storage@v1
         # github.head_ref is only available for pull requests
         # if the event type is not pull_requet we have to use github.ref_name
-        if: ${{ github.ref_name == 'main' }}
+        if: ${{ github.ref_name == 'master' }}
         with:
           path: './dist/'
           destination: 'p4-fusion/x86_64-linux/'
