@@ -3,7 +3,7 @@ name: nix_p4-fusion
 on:
   push:
     branches: 
-      - main
+      - master
   pull_request:
 
 jobs:
