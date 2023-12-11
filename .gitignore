@@ -23,3 +23,8 @@ core
 # Ignore secert and env files
 **/**/*.secrets
 **/**/*.env
+
+# nix-related
+result
+source/
+outputs/
