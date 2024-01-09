@@ -2,7 +2,7 @@ name: nix_p4-fusion
 
 on:
   push:
-    branches: 
+    branches:
       - master
   pull_request:
 
@@ -21,7 +21,7 @@ jobs:
       - name: Run `nix build`
         run: |
           nix build .#p4-fusion_openssl1_1-static
-      - name: Sign the binary 
+      - name: Sign the binary
         # signing in ./result/bin will cause a cache miss on next invocation
         run: |
           mkdir -p dist
@@ -55,7 +55,7 @@ jobs:
       - name: Run `nix build`
         run: |
           nix build .#p4-fusion_openssl1_1-static
-      - name: Sign the binary 
+      - name: Sign the binary
         # signing in ./result/bin will cause a cache miss on next invocation
         run: |
           mkdir -p dist
@@ -105,3 +105,9 @@ jobs:
           path: './dist/'
           destination: 'p4-fusion/x86_64-linux/'
           glob: 'p4-fusion*'
+
+  report_failure:
+    needs: [aarch64-darwin, x86_64-darwin, x86_64-linux]
+    if: ${{ failure() }}
+    uses: sourcegraph/sourcegraph/.github/workflows/report-job-failure.yml@main
+    secrets: inherit
