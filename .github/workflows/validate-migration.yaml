@@ -36,9 +36,13 @@ env:
   ASAN_OPTIONS: "check_initialization_order=1" # check initialization order of globals
 
   # Test: Input parameters to the validate-migration test script
-  DEPOT_NAME: "source/src-cli" # the name of the Perforce depot to validate the git migration against
+  DEPOT_NAME: "go" # the name of the Perforce depot to validate the git migration against
 
 jobs:
+  tidy:
+    runs-on: ubuntu-22.04
+    steps:
+      - name:
   validate-migration:
     strategy:
       fail-fast: false
