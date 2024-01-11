@@ -177,11 +177,12 @@ TestResult P4API::TestConnection(const int retries)
 
 ChangesResult P4API::ShortChanges(const std::string& path)
 {
-	return Run<ChangesResult>("changes", {
-	                                         "-r", // Get CLs from earliest to latest
-	                                         "-s", "submitted", // Only include submitted CLs
-	                                         path // Depot path to get CLs from
-	                                     });
+	ChangesResult changes = Run<ChangesResult>("changes", {
+	                                                          "-s", "submitted", // Only include submitted CLs
+	                                                          path // Depot path to get CLs from
+	                                                      });
+	changes.reverse();
+	return changes;
 }
 
 ChangesResult P4API::Changes(const std::string& path)
@@ -199,7 +200,6 @@ ChangesResult P4API::Changes(const std::string& path, const std::string& from, i
 	std::vector<std::string> args = {
 		"-l", // Get full descriptions instead of sending cut-short ones
 		"-s", "submitted", // Only include submitted CLs
-		"-r" // Send CLs in chronological order
 	};
 
 	// This needs to be declared outside the if scope below to
@@ -226,7 +226,7 @@ ChangesResult P4API::Changes(const std::string& path, const std::string& from, i
 	args.push_back(path + pathAddition);
 
 	ChangesResult result = Run<ChangesResult>("changes", args);
-
+	result.reverse();
 	return result;
 }
 
@@ -251,12 +251,13 @@ ChangesResult P4API::LatestChange(const std::string& path)
 
 ChangesResult P4API::OldestChange(const std::string& path)
 {
-	return Run<ChangesResult>("changes", {
-	                                         "-s", "submitted", // Only include submitted CLs,
-	                                         "-r", // List from earliest to latest
-	                                         "-m", "1", // Get top-most change
-	                                         path // Depot path to get CLs from
-	                                     });
+	ChangesResult changes = Run<ChangesResult>("changes", {
+	                                                          "-s", "submitted", // Only include submitted CLs,
+	                                                          "-m", "1", // Get top-most change
+	                                                          path // Depot path to get CLs from
+	                                                      });
+	changes.reverse();
+	return changes;
 }
 
 DescribeResult P4API::Describe(const std::string& cl)
