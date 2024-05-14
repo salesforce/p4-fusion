@@ -27,7 +27,8 @@ bool FileMap::IsInLeft(const std::string fileRevision) const
 	argMap.Insert(StrBuf(fileRevision.c_str()), MapType::MapInclude);
 
 	// MapAPI is poorly written and doesn't declare things as const when it should.
-	return MapApi::Join(const_cast<MapApi*>(&m_map), &argMap) != nullptr;
+	std::unique_ptr<MapApi> joinResult(MapApi::Join(const_cast<MapApi*>(&m_map), &argMap));
+	return joinResult != nullptr;
 }
 
 bool FileMap::IsInRight(const std::string fileRevision) const
