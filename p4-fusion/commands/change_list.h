@@ -16,7 +16,8 @@
 
 struct ChangeList
 {
-	enum State {
+	enum State
+	{
 		Initialized,
 		Described,
 		Downloaded,

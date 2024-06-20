@@ -20,8 +20,8 @@ ChangeList::ChangeList(const std::string& clNumber, const std::string& clDescrip
     , description(clDescription)
     , timestamp(clTimestamp)
     , changedFileGroups(ChangedFileGroups::Empty())
-	, stateCV(new std::condition_variable ())
-	, stateMutex(new std::mutex ())
+	, stateCV(new std::condition_variable())
+	, stateMutex(new std::mutex())
 	, filesDownloaded(-1)
 	, state(Initialized)
 {
@@ -52,9 +52,9 @@ void ChangeList::PrepareDownload(const BranchSet& branchSet)
 			    cl.changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData());
 		    }
 
-			std::unique_lock<std::mutex> lock(*(cl.stateMutex));
-			cl.state = Described;
-			cl.stateCV->notify_all();
+		    std::unique_lock<std::mutex> lock(*cl.stateMutex);
+		    cl.state = Described;
+		    cl.stateCV->notify_all();
 	    });
 }
 
@@ -126,13 +126,13 @@ void ChangeList::Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles
 			    }
 		    }
 
-			std::lock_guard<std::mutex> lock(*stateMutex);
-			filesDownloaded += printBatchFiles->size();
-			if (filesDownloaded == changedFileGroups->totalFileCount)
-			{
-				state = Downloaded;
-				stateCV->notify_all();
-			}
+		    std::lock_guard<std::mutex> lock(*stateMutex);
+		    filesDownloaded += printBatchFiles->size();
+		    if (filesDownloaded == changedFileGroups->totalFileCount)
+		    {
+			    state = Downloaded;
+			    stateCV->notify_all();
+		    }
 	    });
 }
 
