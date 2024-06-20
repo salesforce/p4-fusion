@@ -20,10 +20,10 @@ ChangeList::ChangeList(const std::string& clNumber, const std::string& clDescrip
     , description(clDescription)
     , timestamp(clTimestamp)
     , changedFileGroups(ChangedFileGroups::Empty())
-	, stateCV(new std::condition_variable())
-	, stateMutex(new std::mutex())
-	, filesDownloaded(-1)
-	, state(Initialized)
+    , stateCV(new std::condition_variable())
+    , stateMutex(new std::mutex())
+    , filesDownloaded(-1)
+    , state(Initialized)
 {
 }
 
