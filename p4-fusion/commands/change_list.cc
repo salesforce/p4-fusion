@@ -20,6 +20,10 @@ ChangeList::ChangeList(const std::string& clNumber, const std::string& clDescrip
     , description(clDescription)
     , timestamp(clTimestamp)
     , changedFileGroups(ChangedFileGroups::Empty())
+    , stateCV(new std::condition_variable())
+    , stateMutex(new std::mutex())
+    , filesDownloaded(-1)
+    , state(Initialized)
 {
 }
 
@@ -48,11 +52,9 @@ void ChangeList::PrepareDownload(const BranchSet& branchSet)
 			    cl.changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData());
 		    }
 
-		    {
-			    std::unique_lock<std::mutex> lock((*(cl.canDownloadMutex)));
-			    *cl.canDownload = true;
-		    }
-		    cl.canDownloadCV->notify_all();
+		    std::unique_lock<std::mutex> lock(*cl.stateMutex);
+		    cl.state = Described;
+		    cl.stateCV->notify_all();
 	    });
 }
 
@@ -64,12 +66,12 @@ void ChangeList::StartDownload(const int& printBatch)
 	    {
 		    // Wait for describe to finish, if it is still running
 		    {
-			    std::unique_lock<std::mutex> lock(*(cl.canDownloadMutex));
-			    cl.canDownloadCV->wait(lock, [&cl]()
-			        { return *(cl.canDownload) == true; });
+			    std::unique_lock<std::mutex> lock(*cl.stateMutex);
+			    cl.stateCV->wait(lock, [&cl]()
+			        { return cl.state == Described; });
 		    }
 
-		    *cl.filesDownloaded = 0;
+		    cl.filesDownloaded = 0;
 
 		    std::shared_ptr<std::vector<std::string>> printBatchFiles = std::make_shared<std::vector<std::string>>();
 		    std::shared_ptr<std::vector<FileData*>> printBatchFileData = std::make_shared<std::vector<FileData*>>();
@@ -122,20 +124,23 @@ void ChangeList::Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles
 			    {
 				    printBatchFileData->at(i)->MoveContentsOnceFrom(printData.GetPrintData().at(i).contents);
 			    }
-
-			    (*filesDownloaded) += printBatchFiles->size();
 		    }
 
-		    // Ensure the notify_all is called.
-		    commitCV->notify_all();
+		    std::lock_guard<std::mutex> lock(*stateMutex);
+		    filesDownloaded += printBatchFiles->size();
+		    if (filesDownloaded == changedFileGroups->totalFileCount)
+		    {
+			    state = Downloaded;
+			    stateCV->notify_all();
+		    }
 	    });
 }
 
 void ChangeList::WaitForDownload()
 {
-	std::unique_lock<std::mutex> lock(*commitMutex);
-	commitCV->wait(lock, [this]()
-	    { return *(filesDownloaded) == (int)changedFileGroups->totalFileCount; });
+	std::unique_lock<std::mutex> lock(*stateMutex);
+	stateCV->wait(lock, [this]()
+	    { return state == Downloaded; });
 }
 
 void ChangeList::Clear()
@@ -145,10 +150,8 @@ void ChangeList::Clear()
 	description.clear();
 	changedFileGroups->Clear();
 
-	filesDownloaded.reset();
-	canDownload.reset();
-	canDownloadMutex.reset();
-	canDownloadCV.reset();
-	commitMutex.reset();
-	commitCV.reset();
+	stateCV.release();
+	stateMutex.release();
+	filesDownloaded = -1;
+	state = Freed;
 }
