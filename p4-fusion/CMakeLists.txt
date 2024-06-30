@@ -45,10 +45,9 @@ target_link_libraries(p4-fusion PUBLIC
     client
     rpc
     supp
+    p4script_cstub
     ${OPENSSL_SSL_LIBRARIES}
     ${OPENSSL_CRYPTO_LIBRARIES}
-    p4script
-    p4script_c
     git2
     minitrace
 )
