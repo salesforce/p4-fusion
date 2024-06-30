@@ -38,8 +38,8 @@ jobs:
     - name: Install Helix Core C++ API
       run: |
         mkdir -p vendor/helix-core-api/linux
-        wget https://www.perforce.com/downloads/perforce/r21.1/bin.linux26x86_64/p4api.tgz
-        tar -C vendor/helix-core-api/linux -xzf p4api.tgz --strip 1
+        wget https://www.perforce.com/downloads/perforce/r24.1/bin.linux26x86_64/p4api-glibc2.12-openssl1.1.1.tgz
+        tar -C vendor/helix-core-api/linux -xzf p4api-glibc2.12-openssl1.1.1.tgz --strip 1
 
     - name: Configure CMake cache
       run: |
