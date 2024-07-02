@@ -150,8 +150,8 @@ void ChangeList::Clear()
 	description.clear();
 	changedFileGroups->Clear();
 
-	stateCV.release();
-	stateMutex.release();
+	stateCV.reset();
+	stateMutex.reset();
 	filesDownloaded = -1;
 	state = Freed;
 }
