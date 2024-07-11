@@ -177,6 +177,27 @@ int Main(int argc, char** argv)
 	const std::unordered_map<UsersResult::UserID, UsersResult::UserData>& users = usersRes.GetUserEmails();
 	SUCCESS("Received " << users.size() << " userbase details from the Perforce server")
 
+	// Load labels
+	PRINT("Requesting labels from the Perforce server")
+	LabelsResult labelsRes = p4.Labels();
+	if (labelsRes.HasError())
+	{
+		ERR("Failed to retrieve label details for mapping: " << labelsRes.PrintError())
+		return 1;
+	}
+	const std::unordered_map<LabelsResult::LabelID, LabelsResult::LabelData>& labels = labelsRes.GetLabels();
+	SUCCESS("Received " << labels.size() << " label details from the Perforce server")
+
+	for (auto& [k, v]: labelsRes.GetLabels()) {
+		LabelResult labelRes = p4.Label(k);
+		if (labelRes.HasError())
+		{
+			ERR("Failed to retrieve label details: " << labelRes.PrintError());
+			continue;
+		}
+		SUCCESS("Got label " << labelRes.label)
+	}
+
 	// Create the thread pool
 	int networkThreads = arguments.GetNetworkThreads();
 	if (networkThreads > changes.size())

@@ -10,6 +10,8 @@
 #include "p4/p4libs.h"
 #include "p4/signaler.h"
 #include "minitrace.h"
+#include "commands/labels_result.h"
+#include "commands/label_result.h"
 
 ClientResult::ClientSpecData P4API::ClientSpec;
 std::string P4API::P4PORT;
@@ -236,6 +238,21 @@ UsersResult P4API::Users()
 	                                 },
 	    []() -> UsersResult
 	    { return {}; });
+}
+
+LabelsResult P4API::Labels()
+{
+	return Run<LabelsResult>("labels", {"-a"}, []() -> LabelsResult { return {}; });
+}
+
+LabelResult P4API::Label(const std::string& labelName)
+{
+	MTR_SCOPE("P4", __func__);
+
+	return Run<LabelResult>("label", { "-o",
+											   labelName },
+		[]() -> LabelResult
+		{ return {}; });
 }
 
 InfoResult P4API::Info()

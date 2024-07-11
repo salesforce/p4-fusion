@@ -21,6 +21,8 @@
 #include "commands/users_result.h"
 #include "commands/info_result.h"
 #include "commands/client_result.h"
+#include "commands/labels_result.h"
+#include "commands/label_result.h"
 #include "commands/test_result.h"
 
 /*
@@ -77,6 +79,8 @@ public:
 	PrintResult PrintFiles(const std::vector<std::string>& fileRevisions, const std::function<void()>& onStat, const std::function<void(const char*, int)>& onOutput);
 	ClientResult Client();
 	UsersResult Users();
+	LabelsResult Labels();
+	LabelResult Label(const std::string& labelName);
 	InfoResult Info();
 };
 
