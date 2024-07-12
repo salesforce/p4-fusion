@@ -20,13 +20,13 @@ jobs:
           ${{ runner.OS }}-p4-fusion-vendor-cache-
 
     # Adopted from: https://github.com/sourcegraph/sourcegraph/blob/main/cmd/gitserver/p4-fusion-install-alpine.sh#L82
-    - name: Install OpenSSL 1.0.2t
+    - name: Install OpenSSL 1.1.1w
       run: |
         pushd vendor
 
         mkdir -p openssl-src
-        wget https://www.openssl.org/source/openssl-1.0.2t.tar.gz
-        tar -C openssl-src -xzf openssl-1.0.2t.tar.gz --strip 1
+        wget https://www.openssl.org/source/openssl-1.1.1w.tar.gz
+        tar -C openssl-src -xzf openssl-1.1.1w.tar.gz --strip 1
         pushd openssl-src
         ./config
         make build_libs
@@ -38,8 +38,8 @@ jobs:
     - name: Install Helix Core C++ API
       run: |
         mkdir -p vendor/helix-core-api/linux
-        wget https://www.perforce.com/downloads/perforce/r21.1/bin.linux26x86_64/p4api.tgz
-        tar -C vendor/helix-core-api/linux -xzf p4api.tgz --strip 1
+        wget https://www.perforce.com/downloads/perforce/r24.1/bin.linux26x86_64/p4api-glibc2.12-openssl1.1.1.tgz
+        tar -C vendor/helix-core-api/linux -xzf p4api-glibc2.12-openssl1.1.1.tgz --strip 1
 
     - name: Configure CMake cache
       run: |
