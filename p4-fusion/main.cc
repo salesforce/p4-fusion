@@ -6,7 +6,7 @@
  */
 #include <thread>
 #include <atomic>
-#include <sstream>
+#include <unordered_map>
 #include <typeinfo>
 
 #include "common.h"
@@ -19,8 +19,8 @@
 #include "git_api.h"
 #include "branch_set.h"
 #include "tracer.h"
-
-#include "p4/p4libs.h"
+#include "git2/commit.h"
+#include "labels_conversion.h"
 
 #define P4_FUSION_VERSION "v1.13.2-sg"
 
@@ -152,10 +152,31 @@ int Main(int argc, char** argv)
 		}
 		changes = std::move(changesRes.GetChanges());
 	}
+
+	// Load labels
+	PRINT("Requesting labels from the Perforce server")
+	LabelsResult labelsRes = p4.Labels();
+	if (labelsRes.HasError())
+	{
+		ERR("Failed to retrieve labels for mapping: " << labelsRes.PrintError())
+		return 1;
+	}
+	const std::list<std::string>& labels = labelsRes.GetLabels();
+	SUCCESS("Received " << labels.size() << " labels from the Perforce server")
+
+	LabelMap revToLabel = getLabelsDetails(&p4, depotPath, labels);
+
 	// Return early if we have no work to do
 	if (changes.empty())
 	{
-		SUCCESS("Repository is up to date. Exiting.")
+		SUCCESS("Repository is up to date.")
+
+		if (!arguments.GetNoConvertLabels())
+		{
+			SUCCESS("Updating tags.")
+			git.CreateTagsFromLabels(revToLabel);
+		}
+
 		return 0;
 	}
 	SUCCESS("Found " << changes.size() << " uncloned CLs starting from CL " << changes.front().number << " to CL " << changes.back().number)
@@ -301,6 +322,12 @@ int Main(int argc, char** argv)
 	}
 
 	SUCCESS("Completed conversion of " << totalChanges << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes, taking " << commitTimer.GetTimeS() / 60.0f << " to commit CLs")
+
+	if (!arguments.GetNoConvertLabels())
+	{
+		SUCCESS("Updating tags.")
+		git.CreateTagsFromLabels(revToLabel);
+	}
 
 	return 0;
 }

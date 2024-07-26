@@ -14,9 +14,15 @@
 #include "common.h"
 #include "commands/file_data.h"
 #include "commands/change_list.h"
+#include "commands/label_result.h"
 #include "git2/oid.h"
 
 struct git_repository;
+
+// LabelMap is a map of Perforce revisions to label names to label details
+// and is accessed with labelMap[revision][labelName], since each
+// revision can have multiple labels associated with it.
+using LabelMap = std::unordered_map<std::string, std::unordered_map<std::string, LabelResult>*>;
 
 class BlobWriter
 {
@@ -88,4 +94,6 @@ public:
 	    const std::string& authorName,
 	    const std::string& authorEmail,
 	    const std::string& mergeFrom);
+
+	void CreateTagsFromLabels(LabelMap revToLabel);
 };

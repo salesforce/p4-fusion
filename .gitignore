@@ -28,3 +28,7 @@ core
 result
 source/
 outputs/
+
+# clangd related files
+.cache/
+compile_commands.json

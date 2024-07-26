@@ -248,4 +248,117 @@ if [ -f "${workdir}/changelist-differences.txt" ]; then
 fi
 
 echo "${error_count} problems discovered.  Complete list in ${workdir}/errors.txt and ${workdir}/commit-differences.txt"
+if [ ${error_count} -gt 0 ] ; then
+  exit ${error_count}
+fi
+
+
+# Extract out the tags/labels history.
+# Each extracted line is in the format "(tag name):(p4 label)"
+grep -E '] TAG:' "${workdir}/migration-log.txt" \
+  | cut -f 2- -d ']' \
+  | cut -f 2- -d ':' \
+  > "${workdir}/history.txt" || true # Might not be any tags so we ignore if this errors
+
+# Process every commit.
+while read line ; do
+    # The Git tag name.
+    gittag="$( echo "${line}" | cut -f 1 -d ':' )"
+
+    # Shorten up the SHA; some Perforce changelists may map to multiple
+    #   commits, so we need this as a distiguisher.
+    gitcommit_short="${gitcommit:0:5}"
+
+    # Perforce label
+    p4label="$( echo "${line}" | cut -f 2- -d ':' )"
+
+    # The relative P4 depot path for pulling files in the changelist.
+    p4DepotPath="...@${p4label}"
+
+    # The output directory where the perforce files are placed.
+    # Allows for clean diff between the git repo and the Perforce files.
+    p4dir="${p4_client_dir}/"
+
+    # The name of the Git branch to create.  Again, because the changelist
+    # may have multiple commits, we need to make them distinctly named.
+    gitbranch="br-${gittag}"
+
+    # The output differences file.  The changelist is first in the bits of the
+    # name, to allow later comparisons to be easier.
+    diff_file="${workdir}/diffs/diff-${gittag}.txt"
+
+    echo "${p4label} - ${gittag}" >> "${workdir}/progress.txt"
+
+    # Fetch all the files.
+    # The Git checkout and Perforce sync are performed in parallel.
+
+    # Make a clean checkout in Git of the commit.
+    # This ensures the files are exactly what's in the commit.
+    if [ ${debug} = 1 ]; then
+      echo "Switching to Git tag ${gittag}"
+    fi
+    ( cd "${workdir}/repo" && git checkout -b "${gitbranch}" "tags/${gittag}" >/dev/null 2>&1 && git reset --hard >/dev/null 2>&1 && git clean -f -d >/dev/null 2>&1 ) &
+    j1=$!
+
+    # Have the Perforce depot path match that specific changelist state.
+    # Because the directory was cleaned out before the start, it should be in a pristine state
+    # after running.
+    # Note: not sync -f, because that's not necessary.
+    if [ ${debug} = 1 ]; then
+      echo "Fetching ${p4DepotPath}"
+    fi
+    ( cd "${p4_client_dir}" && p4 sync -q "${p4DepotPath}" ) &
+    j2=$!
+
+    # Wait for the checkout and sync to complete.
+    wait $j1 $j2
+
+    # Discover differences.
+    if [ ${debug} = 1 ]; then
+      echo "Writing diff into ${diff_file}"
+    fi
+    set +e
+    diff "${diff_args[@]}" "${workdir}/repo" "${p4dir}" > "${diff_file}"
+    set -e
+    if [ -s "${diff_file}" ] ; then
+      echo "${p4label}:${gittag}:${diff_file}" >> "${workdir}/tag-differences.txt"
+      echo "${p4label}" >> "${workdir}/all-label-differences.txt"
+    fi
+done < "${workdir}/history.txt"
+
+# For the error detection, only loop through unique changelists.
+if [ -f "${workdir}/all-label-differences.txt" ]; then
+  sort < "${workdir}/all-label-differences.txt" | uniq > "${workdir}/label-differences.txt"
+fi
+
+error_count=0
+
+if [ ${debug} = 1 ]; then
+  echo "Discovering problems."
+fi
+
+if [ -f "${workdir}/label-differences.txt" ]; then
+  while read gittag ; do
+    # This changelist had at least 1 corresponding commit with a problem.
+    # If there is some commit with the same changelist with no problem,
+    # then that means it eventually matched.
+    # Note that, with the splat pattern, non-branch runs will always have
+    # this changelist be marked as a problem.
+    is_error=1
+    file_list=()
+    for diff in ${workdir}/diffs/diff-${gittag}.txt ; do
+      file_list+=("$( basename "${diff}" )")
+      if [ ! -s "${diff}" ] ; then
+        is_error=0
+      fi
+    done
+    if [ ${is_error} = 1 ] ; then
+      error_count=$(( error_count + 1 ))
+      echo "${gittag} ${file_list[*]}" >> "${workdir}/errors.txt"
+      echo "ERROR: tag ${gittag}"
+    fi
+  done < "${workdir}/label-differences.txt"
+fi
+
+echo "${error_count} problems discovered.  Complete list in ${workdir}/errors.txt and ${workdir}/tag-differences.txt"
 exit ${error_count}

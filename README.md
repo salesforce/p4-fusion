@@ -74,6 +74,9 @@ These execution times are expected to scale as expected with larger depots (mill
 --retries [Optional, Default is 10]
         Specify how many times a command should be retried before the process exits in a failure.
 
+--noConvertLabels [Optional, Default is false]
+        Whether or not to disable label to tag conversion.
+
 --src [Required]
         Relative path where the git repository should be created. This path should be empty before running p4-fusion for the first time in a directory.
 
