@@ -22,7 +22,7 @@
 #include "git2/commit.h"
 #include "labels_conversion.h"
 
-#define P4_FUSION_VERSION "v1.13.2-sg"
+#define P4_FUSION_VERSION "v1.14.0-sg"
 
 int Main(int argc, char** argv)
 {
