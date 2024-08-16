@@ -22,7 +22,27 @@
 #include "git2/commit.h"
 #include "labels_conversion.h"
 
-#define P4_FUSION_VERSION "v1.14.0-sg"
+#define P4_FUSION_VERSION "v1.14.1-sg"
+
+int fetchAndUpdateLabels(P4API& p4, GitAPI& git, const std::string& depotPath)
+{
+	// Load labels
+	PRINT("Requesting labels from the Perforce server")
+	LabelsResult labelsRes = p4.Labels();
+	if (labelsRes.HasError())
+	{
+		ERR("Failed to retrieve labels for mapping: " << labelsRes.PrintError())
+		return 1;
+	}
+	const std::list<std::string>& labels = labelsRes.GetLabels();
+	SUCCESS("Received " << labels.size() << " labels from the Perforce server")
+
+	LabelMap revToLabel = getLabelsDetails(&p4, depotPath, labels);
+
+	SUCCESS("Updating tags.")
+	git.CreateTagsFromLabels(revToLabel);
+	return 0;
+}
 
 int Main(int argc, char** argv)
 {
@@ -153,19 +173,6 @@ int Main(int argc, char** argv)
 		changes = std::move(changesRes.GetChanges());
 	}
 
-	// Load labels
-	PRINT("Requesting labels from the Perforce server")
-	LabelsResult labelsRes = p4.Labels();
-	if (labelsRes.HasError())
-	{
-		ERR("Failed to retrieve labels for mapping: " << labelsRes.PrintError())
-		return 1;
-	}
-	const std::list<std::string>& labels = labelsRes.GetLabels();
-	SUCCESS("Received " << labels.size() << " labels from the Perforce server")
-
-	LabelMap revToLabel = getLabelsDetails(&p4, depotPath, labels);
-
 	// Return early if we have no work to do
 	if (changes.empty())
 	{
@@ -173,8 +180,7 @@ int Main(int argc, char** argv)
 
 		if (!arguments.GetNoConvertLabels())
 		{
-			SUCCESS("Updating tags.")
-			git.CreateTagsFromLabels(revToLabel);
+			return fetchAndUpdateLabels(p4, git, depotPath);
 		}
 
 		return 0;
@@ -325,8 +331,8 @@ int Main(int argc, char** argv)
 
 	if (!arguments.GetNoConvertLabels())
 	{
-		SUCCESS("Updating tags.")
-		git.CreateTagsFromLabels(revToLabel);
+		P4API p4labelsClient;
+		return fetchAndUpdateLabels(p4labelsClient, git, depotPath);
 	}
 
 	return 0;
