@@ -4,12 +4,8 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-#include <thread>
 #include <atomic>
 #include <unordered_map>
-#include <typeinfo>
-
-#include "common.h"
 
 #include "utils/timer.h"
 #include "utils/arguments.h"
@@ -19,7 +15,6 @@
 #include "git_api.h"
 #include "branch_set.h"
 #include "tracer.h"
-#include "git2/commit.h"
 #include "labels_conversion.h"
 
 #define P4_FUSION_VERSION "v1.14.1-sg"
@@ -34,7 +29,7 @@ int fetchAndUpdateLabels(P4API& p4, GitAPI& git, const std::string& depotPath)
 		ERR("Failed to retrieve labels for mapping: " << labelsRes.PrintError())
 		return 1;
 	}
-	const std::list<std::string>& labels = labelsRes.GetLabels();
+	const std::list<LabelsResult::LabelData>& labels = labelsRes.GetLabels();
 	SUCCESS("Received " << labels.size() << " labels from the Perforce server")
 
 	LabelMap revToLabel = getLabelsDetails(&p4, depotPath, labels);

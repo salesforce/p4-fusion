@@ -30,6 +30,7 @@ Arguments::Arguments(int argc, char** argv)
 	OptionalParameter("--flushRate", "30", "Interval in seconds at which the profiling data is flushed to the disk.");
 	OptionalParameter("--noColor", "false", "Disable colored output.");
 	OptionalParameter("--noConvertLabels", "false", "Whether or not to disable label to tag conversion.");
+	OptionalParameter("--labelCache", "", "Absolute path to a label cache file. If not specified, labels will not be cached.");
 
 	for (int i = 1; i < argc - 1; i += 2)
 	{

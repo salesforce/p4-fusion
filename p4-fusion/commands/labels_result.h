@@ -6,16 +6,23 @@
  */
 #pragma once
 
-#include "common.h"
 #include "result.h"
 #include <list>
 
 class LabelsResult : public Result
 {
-	std::list<std::string> m_Labels;
+public:
+	struct LabelData
+	{
+		std::string label;
+		std::string update;
+	};
+
+private:
+	std::list<LabelData> m_Labels;
 
 public:
-	[[nodiscard]] const std::list<std::string>& GetLabels() const { return m_Labels; }
+	[[nodiscard]] const std::list<LabelsResult::LabelData>& GetLabels() const { return m_Labels; }
 
 	void OutputStat(StrDict* varList) override;
 };

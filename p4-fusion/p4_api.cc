@@ -244,7 +244,7 @@ LabelsResult P4API::Labels()
 {
 	MTR_SCOPE("P4", __func__);
 
-	return Run<LabelsResult>("labels", { "-a" }, []() -> LabelsResult
+	return Run<LabelsResult>("labels", { "-a", "-t" }, []() -> LabelsResult
 	    { return {}; });
 }
 

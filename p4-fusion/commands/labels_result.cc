@@ -9,6 +9,7 @@
 void LabelsResult::OutputStat(StrDict* varList)
 {
 	StrPtr* labelIDPtr = varList->GetVar("label");
+	StrPtr* updatePtr = varList->GetVar("Update");
 
 	if (!labelIDPtr)
 	{
@@ -17,5 +18,5 @@ void LabelsResult::OutputStat(StrDict* varList)
 		return;
 	}
 
-	m_Labels.emplace_back(labelIDPtr->Text());
+	m_Labels.emplace_back(LabelsResult::LabelData { .label = labelIDPtr->Text(), .update = updatePtr->Text() });
 }
