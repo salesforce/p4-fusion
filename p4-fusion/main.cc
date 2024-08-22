@@ -5,6 +5,8 @@
  * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 #include <atomic>
+#include <fstream>
+#include <string>
 #include <unordered_map>
 
 #include "utils/timer.h"
@@ -19,7 +21,156 @@
 
 #define P4_FUSION_VERSION "v1.14.1-sg"
 
-int fetchAndUpdateLabels(P4API& p4, GitAPI& git, const std::string& depotPath)
+void writeString(std::ofstream& outFile, const std::string& str)
+{
+	size_t length = str.size();
+	outFile.write(reinterpret_cast<const char*>(&length), sizeof(length));
+	outFile.write(str.data(), length);
+}
+
+void writeVectorOfStrings(std::ofstream& outFile, const std::vector<std::string>& vec)
+{
+	size_t vecSize = vec.size();
+	outFile.write(reinterpret_cast<const char*>(&vecSize), sizeof(vecSize));
+	for (const auto& str : vec)
+	{
+		writeString(outFile, str);
+	}
+}
+
+void writeStructToDisk(std::ofstream& outFile, const LabelResult& labels)
+{
+	writeString(outFile, labels.label);
+	writeString(outFile, labels.revision);
+	writeString(outFile, labels.description);
+	writeString(outFile, labels.update);
+	writeVectorOfStrings(outFile, labels.views);
+}
+
+void writeLabelMapToDisk(const std::string& filename, const LabelNameToDetails& labelMap, const std::string& cacheFile)
+{
+	std::ofstream outFile(filename, std::ios::binary);
+	if (!outFile)
+	{
+		ERR("Error opening " << cacheFile << " file for writing, could not cache labels!");
+		return;
+	}
+
+	// Write the size of the map
+	size_t size = labelMap.size();
+	outFile.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+	// Write each key-value pair
+	for (const auto& pair : labelMap)
+	{
+		writeStructToDisk(outFile, pair.second);
+	}
+
+	outFile.close();
+}
+
+std::string readString(std::ifstream& inFile)
+{
+	size_t length;
+	inFile.read(reinterpret_cast<char*>(&length), sizeof(length));
+	std::string str(length, '\0');
+	inFile.read(&str[0], length);
+	return str;
+}
+
+std::vector<std::string> readVectorOfStrings(std::ifstream& inFile)
+{
+	size_t vecSize;
+	inFile.read(reinterpret_cast<char*>(&vecSize), sizeof(vecSize));
+	std::vector<std::string> vec(vecSize);
+	for (size_t i = 0; i < vecSize; ++i)
+	{
+		vec[i] = readString(inFile);
+	}
+	return vec;
+}
+
+LabelResult readStructFromDisk(std::ifstream& inFile)
+{
+	LabelResult label;
+	label.label = readString(inFile);
+	label.revision = readString(inFile);
+	label.description = readString(inFile);
+	label.update = readString(inFile);
+	label.views = readVectorOfStrings(inFile);
+	return label;
+}
+
+LabelNameToDetails readLabelMapFromDisk(const std::string& filename)
+{
+	LabelNameToDetails labelMap;
+	std::ifstream inFile(filename, std::ios::binary);
+	if (!inFile)
+	{
+		ERR("No label cache found at " << filename)
+		return labelMap;
+	}
+
+	// Read the size of the map
+	size_t size;
+	inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
+
+	// Read each key-value pair and insert into the map
+	for (size_t i = 0; i < size; ++i)
+	{
+		LabelResult value = readStructFromDisk(inFile);
+		labelMap.insert({ value.label, value });
+	}
+
+	inFile.close();
+	return labelMap;
+}
+
+struct compareResponse
+{
+	std::list<LabelsResult::LabelData> labelsToFetch;
+	LabelNameToDetails resultingLabels; // labelMap with the labels that no longer exit removed
+};
+
+// Compares the last updated date in the labels list to the updated dates
+// in the cache, and returns all labels of which the last updated date is
+// different.
+compareResponse compareLabelsToCache(const std::list<LabelsResult::LabelData>& labels, LabelNameToDetails& labelMap)
+{
+	LabelNameToDetails newLabelMap;
+	std::list<LabelsResult::LabelData> labelsToFetch;
+	for (const auto& label : labels)
+	{
+		if (labelMap.contains(label.label))
+		{
+			LabelResult cachedLabel
+			    = labelMap.at(label.label);
+			if (cachedLabel.update != label.update)
+			{
+				labelsToFetch.push_back(label);
+			}
+			else
+			{
+				newLabelMap.insert({ label.label, cachedLabel });
+			}
+		}
+		else
+		{
+			labelsToFetch.push_back(label);
+		}
+	}
+
+	return compareResponse {
+		.labelsToFetch = labelsToFetch,
+		.resultingLabels = newLabelMap
+	};
+}
+
+// We need to figure out which labels to delete as well?
+// Okay, split it into two functions. Don't be stupid.
+// Or make a struct, babyyyyyy
+
+int fetchAndUpdateLabels(P4API& p4, GitAPI& git, const std::string& depotPath, const std::string& cachePath)
 {
 	// Load labels
 	PRINT("Requesting labels from the Perforce server")
@@ -32,9 +183,32 @@ int fetchAndUpdateLabels(P4API& p4, GitAPI& git, const std::string& depotPath)
 	const std::list<LabelsResult::LabelData>& labels = labelsRes.GetLabels();
 	SUCCESS("Received " << labels.size() << " labels from the Perforce server")
 
-	LabelMap revToLabel = getLabelsDetails(&p4, depotPath, labels);
+	LabelNameToDetails cachedLabels;
+	if (cachePath.size() > 0)
+	{
+		PRINT("Reading labels from cache")
+		cachedLabels = readLabelMapFromDisk(cachePath);
+		SUCCESS("Successfully read " << cachedLabels.size() << " cached labels")
+	}
 
-	SUCCESS("Updating tags.")
+	PRINT("Comparing cached labels with labels from the Perforce server")
+	compareResponse compResp = compareLabelsToCache(labels, cachedLabels);
+
+	PRINT("Fetching " << compResp.labelsToFetch.size() << " new label details")
+	LabelNameToDetails fetchedLabelMap = getLabelsDetails2(&p4, compResp.labelsToFetch);
+
+	// Join the new map with the old map
+	for (const auto& pair : fetchedLabelMap)
+	{
+		compResp.resultingLabels.insert({ pair.first, pair.second });
+	}
+
+	PRINT("Caching updated labels to " << cachePath)
+	writeLabelMapToDisk(cachePath, compResp.resultingLabels, cachePath);
+
+	LabelMap revToLabel = getLabelsDetails(&p4, depotPath, compResp.resultingLabels);
+
+	PRINT("Updating tags.")
 	git.CreateTagsFromLabels(revToLabel);
 	return 0;
 }
@@ -175,7 +349,7 @@ int Main(int argc, char** argv)
 
 		if (!arguments.GetNoConvertLabels())
 		{
-			return fetchAndUpdateLabels(p4, git, depotPath);
+			return fetchAndUpdateLabels(p4, git, depotPath, arguments.GetLabelCache());
 		}
 
 		return 0;
@@ -327,7 +501,7 @@ int Main(int argc, char** argv)
 	if (!arguments.GetNoConvertLabels())
 	{
 		P4API p4labelsClient;
-		return fetchAndUpdateLabels(p4labelsClient, git, depotPath);
+		return fetchAndUpdateLabels(p4labelsClient, git, depotPath, arguments.GetLabelCache());
 	}
 
 	return 0;

@@ -15,6 +15,7 @@ public:
 	std::string label;
 	std::string revision;
 	std::string description;
+	std::string update;
 	std::vector<std::string> views;
 
 public:

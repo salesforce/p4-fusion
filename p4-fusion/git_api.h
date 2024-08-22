@@ -24,6 +24,8 @@ struct git_repository;
 // revision can have multiple labels associated with it.
 using LabelMap = std::unordered_map<std::string, std::unordered_map<std::string, LabelResult>*>;
 
+using LabelNameToDetails = std::unordered_map<std::string, LabelResult>;
+
 class BlobWriter
 {
 private:

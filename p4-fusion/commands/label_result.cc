@@ -19,6 +19,7 @@ void LabelResult::OutputStat(StrDict* varList)
 
 	StrPtr* revisionPtr = varList->GetVar("Revision");
 	StrPtr* descriptionPtr = varList->GetVar("Description");
+	StrPtr* updatePtr = varList->GetVar("Update");
 
 	label = labelPtr->Text();
 
@@ -29,6 +30,10 @@ void LabelResult::OutputStat(StrDict* varList)
 	if (descriptionPtr)
 	{
 		description = descriptionPtr->Text();
+	}
+	if (updatePtr)
+	{
+		update = updatePtr->Text();
 	}
 
 	int i = 0;
