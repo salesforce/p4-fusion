@@ -5,6 +5,9 @@
  * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 #include "std_helpers.h"
+#include <cstddef>
+#include <string>
+#include <vector>
 
 bool STDHelpers::EndsWith(const std::string& str, const std::string& checkStr)
 {
@@ -72,4 +75,19 @@ std::array<std::string, 2> STDHelpers::SplitAt(const std::string& source, const 
 		return { source.substr(startAt, pos - startAt), source.substr(pos + 1) };
 	}
 	return { source, "" };
+}
+
+std::vector<std::string> STDHelpers::SplitOnDelim(const std::string& source, const char delim)
+{
+	std::vector<std::string> out {};
+	std::size_t prev = 0;
+	std::size_t curr = source.find(delim, 0);
+	while (curr != std::string::npos)
+	{
+		out.push_back(source.substr(prev, (curr - prev)));
+		prev = curr + 1;
+		curr = source.find(delim, prev);
+	}
+	out.push_back(source.substr(prev, -1));
+	return out;
 }
