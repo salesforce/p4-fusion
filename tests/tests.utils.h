@@ -7,6 +7,7 @@
 #pragma once
 
 #include <array>
+#include <vector>
 #include "tests.common.h"
 #include "utils/std_helpers.h"
 #include "utils/time_helpers.h"
@@ -91,6 +92,22 @@ int TestUtils()
 	{
 		auto actual = STDHelpers::SplitAt("//depot/path", '/', 2);
 		auto expected = std::array<std::string, 2> { "depot", "path" };
+		TEST(actual, expected);
+	}
+
+	{
+		auto actual = STDHelpers::SplitOnDelim("Foo Bar Baz", ' ');
+		auto expected = std::vector<std::string> { "Foo", "Bar", "Baz" };
+		TEST(actual, expected);
+	}
+	{
+		auto actual = STDHelpers::SplitOnDelim("somestring", ' ');
+		auto expected = std::vector<std::string> { "somestring" };
+		TEST(actual, expected);
+	}
+	{
+		auto actual = STDHelpers::SplitOnDelim("test  string", ' ');
+		auto expected = std::vector<std::string> { "test", "", "string" };
 		TEST(actual, expected);
 	}
 

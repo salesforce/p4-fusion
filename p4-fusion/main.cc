@@ -248,11 +248,6 @@ int Main(int argc, char** argv)
 	{
 		PRINT("Mapped in Streams: " << mappings.size());
 		PRINT("Excluded paths: " << exclusions.size());
-		if (maxChanges > -1)
-		{
-			ERR("MaxChanges and StreamMappings cannot be used together! exiting.");
-			return 1;
-		}
 	}
 
 	GitAPI git(fsyncEnable);
@@ -296,6 +291,11 @@ int Main(int argc, char** argv)
 			changes.insert(changes.end(), std::make_move_iterator(temp.begin()), std::make_move_iterator(temp.end()));
 		}
 		std::sort(changes.begin(), changes.end());
+		// Truncate excess changes
+		if ((maxChanges > -1) && (changes.size() > maxChanges))
+		{
+			changes.resize(maxChanges);
+		}
 	}
 
 	// Return early if we have no work to do
@@ -373,7 +373,7 @@ int Main(int argc, char** argv)
 		cl.WaitForDownload();
 
 		std::string fullName = cl.user;
-		std::string email = "deleted@user.com";
+		std::string email = "deleted@user";
 		if (users.find(cl.user) != users.end())
 		{
 			fullName = users.at(cl.user).fullName;
