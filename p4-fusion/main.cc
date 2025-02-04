@@ -294,6 +294,7 @@ int Main(int argc, char** argv)
 		// Truncate excess changes
 		if ((maxChanges > -1) && (changes.size() > maxChanges))
 		{
+			// We don't need to consider the case if this ever expands the vector.
 			changes.resize(maxChanges);
 		}
 	}

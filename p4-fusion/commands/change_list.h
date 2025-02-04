@@ -35,6 +35,7 @@ struct ChangeList
 	int filesDownloaded;
 	State state;
 
+	ChangeList() = default; // Defaulted so that vector<ChangeList>::resize() can be used.
 	ChangeList(const std::string& number, const std::string& description, const std::string& user, const int64_t& timestamp);
 
 	ChangeList(const ChangeList& other) = delete;
