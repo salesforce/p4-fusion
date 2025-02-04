@@ -106,8 +106,10 @@ std::vector<Branch> createBranchesFromPaths(const std::vector<std::string>& bran
 	return parsed;
 }
 
-BranchSet::BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const bool includeBinaries)
+BranchSet::BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const std::vector<StreamResult::MappingData>& mappings, const std::vector<StreamResult::MappingData>& exclusions, const bool includeBinaries)
     : m_branches(createBranchesFromPaths(branches))
+    , m_mappings(mappings)
+    , m_exclusions(exclusions)
     , m_includeBinaries(includeBinaries)
 {
 	m_view.InsertTranslationMapping(clientViewMapping);
@@ -219,11 +221,62 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 		{
 			continue;
 		}
+		// Put logic for Absolutely do not dare map these files here, here :)
 		std::string relativeDepotPath = stripBasePath(depotFile);
 		if (relativeDepotPath.empty())
 		{
-			// Not under the depot path.  Shouldn't happen due to the way we
-			// scan for files, but...
+			// Not under regular depot path, might be mapped in
+			// check and attenuate if it is.
+			bool isImport = false;
+			for (auto const& v : m_mappings)
+			{
+				if (STDHelpers::EndsWith(v.stream2, "..."))
+				{
+					// get rid of trailing ...
+					auto tempStr = v.stream2.substr(0, v.stream2.size() - 3);
+					if (STDHelpers::StartsWith(depotFile, tempStr))
+					{
+						isImport = true;
+						// Shove the replacement path at the front
+						relativeDepotPath = v.stream1.substr(0, v.stream1.size() - 3) + depotFile.substr(tempStr.size());
+						break;
+					}
+					if (depotFile == tempStr)
+					{
+						// Map in exactly one file and nothing else.
+						relativeDepotPath = v.stream1;
+						isImport = true;
+						break;
+					}
+				}
+			}
+
+			if (!isImport)
+			{
+				continue;
+			}
+		}
+
+		// Check the file or path is not marked as excluded (There is a chance that not all of a mapped in directory is desired, so we have to check post mapping.)
+		bool discard = false;
+		for (auto const& v : m_exclusions)
+		{
+			if (STDHelpers::EndsWith(v.stream1, "..."))
+			{
+				if (STDHelpers::StartsWith(relativeDepotPath, v.stream1.substr(0, v.stream1.size() - 3)))
+				{
+					discard = true;
+					break;
+				}
+			}
+			else if (v.stream1 == relativeDepotPath)
+			{
+				discard = true;
+				break;
+			}
+		}
+		if (discard)
+		{
 			continue;
 		}
 

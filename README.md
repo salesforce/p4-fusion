@@ -28,7 +28,12 @@ These execution times are expected to scale as expected with larger depots (mill
 ## Usage
 
 ```shell
-[ PRINT @ Main:56 ] Usage:
+[ PRINT @ Main:59 ] Usage:
+--branch [Optional, Default is empty]
+        A branch to migrate under the depot path.  May be specified more than once.  If at least one is given and the noMerge option is false, then the Git repository will include merges between branches
+        in the history.   You may use the formatting 'depot/path:git-alias', separating the Perforce branch sub-path from the git alias name by a ':'; if the depot path contains a ':', then you must provide
+        the git branch alias.
+
 --client [Required]
         Name/path of the client workspace specification.
 
@@ -44,12 +49,6 @@ These execution times are expected to scale as expected with larger depots (mill
 --lookAhead [Required]
         How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?
 
---branch [Optional]
-        A branch to migrate under the depot path.  May be specified more than once.  If at least one is given and the noMerge option is false, then the Git repository will include merges between branches in the history.  You may use the formatting 'depot/path:git-alias', separating the Perforce branch sub-path from the git alias name by a ':'; if the depot path contains a ':', then you must provide the git branch alias.
-
---noMerge [Optional, Default is false]
-        When false and at least one branch is given, then .  If this is true, then the Git history will not contain any merges, except for an artificial empty commit added at the root, which acts as a common source to make later merges easier.
-
 --maxChanges [Optional, Default is -1]
         Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.
 
@@ -59,8 +58,11 @@ These execution times are expected to scale as expected with larger depots (mill
 --noColor [Optional, Default is false]
         Disable colored output.
 
+--noMerge [Optional, Default is false]
+        Disable performing a Git merge when a Perforce branch integrates (or copies, etc) into another branch.
+
 --path [Required]
-        P4 depot path to convert to a Git repo
+        P4 depot path to convert to a Git repo.  If used with '--branch', this is the base path for the branches.
 
 --port [Required]
         Specify which P4PORT to use.
@@ -76,6 +78,9 @@ These execution times are expected to scale as expected with larger depots (mill
 
 --src [Required]
         Relative path where the git repository should be created. This path should be empty before running p4-fusion for the first time in a directory.
+
+--streamMappings [Optional, Default is false]
+        Use Mappings defined by Perforce Stream Spec for a given stream
 
 --user [Required]
         Specify which P4USER to use. Please ensure that the user is logged in.
@@ -95,6 +100,33 @@ Because Perforce integration isn't a 1-to-1 mapping onto Git merge, there can be
 
 If the Perforce tree contains sub-branches, such as `//base/tree/sub` being a sub-branch of `//base/tree`, then you can use the arguments `--path //base/... --branch tree/sub:tree-sub --branch tree`.  The ordering is important here - provide the deeper paths first to have them take priority over the others.  Because Git creates branches with '/' characters as implicit directories, you must provide the Git branch alias to prevent Git reporting an error where the branch "tree" can't be created because is already a directory, or "tree/sub" can't be created because "tree" isn't a directory.
 
+## Notes on stream mapping mode
+
+Stream Mapping mode is disabled by default, it makes it so that Perforce Stream Views and Paths [link](https://www.perforce.com/manuals/p4guide/Content/P4Guide/streams.paths.html) are treated as part of the of the depot in which the stream view is mapped. This can include completely out-of-tree depots with no shared path deeper than `//...` it commits everything to the master branch (Using it with branching mode is untested)
+lets assume that you have some depots
+```
+//A/foo/...
+//B/bar/...
+//C/baz/...
+```
+and you have some (in perforce) read only monorepo stream with the following mappings
+```
+import a/... //A/foo/...
+import b/... //B/bar/...
+import c/... //C/baz/...
+```
+
+This will also recursively traverse those depots/streams (you can even just map in a single file and it's fine.) and map in their contents
+
+If you were to run p4-fusion without stream-mapping mode you would be given what could possibly be an empty repo. This will mangle paths to merge all of those imports and treat it as one git repo (almost) seamlessly.
+
+A side effect of stream mapping mode is that you can use stream mappings to exclude paths that no longer exist, and as a result their contents are ignored from git history.
+
+### limitations
+
+ - If there is a cycle in the mapping graph this mode will break.
+ - If the contents of a subdirectory were at one stage part of the parent stream and are now being mapped in (or vice versa) there is a possibility that the files may not exist in the git history. (this is a file-by-file basis if you have several paths mapped into one directory and have files in the parent stream in the same directory, it will be fine provided the file names are all unique to that stream.)
+
 ## Checking Results
 
 In order to test the validity of the logic, we need to run the program over a Perforce depot and compare each changelist against the corresponding Git commit SHA, to ensure the files match up.
@@ -106,12 +138,13 @@ Because of the extra effort the script performs, expect it to take orders of mag
 ## Build
 
 0. Pre-requisites
-  * Install openssl@1.0.2t at `/usr/local/ssl` by following the steps [here](https://askubuntu.com/a/1094690).
+  * Install openssl (both 1.1.1 and 3 work)
   * Install CMake 3.16+.
   * Install g++ 11.2.0 (older versions compatible with C++11 are also supported).
   * Clone this repository or [get a release distribution](https://github.com/salesforce/p4-fusion/releases).
   * Get the Helix Core C++ API binaries from the [official Perforce website](https://www.perforce.com/downloads/helix-core-c/c-api).
-    * Tested versions: 2021.1, 2021.2, 2022.1
+    * If you are using Openssl3, As of October 12th 2024, you need to manually access the FTP site [here](https://cdist2.perforce.com/perforce/r24.1/bin.linux26x86_64/).
+    * Tested versions: 2021.1, 2021.2, 2022.1, 2024.1
     * We recommend always picking the newest API versions that compile with p4-fusion.
   * Extract the contents in `./vendor/helix-core-api/linux/` or `./vendor/helix-core-api/mac/` based on your OS.
 
