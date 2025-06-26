@@ -6,6 +6,7 @@ helix-core-api/
 .DS_Store
 .vscode/
 *.zip
+compile_commands.json
 
 # Depot conversion results
 clones/

@@ -5,6 +5,7 @@ option(BUILD_TESTS "Build tests" OFF)
 
 set(CXX_STANDARD_REQUIRED true)
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(
     p4-fusion

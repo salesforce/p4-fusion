@@ -8,6 +8,7 @@
 
 #include <csignal>
 
+#include "commands/stream_result.h"
 #include "utils/std_helpers.h"
 
 #include "p4/p4libs.h"
@@ -168,6 +169,11 @@ void P4API::UpdateClientSpec()
 ClientResult P4API::Client()
 {
 	return Run<ClientResult>("client", { "-o" });
+}
+
+StreamResult P4API::Stream(const std::string& path)
+{
+	return Run<StreamResult>("stream", { "-o", path });
 }
 
 TestResult P4API::TestConnection(const int retries)

@@ -16,6 +16,7 @@
 
 #include "commands/file_map.h"
 #include "commands/file_data.h"
+#include "commands/stream_result.h"
 #include "utils/std_helpers.h"
 
 struct BranchedFileGroup
@@ -75,6 +76,8 @@ private:
 	mutable std::unordered_set<std::string> m_excludedFileDirs;
 	std::string m_basePath;
 	const std::vector<Branch> m_branches;
+	const std::vector<StreamResult::MappingData> m_mappings;
+	const std::vector<StreamResult::MappingData> m_exclusions;
 	FileMap m_view;
 
 	// stripBasePath remove the base path from the depot path, or "" if not in the base path.
@@ -87,7 +90,7 @@ private:
 	bool matchesExcludes(const std::string& depotPath) const;
 
 public:
-	BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const bool includeBinaries, const std::vector<std::regex>& excludes);
+	BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const std::vector<StreamResult::MappingData>& mappings, const std::vector<StreamResult::MappingData>& exclusions, const bool includeBinaries, const std::vector<std::regex>& excludes);
 
 	// HasMergeableBranch is there a branch model that requires integration history?
 	bool HasMergeableBranch() const { return !m_branches.empty(); };

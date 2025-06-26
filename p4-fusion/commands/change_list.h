@@ -35,6 +35,7 @@ struct ChangeList
 	int filesDownloaded;
 	State state;
 
+	ChangeList() = default; // Defaulted so that vector<ChangeList>::resize() can be used.
 	ChangeList(const std::string& number, const std::string& description, const std::string& user, const int64_t& timestamp);
 
 	ChangeList(const ChangeList& other) = delete;
@@ -48,4 +49,34 @@ struct ChangeList
 	void Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles, std::shared_ptr<std::vector<FileData*>> printBatchFileData);
 	void WaitForDownload();
 	void Clear();
+
+	friend bool operator==(ChangeList const& cl1, ChangeList const& cl2)
+	{
+		return cl1.timestamp == cl2.timestamp;
+	}
+
+	friend bool operator!=(ChangeList const& cl1, ChangeList const& cl2)
+	{
+		return !(cl1 == cl2);
+	}
+
+	friend bool operator<(ChangeList const& cl1, ChangeList const& cl2)
+	{
+		return cl1.timestamp < cl2.timestamp;
+	}
+
+	friend bool operator<=(ChangeList const& cl1, ChangeList const& cl2)
+	{
+		return (cl1 < cl2) || (cl1 == cl2);
+	}
+
+	friend bool operator>(ChangeList const& cl1, ChangeList const& cl2)
+	{
+		return cl2 < cl1;
+	}
+
+	friend bool operator>=(ChangeList const& cl1, ChangeList const& cl2)
+	{
+		return (cl1 > cl2) || (cl1 == cl2);
+	}
 };

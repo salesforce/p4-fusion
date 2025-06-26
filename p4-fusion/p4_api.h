@@ -23,6 +23,7 @@
 #include "commands/info_result.h"
 #include "commands/client_result.h"
 #include "commands/test_result.h"
+#include "commands/stream_result.h"
 
 class P4API
 {
@@ -81,6 +82,7 @@ public:
 	PrintResult PrintFiles(const std::vector<std::string>& fileRevisions);
 	void UpdateClientSpec();
 	ClientResult Client();
+	StreamResult Stream(const std::string& path);
 	UsersResult Users();
 	InfoResult Info();
 };
