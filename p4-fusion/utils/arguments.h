@@ -57,4 +57,6 @@ public:
 	std::string GetNoColor() const { return GetParameter("--noColor"); };
 	std::string GetNoMerge() const { return GetParameter("--noMerge"); };
 	std::vector<std::string> GetBranches() const { return GetParameterList("--branch"); };
+	std::vector<std::string> GetExcludes() const { return GetParameterList("--exclude"); };
+	std::string GetExcludeLogPath() const { return GetParameter("--excludeLogPath"); };
 };

@@ -106,9 +106,10 @@ std::vector<Branch> createBranchesFromPaths(const std::vector<std::string>& bran
 	return parsed;
 }
 
-BranchSet::BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const bool includeBinaries)
+BranchSet::BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const bool includeBinaries, const std::vector<std::regex>& excludes)
     : m_branches(createBranchesFromPaths(branches))
     , m_includeBinaries(includeBinaries)
+    , m_excludes(excludes)
 {
 	m_view.InsertTranslationMapping(clientViewMapping);
 	if (STDHelpers::EndsWith(baseDepotPath, "/..."))
@@ -143,6 +144,18 @@ std::array<std::string, 2> BranchSet::splitBranchPath(const std::string& relativ
 		}
 	}
 	return { "", "" };
+}
+
+bool BranchSet::matchesExcludes(const std::string& depotPath) const
+{
+	for (const auto& exclude : m_excludes)
+	{
+		if (std::regex_match(depotPath, exclude))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 std::string BranchSet::stripBasePath(const std::string& depotPath) const
@@ -208,6 +221,13 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 
 		// First, filter out files we don't want.
 		const std::string& depotFile = fileData.GetDepotFile();
+		const bool matchesAnyExcludes = matchesExcludes(depotFile);
+		if (matchesAnyExcludes)
+		{
+			const std::string depotBasePath = depotFile.substr(0, depotFile.find_last_of('/'));
+			m_excludedFileDirs.insert(depotBasePath);
+		}
+
 		if (
 		    // depot file should always be present.
 		    // The left side of the client view is the depot side.
@@ -215,6 +235,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 		    || (!m_includeBinaries && fileData.IsBinary())
 		    || STDHelpers::Contains(depotFile, "/.git/") // To avoid adding .git/ files in the Perforce history if any
 		    || STDHelpers::EndsWith(depotFile, "/.git") // To avoid adding a .git submodule file in the Perforce history if any
+			|| matchesAnyExcludes // Exclude files that match any excludes regexes
 		)
 		{
 			continue;
