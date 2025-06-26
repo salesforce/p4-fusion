@@ -4,16 +4,15 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+#include <algorithm>
 #include <thread>
-#include <map>
-#include <atomic>
-#include <mutex>
-#include <sstream>
 #include <typeinfo>
 #include <csignal>
+#include <iterator>
 
 #include "common.h"
 
+#include "utils/std_helpers.h"
 #include "utils/timer.h"
 #include "utils/arguments.h"
 
@@ -50,6 +49,7 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameter("--includeBinaries", "false", "Do not discard binary files while downloading changelists.");
 	Arguments::GetSingleton()->OptionalParameter("--flushRate", "1000", "Rate at which profiling data is flushed on the disk.");
 	Arguments::GetSingleton()->OptionalParameter("--noColor", "false", "Disable colored output.");
+	Arguments::GetSingleton()->OptionalParameter("--streamMappings", "false", "Use Mappings defined by Perforce Stream Spec for a given stream");
 
 	PRINT("p4-fusion " P4_FUSION_VERSION);
 
@@ -75,6 +75,7 @@ int Main(int argc, char** argv)
 	const int maxChanges = std::atoi(Arguments::GetSingleton()->GetMaxChanges().c_str());
 	const int flushRate = std::atoi(Arguments::GetSingleton()->GetFlushRate().c_str());
 	const std::vector<std::string> branchNames = Arguments::GetSingleton()->GetBranches();
+	const bool streamMappings = Arguments::GetSingleton()->GetStreamMappings() != "false";
 
 	PRINT("Running p4-fusion from: " << argv[0]);
 
@@ -157,7 +158,69 @@ int Main(int argc, char** argv)
 		P4API::CommandRefreshThreshold = std::atoi(refreshStr.c_str());
 	}
 
-	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, includeBinaries);
+	std::vector<StreamResult::MappingData> mappings {};
+	std::vector<StreamResult::MappingData> exclusions {};
+
+	if (streamMappings)
+	{
+		PRINT("STREAM MAPPING MODE!");
+		PRINT("NOTE: validate-migration.sh might say the stream is incorrect even if it complies to the stream spec");
+		// p4 stream takes a path in the form "//depot/stream" as opposed to "//depot/stream/..."
+		auto tempStr = depotPath.substr(0, depotPath.size() - 4);
+		auto val = p4.Stream(tempStr);
+		// First we get the shallow imports.
+		for (auto const& v : val.GetStreamSpec().mapping)
+		{
+			// We don't need stream isolate or share, so we don't check them
+			if (v.rule == StreamResult::EStreamImport)
+			{
+				mappings.push_back(v);
+			}
+			else if (v.rule == StreamResult::EStreamExclude)
+			{
+				exclusions.push_back(v);
+			}
+		}
+
+		// Nested mappings get handled here.
+		for (auto idx = 0; idx < mappings.size(); idx++)
+		{
+			PRINT("Mapping: " << mappings[idx]);
+			// Check this is not for a specific file
+			if (!STDHelpers::EndsWith(mappings[idx].stream2, "..."))
+			{
+				continue;
+			}
+
+			// It's a path or a stream
+			// A path isn't nessecarily a fully qualified stream in itself but p4 stream works with arbitrary paths
+			auto streamName = mappings[idx].stream2.substr(0, mappings[idx].stream2.size() - 4);
+			auto subStream = p4.Stream(streamName);
+			for (auto& v : subStream.GetStreamSpec().mapping)
+			{
+				// According to the perforce rules, exclude should not be propagated outside the parent stream
+				// The only rules we need to care about are import and exclude.
+				if (v.rule == StreamResult::EStreamExclude)
+				{
+					StreamResult::MappingData tmp { v };
+					// Do path mangling here.
+					tmp.stream1 = streamName + "/" + v.stream1;
+					exclusions.push_back(tmp);
+				}
+				else if (v.rule == StreamResult::EStreamImport)
+				{
+					// Mangle the path so it's in respect to the super repo
+					// keep the "/"
+					auto fakePath = mappings[idx].stream1.substr(0, mappings[idx].stream1.size() - 3);
+					StreamResult::MappingData tmp { v };
+					tmp.stream1 = fakePath + tmp.stream1;
+					mappings.push_back(tmp);
+				}
+			}
+		}
+	}
+
+	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, mappings, exclusions, includeBinaries);
 
 	bool profiling = false;
 #if MTR_ENABLED
@@ -180,6 +243,12 @@ int Main(int argc, char** argv)
 	PRINT("Profiling Flush Rate: " << flushRate);
 	PRINT("No Colored Output: " << noColor);
 	PRINT("Inspecting " << branchSet.Count() << " branches");
+	PRINT("Stream Mapping " << streamMappings);
+	if (streamMappings)
+	{
+		PRINT("Mapped in Streams: " << mappings.size());
+		PRINT("Excluded paths: " << exclusions.size());
+	}
 
 	GitAPI git(fsyncEnable);
 
@@ -211,6 +280,24 @@ int Main(int argc, char** argv)
 	PRINT("Requesting changelists to convert from the Perforce server");
 
 	std::vector<ChangeList> changes = std::move(p4.Changes(depotPath, resumeFromCL, maxChanges).GetChanges());
+
+	if (streamMappings)
+	{
+		PRINT("Path: " << depotPath << " has " << changes.size() << " changes!");
+		for (auto const& mapped : mappings)
+		{
+			std::vector<ChangeList> temp = std::move(p4.Changes(mapped.stream2, resumeFromCL, maxChanges).GetChanges());
+			PRINT("Path: " << mapped.stream2 << " has " << temp.size() << " changes!");
+			changes.insert(changes.end(), std::make_move_iterator(temp.begin()), std::make_move_iterator(temp.end()));
+		}
+		std::sort(changes.begin(), changes.end());
+		// Truncate excess changes
+		if ((maxChanges > -1) && (changes.size() > maxChanges))
+		{
+			// We don't need to consider the case if this ever expands the vector.
+			changes.resize(maxChanges);
+		}
+	}
 
 	// Return early if we have no work to do
 	if (changes.empty())
