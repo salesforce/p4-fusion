@@ -6,6 +6,13 @@
  */
 #include <algorithm>
 #include <thread>
+#include <map>
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <regex>
+#include <fstream>
+#include <sstream>
 #include <typeinfo>
 #include <csignal>
 #include <iterator>
@@ -49,6 +56,8 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameter("--includeBinaries", "false", "Do not discard binary files while downloading changelists.");
 	Arguments::GetSingleton()->OptionalParameter("--flushRate", "1000", "Rate at which profiling data is flushed on the disk.");
 	Arguments::GetSingleton()->OptionalParameter("--noColor", "false", "Disable colored output.");
+	Arguments::GetSingleton()->OptionalParameterList("--exclude", "A regex used to exclude files from the conversion. Can be specified more than once.");
+	Arguments::GetSingleton()->OptionalParameter("--excludeLogPath", "", "Path to a file where the excluded files will be logged.");
 	Arguments::GetSingleton()->OptionalParameter("--streamMappings", "false", "Use Mappings defined by Perforce Stream Spec for a given stream");
 
 	PRINT("p4-fusion " P4_FUSION_VERSION);
@@ -75,6 +84,23 @@ int Main(int argc, char** argv)
 	const int maxChanges = std::atoi(Arguments::GetSingleton()->GetMaxChanges().c_str());
 	const int flushRate = std::atoi(Arguments::GetSingleton()->GetFlushRate().c_str());
 	const std::vector<std::string> branchNames = Arguments::GetSingleton()->GetBranches();
+	const std::vector<std::string> excludesStrs = Arguments::GetSingleton()->GetExcludes();
+	const std::string excludeLogPath = Arguments::GetSingleton()->GetExcludeLogPath();
+
+	std::vector<std::regex> excludes;
+	for (const auto& excludeStr : excludesStrs)
+	{
+		try
+		{
+			excludes.emplace_back(excludeStr, std::regex_constants::icase);
+		}
+		catch (const std::regex_error& e)
+		{
+			ERR("Invalid regex '" << excludeStr << "': " << e.what());
+
+			return 1;
+		}
+	}
 	const bool streamMappings = Arguments::GetSingleton()->GetStreamMappings() != "false";
 
 	PRINT("Running p4-fusion from: " << argv[0]);
@@ -220,7 +246,7 @@ int Main(int argc, char** argv)
 		}
 	}
 
-	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, mappings, exclusions, includeBinaries);
+	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, mappings, exclusions, includeBinaries, excludes);
 
 	bool profiling = false;
 #if MTR_ENABLED
@@ -463,6 +489,24 @@ int Main(int argc, char** argv)
 	git.CloseIndex();
 
 	SUCCESS("Completed conversion of " << changes.size() << " CLs in " << programTimer.GetTimeS() / 60.0f << " minutes, taking " << commitTimer.GetTimeS() / 60.0f << " to commit CLs");
+
+	const auto& excludedFileDirs = branchSet.GetExcludedFileDirs();
+	std::unique_ptr<std::ofstream> excludeLogStream;
+	if (!Arguments::GetSingleton()->GetExcludeLogPath().empty())
+	{
+		excludeLogStream.reset(new std::ofstream(Arguments::GetSingleton()->GetExcludeLogPath(), std::ios::out | std::ios::app));
+	}
+	for (const auto& dir : excludedFileDirs)
+	{
+		if (excludeLogStream)
+		{
+			*excludeLogStream << dir << std::endl;
+		}
+		else
+		{
+			WARN("Excluded file directory: " << dir);
+		}
+	}
 
 	ThreadPool::GetSingleton()->ShutDown();
 

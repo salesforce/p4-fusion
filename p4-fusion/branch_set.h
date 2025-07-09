@@ -10,7 +10,9 @@
 #include <vector>
 #include <array>
 #include <memory>
+#include <regex>
 #include <stdexcept>
+#include <unordered_set>
 
 #include "commands/file_map.h"
 #include "commands/file_data.h"
@@ -70,6 +72,8 @@ struct BranchSet
 private:
 	// Technically, these should all be const.
 	const bool m_includeBinaries;
+	const std::vector<std::regex> m_excludes;
+	mutable std::unordered_set<std::string> m_excludedFileDirs;
 	std::string m_basePath;
 	const std::vector<Branch> m_branches;
 	const std::vector<StreamResult::MappingData> m_mappings;
@@ -83,8 +87,10 @@ private:
 	//    relativeDepotPath - already stripped from running stripBasePath.
 	std::array<std::string, 2> splitBranchPath(const std::string& relativeDepotPath) const;
 
+	bool matchesExcludes(const std::string& depotPath) const;
+
 public:
-	BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const std::vector<StreamResult::MappingData>& mappings, const std::vector<StreamResult::MappingData>& exclusions, const bool includeBinaries);
+	BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const std::vector<StreamResult::MappingData>& mappings, const std::vector<StreamResult::MappingData>& exclusions, const bool includeBinaries, const std::vector<std::regex>& excludes);
 
 	// HasMergeableBranch is there a branch model that requires integration history?
 	bool HasMergeableBranch() const { return !m_branches.empty(); };
@@ -98,4 +104,6 @@ public:
 	//   ... the FileData object is copied, but it's underlying shared data is shared.  So, this
 	//       breaks the const.
 	std::unique_ptr<ChangedFileGroups> ParseAffectedFiles(const std::vector<FileData>& cl) const;
+
+	const std::unordered_set<std::string>& GetExcludedFileDirs() const { return m_excludedFileDirs; };
 };
