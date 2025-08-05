@@ -20,7 +20,7 @@ struct ChangeList
 	{
 		Initialized,
 		Described,
-		Downloaded,
+		CommitReady,
 		Freed
 	};
 
@@ -45,9 +45,10 @@ struct ChangeList
 	~ChangeList() = default;
 
 	void PrepareDownload(const BranchSet& branchSet);
-	void StartDownload(const int& printBatch);
-	void Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles, std::shared_ptr<std::vector<FileData*>> printBatchFileData);
-	void WaitForDownload();
+	void StartDownloadAndLFSUpload(int nPrintBatch);
+	void DownloadBatch(std::shared_ptr<std::vector<std::string>> printBatchFiles, std::shared_ptr<std::vector<FileData*>> printBatchFileData);
+
+	void WaitForBeingCommitReady();
 	void Clear();
 
 	friend bool operator==(ChangeList const& cl1, ChangeList const& cl2)
