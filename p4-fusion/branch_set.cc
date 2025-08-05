@@ -237,7 +237,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 		    || (!m_includeBinaries && fileData.IsBinary())
 		    || STDHelpers::Contains(depotFile, "/.git/") // To avoid adding .git/ files in the Perforce history if any
 		    || STDHelpers::EndsWith(depotFile, "/.git") // To avoid adding a .git submodule file in the Perforce history if any
-			|| matchesAnyExcludes // Exclude files that match any excludes regexes
+		    || matchesAnyExcludes // Exclude files that match any excludes regexes
 		)
 		{
 			continue;

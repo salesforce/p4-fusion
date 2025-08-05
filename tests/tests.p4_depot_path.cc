@@ -3,15 +3,15 @@
 #include "tests.common.h"
 #include "utils/p4_depot_path.h"
 
-int TestP4DepotPath ()
+int TestP4DepotPath()
 {
-    TEST_START();
+	TEST_START();
 
 	const char* pPathStr = "//Depot/Path/To/file";
 	P4DepotPath p(pPathStr);
 	TEST(p.AsString(), pPathStr);
 	TEST(p.GetDepotName(), "Depot");
-	TEST(p.GetParts(), std::vector<P4DepotPath::Part> ({ "Depot", "Path", "To", "file" }));
+	TEST(p.GetParts(), std::vector<P4DepotPath::Part>({ "Depot", "Path", "To", "file" }));
 
 	const char* pPathMixedCase = "//Depot/PATH/to/FiLe";
 	P4DepotPath pMixedCase(pPathMixedCase);
@@ -23,7 +23,7 @@ int TestP4DepotPath ()
 	P4DepotPath pWSlash(pPathWithSlashStr);
 	TEST(pWSlash.AsString(), pPathWithSlashStr);
 	TEST(pWSlash.GetDepotName(), "Depot");
-	TEST(pWSlash.GetParts(), std::vector<P4DepotPath::Part> ({ "Depot", "Branch", "2" }));
+	TEST(pWSlash.GetParts(), std::vector<P4DepotPath::Part>({ "Depot", "Branch", "2" }));
 
 	P4DepotPath pathWOEndingSlash("//Depot/Branch/2");
 	P4DepotPath pathWEndingSlash("//Depot/Branch/2/");

@@ -16,16 +16,17 @@
 
 #include <CoreFoundation/CoreFoundation.h>
 
-namespace {
+namespace
+{
 
-static void GetStringAsNFC (const std::string& str, char* buffer, size_t bufferLength)
+static void GetStringAsNFC(const std::string& str, char* buffer, size_t bufferLength)
 {
 	CFStringRef cfString = CFStringCreateWithCString(NULL, str.c_str(), kCFStringEncodingUTF8);
 	CFMutableStringRef cfMutableString = CFStringCreateMutableCopy(NULL, 0, cfString);
-	CFStringNormalize (cfMutableString, kCFStringNormalizationFormC);
-	CFStringGetCString (cfMutableString, buffer, bufferLength, kCFStringEncodingUTF8);
+	CFStringNormalize(cfMutableString, kCFStringNormalizationFormC);
+	CFStringGetCString(cfMutableString, buffer, bufferLength, kCFStringEncodingUTF8);
 
-	CFRelease (cfString);
+	CFRelease(cfString);
 	CFRelease(cfMutableString);
 }
 
@@ -254,7 +255,7 @@ void GitAPI::AddFileToIndex(const std::string& relativePath, const std::vector<c
 	//   defaults to true. This makes git "convert" decomposed paths to precomposed paths, when encountered during
 	//   filesystem operations. This was probably created to handle the weirdness of the HFS+ filesystem, which
 	//   stores file names in decomposed form. However, this setting also implies that there are no decomposed paths
-	//   in the repository. If this assumption is broken, it causes issues. 
+	//   in the repository. If this assumption is broken, it causes issues.
 	//
 	// As a workaround, we always convert paths to precomposed form, avoiding this issue altogether (and avoiding
 	//   mandating setting core.precomposeUnicode to false...). This way, the resulting repo probably won't properly

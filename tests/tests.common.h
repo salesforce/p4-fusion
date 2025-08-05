@@ -25,7 +25,7 @@
 		}                                                \
 	} while (false)
 
-#define TEST_NEQ(value, expected)                         \
+#define TEST_NEQ(value, expected)                        \
 	do                                                   \
 	{                                                    \
 		bool result = (value != expected);               \

@@ -120,7 +120,6 @@ int TestUtils()
 	TEST(STDHelpers::ToLower("aBc123!@#"), "abc123!@#");
 	TEST(STDHelpers::ToLower("Hello world"), "hello world");
 
-
 	TEST_END();
 	return TEST_EXIT_CODE();
 }

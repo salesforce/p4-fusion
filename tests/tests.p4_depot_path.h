@@ -1,3 +1,3 @@
 #pragma once
 
-int TestP4DepotPath ();
+int TestP4DepotPath();
