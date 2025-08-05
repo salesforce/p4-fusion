@@ -21,6 +21,7 @@ void UsersResult::OutputStat(StrDict* varList)
 	UserData userData;
 
 	userData.email = emailPtr->Text();
+	std::transform(userData.email.begin(), userData.email.end(), userData.email.begin(), ::tolower);
 
 	StrPtr* fullNamePtr = varList->GetVar("FullName");
 	if (fullNamePtr)
