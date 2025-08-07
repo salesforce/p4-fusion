@@ -13,18 +13,20 @@
 #include <condition_variable>
 
 #include "common.h"
+#include "lfs_client.h"
 
 class P4API;
 
 class ThreadPool
 {
-	typedef std::function<void(P4API*)> Job;
+	typedef std::function<void(P4API*, LFSClient*)> Job;
 
 	std::vector<std::thread> m_Threads;
 	std::mutex m_ThreadExceptionsMutex;
 	std::vector<std::exception_ptr> m_ThreadExceptions;
 	std::vector<std::string> m_ThreadNames;
 	std::vector<P4API> m_P4Contexts;
+	LFSClient* m_LFSClient;
 
 	std::deque<Job> m_Jobs;
 	std::mutex m_JobsMutex;
@@ -41,7 +43,7 @@ public:
 
 	~ThreadPool();
 
-	void Initialize(int size);
+	void Initialize(int size, LFSClient* lfsClient);
 	void AddJob(Job function);
 	void Wait();
 	void RaiseCaughtExceptions();

@@ -6,15 +6,17 @@
  */
 #include "git_api.h"
 
+#include <CoreFoundation/CoreFoundation.h>
+
 #include <cstring>
 #include <cstdlib>
 
 #include "git2.h"
 #include "git2/sys/repository.h"
 #include "minitrace.h"
-#include "utils/std_helpers.h"
 
-#include <CoreFoundation/CoreFoundation.h>
+#include "lfs_client.h"
+#include "utils/std_helpers.h"
 
 namespace
 {
@@ -157,6 +159,34 @@ git_oid GitAPI::CreateBlob(const std::vector<char>& data)
 	return oid;
 }
 
+git_pathspec* GitAPI::CreatePathSpec(const std::vector<std::string>& patterns)
+{
+	git_pathspec* result = nullptr;
+
+	git_strarray strs;
+	strs.count = patterns.size();
+	strs.strings = new char*[strs.count];
+	for (size_t i = 0; i < strs.count; i++)
+	{
+		strs.strings[i] = strdup(patterns[i].c_str());
+	}
+
+	GIT2(git_pathspec_new(&result, &strs));
+
+	for (size_t i = 0; i < strs.count; i++)
+	{
+		free(strs.strings[i]);
+	}
+	delete[] strs.strings;
+
+	return result;
+}
+
+void GitAPI::DestroyPathSpec(git_pathspec* pathSpec)
+{
+	git_pathspec_free(pathSpec);
+}
+
 std::string GitAPI::DetectLatestCL()
 {
 	git_oid oid;
@@ -178,7 +208,7 @@ std::string GitAPI::DetectLatestCL()
 	return cl;
 }
 
-void GitAPI::CreateIndex()
+void GitAPI::CreateIndex(LFSClient* lfsClient)
 {
 	MTR_SCOPE("Git", __func__);
 
@@ -209,12 +239,50 @@ void GitAPI::CreateIndex()
 		git_revwalk_free(walk);
 
 		WARN("Loaded index was refreshed to match the tree of the current HEAD commit");
+
+		// If LFS is enabled, check if the existing repo was initially created with LFS support
+		if (lfsClient)
+		{
+			git_commit* firstCommit = nullptr;
+			GIT2(git_commit_lookup(&firstCommit, m_Repo, &m_FirstCommitOid));
+
+			git_tree* tree = nullptr;
+			GIT2(git_commit_tree(&tree, firstCommit));
+
+			git_tree_entry* entry = nullptr;
+			int errorCode = git_tree_entry_bypath(&entry, tree, ".gitattributes");
+			if (errorCode == GIT_ENOTFOUND)
+			{
+				ERR("GitAPI: LFS support was requested, but existing repo was not created with it!");
+
+				git_tree_free(tree);
+				git_commit_free(firstCommit);
+
+				exit(errorCode);
+			}
+			else if (errorCode != 0)
+			{
+				GIT2(errorCode);
+			}
+
+			git_tree_entry_free(entry);
+			git_tree_free(tree);
+			git_commit_free(firstCommit);
+		}
 	}
 	else
 	{
-		// In order to have branches be mergable, even with no shared history, we perform
-		// a trick by adding an empty commit as the very first commit, and use this as the base for all branches.
-		// The time is set to the beginning of time.
+		// Add .gitattributes file if LFS is enabled
+		if (lfsClient)
+		{
+			auto gitAttrContents = lfsClient->GetGitAttributesContents();
+			git_index_entry entry = {};
+			entry.mode = GIT_FILEMODE_BLOB;
+			entry.path = ".gitattributes";
+			GIT2(git_index_add_from_buffer(m_Index, &entry, gitAttrContents.data(), gitAttrContents.size()));
+		}
+
+		// Create initial commit
 		git_oid commitTreeID;
 		GIT2(git_index_write_tree_to(&commitTreeID, m_Index, m_Repo));
 

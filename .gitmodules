@@ -1,0 +1,3 @@
+[submodule "vendor/rapidjson"]
+	path = vendor/rapidjson
+    url = https://github.com/Tencent/rapidjson

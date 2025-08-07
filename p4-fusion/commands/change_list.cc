@@ -31,7 +31,7 @@ void ChangeList::PrepareDownload(const BranchSet& branchSet)
 {
 	ChangeList& cl = *this;
 
-	ThreadPool::GetSingleton()->AddJob([&cl, &branchSet](P4API* p4)
+	ThreadPool::GetSingleton()->AddJob([&cl, &branchSet](P4API* p4, LFSClient* lfsClient)
 	    {
 		    std::vector<FileData> changedFiles;
 		    if (branchSet.HasMergeableBranch())
@@ -54,15 +54,14 @@ void ChangeList::PrepareDownload(const BranchSet& branchSet)
 
 		    std::unique_lock<std::mutex> lock(*cl.stateMutex);
 		    cl.state = Described;
-		    cl.stateCV->notify_all();
-	    });
+		    cl.stateCV->notify_all(); });
 }
 
-void ChangeList::StartDownload(const int& printBatch)
+void ChangeList::StartDownloadAndLFSUpload(int nPrintBatch)
 {
 	ChangeList& cl = *this;
 
-	ThreadPool::GetSingleton()->AddJob([&cl, printBatch](P4API* p4)
+	ThreadPool::GetSingleton()->AddJob([&cl, nPrintBatch](P4API* p4, LFSClient* lfsClient)
 	    {
 		    // Wait for describe to finish, if it is still running
 		    {
@@ -90,9 +89,9 @@ void ChangeList::StartDownload(const int& printBatch)
 						    printBatchFileData->push_back(&fileData);
 
 						    // Clear the batches if it fits
-						    if (printBatchFiles->size() == printBatch)
+						    if (printBatchFiles->size() == nPrintBatch)
 						    {
-							    cl.Flush(printBatchFiles, printBatchFileData);
+							    cl.DownloadBatch(printBatchFiles, printBatchFileData);
 
 							    // We let go of the refs held by us and create new ones to queue the next batch
 							    printBatchFiles = std::make_shared<std::vector<std::string>>();
@@ -104,25 +103,52 @@ void ChangeList::StartDownload(const int& printBatch)
 			    }
 		    }
 
-		    // Flush any remaining files that were smaller in number than the total batch size.
+		    // Download any remaining files that were smaller in number than the total batch size.
 		    // Additionally, signal the batch processing end.
-		    cl.Flush(printBatchFiles, printBatchFileData);
-	    });
+		    cl.DownloadBatch(printBatchFiles, printBatchFileData); });
 }
 
-void ChangeList::Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles, std::shared_ptr<std::vector<FileData*>> printBatchFileData)
+void ChangeList::DownloadBatch(std::shared_ptr<std::vector<std::string>> printBatchFiles, std::shared_ptr<std::vector<FileData*>> printBatchFileData)
 {
 	// Share ownership of this batch with the thread job
-	ThreadPool::GetSingleton()->AddJob([this, printBatchFiles, printBatchFileData](P4API* p4)
+	ThreadPool::GetSingleton()->AddJob([this, printBatchFiles, printBatchFileData](P4API* p4, LFSClient* lfsClient)
 	    {
 		    // Only perform the batch processing when there are files to process.
 		    if (!printBatchFileData->empty())
 		    {
-			    const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
-
+				const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
 			    for (int i = 0; i < printBatchFiles->size(); i++)
 			    {
-				    printBatchFileData->at(i)->MoveContentsOnceFrom(printData.GetPrintData().at(i).contents);
+					// If in LFS mode, then we determine whether a file is LFS-tracked, and if so, we do produce a ponter file and upload the file contents.
+					if (lfsClient)
+					{
+						if (!lfsClient->IsLFSTracked(printBatchFileData->at(i)->GetRelativePath()))
+						{
+							printBatchFileData->at(i)->MoveContentsOnceFrom(printData.GetPrintData().at(i).contents);
+						} else
+						{
+							const auto& fileContents = printData.GetPrintData().at(i).contents;
+							auto& filePath = printBatchFileData->at(i)->GetRelativePath();
+							const std::vector<char> pointerFileContents = lfsClient->CreatePointerFileContents(fileContents);
+							LFSClient::UploadResult uploadResult = lfsClient->UploadFile(fileContents);
+							switch (uploadResult)
+							{
+								case LFSClient::UploadResult::Uploaded:
+									SUCCESS("Uploaded file " << filePath << " to LFS (" << fileContents.size() << " bytes)");
+									break;
+								case LFSClient::UploadResult::AlreadyExists:
+									SUCCESS("File " << filePath << " already exists in LFS, skipping upload");
+									break;
+								case LFSClient::UploadResult::Error:									
+									ERR("Failed to upload file " << filePath << " to LFS");
+									// Not nice, but we have no other means to signal any intermediate errors from here
+									std::abort();
+							}
+
+							// git blob content should be a pointer file, so replace the contents
+							printBatchFileData->at(i)->MoveContentsOnceFrom(pointerFileContents);
+						}
+					}
 			    }
 		    }
 
@@ -130,17 +156,16 @@ void ChangeList::Flush(std::shared_ptr<std::vector<std::string>> printBatchFiles
 		    filesDownloaded += printBatchFiles->size();
 		    if (filesDownloaded == changedFileGroups->totalFileCount)
 		    {
-			    state = Downloaded;
+			    state = CommitReady;
 			    stateCV->notify_all();
-		    }
-	    });
+		    } });
 }
 
-void ChangeList::WaitForDownload()
+void ChangeList::WaitForBeingCommitReady()
 {
 	std::unique_lock<std::mutex> lock(*stateMutex);
 	stateCV->wait(lock, [this]()
-	    { return state == Downloaded; });
+	    { return state == CommitReady; });
 }
 
 void ChangeList::Clear()
