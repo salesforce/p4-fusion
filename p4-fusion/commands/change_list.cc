@@ -119,35 +119,32 @@ void ChangeList::DownloadBatch(std::shared_ptr<std::vector<std::string>> printBa
 				const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
 			    for (int i = 0; i < printBatchFiles->size(); i++)
 			    {
-					// If in LFS mode, then we determine whether a file is LFS-tracked, and if so, we do produce a ponter file and upload the file contents.
-					if (lfsClient)
+					// If in LFS mode, then we determine whether a file is LFS-tracked, and if so, we do produce a pointer file and upload the file contents.
+					if (! lfsClient ||  !lfsClient->IsLFSTracked(printBatchFileData->at(i)->GetRelativePath()))
 					{
-						if (!lfsClient->IsLFSTracked(printBatchFileData->at(i)->GetRelativePath()))
+						printBatchFileData->at(i)->MoveContentsOnceFrom(printData.GetPrintData().at(i).contents);
+					} else
+					{
+						const auto& fileContents = printData.GetPrintData().at(i).contents;
+						auto& filePath = printBatchFileData->at(i)->GetRelativePath();
+						const std::vector<char> pointerFileContents = lfsClient->CreatePointerFileContents(fileContents);
+						LFSClient::UploadResult uploadResult = lfsClient->UploadFile(fileContents);
+						switch (uploadResult)
 						{
-							printBatchFileData->at(i)->MoveContentsOnceFrom(printData.GetPrintData().at(i).contents);
-						} else
-						{
-							const auto& fileContents = printData.GetPrintData().at(i).contents;
-							auto& filePath = printBatchFileData->at(i)->GetRelativePath();
-							const std::vector<char> pointerFileContents = lfsClient->CreatePointerFileContents(fileContents);
-							LFSClient::UploadResult uploadResult = lfsClient->UploadFile(fileContents);
-							switch (uploadResult)
-							{
-								case LFSClient::UploadResult::Uploaded:
-									SUCCESS("Uploaded file " << filePath << " to LFS (" << fileContents.size() << " bytes)");
-									break;
-								case LFSClient::UploadResult::AlreadyExists:
-									SUCCESS("File " << filePath << " already exists in LFS, skipping upload");
-									break;
-								case LFSClient::UploadResult::Error:									
-									ERR("Failed to upload file " << filePath << " to LFS");
-									// Not nice, but we have no other means to signal any intermediate errors from here
-									std::abort();
-							}
-
-							// git blob content should be a pointer file, so replace the contents
-							printBatchFileData->at(i)->MoveContentsOnceFrom(pointerFileContents);
+							case LFSClient::UploadResult::Uploaded:
+								SUCCESS("Uploaded file " << filePath << " to LFS (" << fileContents.size() << " bytes)");
+								break;
+							case LFSClient::UploadResult::AlreadyExists:
+								SUCCESS("File " << filePath << " already exists in LFS, skipping upload");
+								break;
+							case LFSClient::UploadResult::Error:									
+								ERR("Failed to upload file " << filePath << " to LFS");
+								// Not nice, but we have no other means to signal any intermediate errors from here
+								std::abort();
 						}
+
+						// git blob content should be a pointer file, so replace the contents
+						printBatchFileData->at(i)->MoveContentsOnceFrom(pointerFileContents);
 					}
 			    }
 		    }
