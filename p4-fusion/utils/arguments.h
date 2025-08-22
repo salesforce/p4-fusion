@@ -64,4 +64,6 @@ public:
 	std::string GetLFSServerUrl() const { return GetParameter("--lfsServerUrl"); }
 	std::string GetLFSUsername() const { return GetParameter("--lfsUsername"); }
 	std::string GetLFSPassword() const { return GetParameter("--lfsPassword"); }
+	std::string GetOverrideToTextSpecPath() const { return GetParameter("--overrideToTextSpecPath"); }
+	std::string GetOverrideToBinarySpecPath() const { return GetParameter("--overrideToBinarySpecPath"); }
 };

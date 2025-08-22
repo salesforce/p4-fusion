@@ -75,7 +75,7 @@ RequestResult PerformRequestWithRetry(std::function<RequestResult()> requestFunc
 		}
 		else
 		{
-			WARN("LFS request failed with HTTP status " << result.response_code << ", retrying (attempt " << (attempt + 1) << "/" << MaxRetryAttempts << ")");
+			WARN("LFS request failed with HTTP status " << result.response_code << " and body " << result.response_body << ", retrying (attempt " << (attempt + 1) << "/" << MaxRetryAttempts << ")");
 		}
 
 		if (attempt < MaxRetryAttempts - 1)

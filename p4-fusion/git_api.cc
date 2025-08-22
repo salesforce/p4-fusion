@@ -267,7 +267,7 @@ void GitAPI::CreateIndex(LFSClient* lfsClient)
 	}
 	else
 	{
-		// Add .gitattributes file if LFS is enabled
+		// Add .gitattributes file and url configuration if LFS is enabled
 		if (lfsClient)
 		{
 			auto gitAttrContents = lfsClient->GetGitAttributesContents();

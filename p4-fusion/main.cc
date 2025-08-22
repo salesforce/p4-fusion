@@ -37,6 +37,27 @@
 
 void SignalHandler(sig_atomic_t s);
 
+static std::unique_ptr<std::vector<std::string>> GetLinesFromFileWithoutComments(const std::string& filename)
+{
+	std::unique_ptr<std::vector<std::string>> lines(new std::vector<std::string>());
+	std::ifstream infile(filename);
+	if (!infile.is_open())
+	{
+		ERR("Failed to open file: " << filename);
+		return nullptr;
+	}
+	std::string line;
+	while (std::getline(infile, line))
+	{
+		// Ignore empty lines and comments
+		if (!line.empty() && line[0] != '#')
+		{
+			lines->push_back(line);
+		}
+	}
+	return lines;
+}
+
 int Main(int argc, char** argv)
 {
 	Timer programTimer;
@@ -65,6 +86,12 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameter("--lfsServerUrl", "", "URL of the Git LFS server to use for uploading files with basic transfer.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsUsername", "", "Git LFS username for basic access authentication.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsPassword", "", "Git LFS password for basic access authentication.");
+	Arguments::GetSingleton()->OptionalParameter("--overrideToTextSpecPath", "", "File path containing path specs for files to be handled as text, even when their P4 type is binary or something else. "
+	                                                                             "Normally this results in them being committed to the Git repo instead of ignored. "
+	                                                                             "In includeBinaries+LFS mode, the LFS pathspecs control where to commit what; in that case this only serves to silence a warning.");
+	Arguments::GetSingleton()->OptionalParameter("--overrideToBinarySpecPath", "", "File path containing path specs for files to be handled as binary, even when their P4 type is something else. "
+	                                                                               "Normally this results in them being ignored instead of committed. "
+	                                                                               "In includeBinaries+LFS mode, the LFS pathspecs control where to commit what; in that case this does nothing.");
 
 	PRINT("p4-fusion " P4_FUSION_VERSION);
 
@@ -118,30 +145,39 @@ int Main(int argc, char** argv)
 	std::unique_ptr<LFSClient> lfsClient;
 	if (!lfsSpecPath.empty() && !lfsServerUrl.empty())
 	{
-		std::vector<std::string> lfsPatterns;
-		std::ifstream lfsFile(lfsSpecPath);
-		if (!lfsFile.is_open())
+		std::unique_ptr<std::vector<std::string>> lfsPatterns = GetLinesFromFileWithoutComments(lfsSpecPath);
+		if (!lfsPatterns)
 		{
-			ERR("Failed to open LFS spec file: " << lfsSpecPath);
 			return 1;
 		}
-		std::string line;
-		while (std::getline(lfsFile, line))
-		{
-			// Ignore empty lines and comments
-			if (!line.empty() && line[0] != '#')
-			{
-				lfsPatterns.push_back(line);
-			}
-		}
-		lfsFile.close();
-
-		lfsClient.reset(new LFSClient(git, lfsServerUrl, lfsUsername, lfsPassword, lfsPatterns));
+		lfsClient.reset(new LFSClient(git, lfsServerUrl, lfsUsername, lfsPassword, *lfsPatterns));
 		PRINT("Initialized LFS client with server URL: " << lfsServerUrl);
 
 		if (!includeBinaries)
 		{
 			WARN("LFS support is enabled, but binaries are excluded. This is probably not what you want.");
+		}
+	}
+
+	const std::string overrideToTextSpecPath = Arguments::GetSingleton()->GetOverrideToTextSpecPath();
+	const std::string overrideToBinarySpecPath = Arguments::GetSingleton()->GetOverrideToBinarySpecPath();
+
+	std::unique_ptr<std::vector<std::string>> overrideToTextSpecs(new std::vector<std::string>());
+	std::unique_ptr<std::vector<std::string>> overrideToBinarySpecs(new std::vector<std::string>());
+	if (!overrideToTextSpecPath.empty())
+	{
+		overrideToTextSpecs = GetLinesFromFileWithoutComments(overrideToTextSpecPath);
+		if (!overrideToTextSpecs)
+		{
+			return 1;
+		}
+	}
+	if (!overrideToBinarySpecPath.empty())
+	{
+		overrideToBinarySpecs = GetLinesFromFileWithoutComments(overrideToBinarySpecPath);
+		if (!overrideToBinarySpecs)
+		{
+			return 1;
 		}
 	}
 
@@ -288,7 +324,7 @@ int Main(int argc, char** argv)
 		}
 	}
 
-	BranchSet branchSet(P4API::ClientSpec.mapping, depotPath, branchNames, mappings, exclusions, includeBinaries, excludes);
+	BranchSet branchSet(git, P4API::ClientSpec.mapping, depotPath, branchNames, mappings, exclusions, includeBinaries, excludes, *overrideToTextSpecs, *overrideToBinarySpecs);
 
 	bool profiling = false;
 #if MTR_ENABLED

@@ -34,6 +34,10 @@ public:
 
 	std::vector<char> GetGitAttributesContents() const;
 
+	const std::string& GetServerUrl() const { return m_ServerUrl; }
+	const std::string& GetUsername() const { return m_Username; }
+	const std::string& GetPassword() const { return m_Password; }
+
 private:
 	GitAPI& m_GitAPI;
 

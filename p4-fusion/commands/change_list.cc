@@ -43,13 +43,13 @@ void ChangeList::PrepareDownload(const BranchSet& branchSet)
 			    // different changelists than the point-in-time source branch's
 			    // changelist.
 			    const FileLogResult& filelog = p4->FileLog(cl.number);
-			    cl.changedFileGroups = branchSet.ParseAffectedFiles(filelog.GetFileData());
+			    cl.changedFileGroups = branchSet.ParseAffectedFiles(filelog.GetFileData(), lfsClient);
 		    }
 		    else
 		    {
 			    // If we don't care about branches, then p4->Describe is much faster.
 			    const DescribeResult& describe = p4->Describe(cl.number);
-			    cl.changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData());
+			    cl.changedFileGroups = branchSet.ParseAffectedFiles(describe.GetFileData(), lfsClient);
 		    }
 
 		    std::unique_lock<std::mutex> lock(*cl.stateMutex);

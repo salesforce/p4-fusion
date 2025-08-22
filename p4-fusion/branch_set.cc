@@ -106,8 +106,18 @@ std::vector<Branch> createBranchesFromPaths(const std::vector<std::string>& bran
 	return parsed;
 }
 
-BranchSet::BranchSet(std::vector<std::string>& clientViewMapping, const std::string& baseDepotPath, const std::vector<std::string>& branches, const std::vector<StreamResult::MappingData>& mappings, const std::vector<StreamResult::MappingData>& exclusions, const bool includeBinaries, const std::vector<std::regex>& excludes)
-    : m_branches(createBranchesFromPaths(branches))
+BranchSet::BranchSet(GitAPI& gitAPI,
+    const std::vector<std::string>& clientViewMapping,
+    const std::string& baseDepotPath,
+    const std::vector<std::string>& branches,
+    const std::vector<StreamResult::MappingData>& mappings,
+    const std::vector<StreamResult::MappingData>& exclusions,
+    const bool includeBinaries,
+    const std::vector<std::regex>& excludes,
+    const std::vector<std::string>& overrideToTextSpecs,
+    const std::vector<std::string>& overrideToBinarySpecs)
+    : m_gitApi(gitAPI)
+    , m_branches(createBranchesFromPaths(branches))
     , m_mappings(mappings)
     , m_exclusions(exclusions)
     , m_includeBinaries(includeBinaries)
@@ -127,6 +137,15 @@ BranchSet::BranchSet(std::vector<std::string>& clientViewMapping, const std::str
 	{
 		m_basePath = baseDepotPath;
 	}
+
+	m_overrideToTextSpec = overrideToTextSpecs.empty() ? nullptr : m_gitApi.CreatePathSpec(overrideToTextSpecs);
+	m_overrideToBinarySpec = overrideToBinarySpecs.empty() ? nullptr : m_gitApi.CreatePathSpec(overrideToBinarySpecs);
+}
+
+BranchSet::~BranchSet()
+{
+	m_gitApi.DestroyPathSpec(m_overrideToTextSpec);
+	m_gitApi.DestroyPathSpec(m_overrideToBinarySpec);
 }
 
 std::array<std::string, 2> BranchSet::splitBranchPath(const std::string& relativeDepotPath) const
@@ -214,7 +233,7 @@ void branchIntegrationMap::addMerge(const std::string& sourceBranch, const std::
 }
 
 // Post condition: all returned FileData (e.g. filtered for git commit) have the relativePath set.
-std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vector<FileData>& cl) const
+std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vector<FileData>& cl, const LFSClient* lfsClient) const
 {
 	branchIntegrationMap branchMap;
 	for (auto& clFileData : cl)
@@ -223,6 +242,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 
 		// First, filter out files we don't want.
 		const std::string& depotFile = fileData.GetDepotFile();
+		std::string relativeDepotPath = stripBasePath(depotFile);
 		const bool matchesAnyExcludes = matchesExcludes(depotFile);
 		if (matchesAnyExcludes)
 		{
@@ -230,11 +250,16 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 			m_excludedFileDirs.insert(depotBasePath);
 		}
 
+		const bool isP4Binary = fileData.IsBinary();
+		const bool isLFSTracked = lfsClient && lfsClient->IsLFSTracked(relativeDepotPath);
+		const bool overrideToBinary = m_overrideToBinarySpec && git_pathspec_matches_path(m_overrideToBinarySpec, GIT_PATHSPEC_IGNORE_CASE, relativeDepotPath.c_str());
+		const bool overrideToText = m_overrideToTextSpec && git_pathspec_matches_path(m_overrideToTextSpec, GIT_PATHSPEC_IGNORE_CASE, relativeDepotPath.c_str());
+
 		if (
 		    // depot file should always be present.
 		    // The left side of the client view is the depot side.
 		    !m_view.IsInLeft(depotFile)
-		    || (!m_includeBinaries && fileData.IsBinary())
+		    || (!m_includeBinaries && ((isP4Binary && !overrideToText) || overrideToBinary))
 		    || STDHelpers::Contains(depotFile, "/.git/") // To avoid adding .git/ files in the Perforce history if any
 		    || STDHelpers::EndsWith(depotFile, "/.git") // To avoid adding a .git submodule file in the Perforce history if any
 		    || matchesAnyExcludes // Exclude files that match any excludes regexes
@@ -242,8 +267,13 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 		{
 			continue;
 		}
+
+		if (isP4Binary && !overrideToText && m_includeBinaries && lfsClient && !isLFSTracked)
+		{
+			WARN("File " << depotFile << " at revision " << fileData.GetRevision() << " has filetype binary, but is not LFS tracked. It will be committed directly to the git repo.");
+		}
+
 		// Put logic for Absolutely do not dare map these files here, here :)
-		std::string relativeDepotPath = stripBasePath(depotFile);
 		if (relativeDepotPath.empty())
 		{
 			// Not under regular depot path, might be mapped in
