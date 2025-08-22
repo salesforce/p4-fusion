@@ -18,6 +18,8 @@
 struct git_repository;
 class LFSClient;
 
+using UniqueGitPathSpec = std::unique_ptr<git_pathspec, decltype(&git_pathspec_free)>;
+
 class GitAPI
 {
 	git_repository* m_Repo = nullptr;
@@ -39,8 +41,7 @@ public:
 
 	git_oid CreateBlob(const std::vector<char>& data);
 
-	git_pathspec* CreatePathSpec(const std::vector<std::string>& patterns);
-	void DestroyPathSpec(git_pathspec* pathSpec);
+	UniqueGitPathSpec CreatePathSpec(const std::vector<std::string>& patterns);
 
 	void CreateIndex(LFSClient* lfsClient);
 	void SetActiveBranch(const std::string& branchName);

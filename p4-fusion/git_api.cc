@@ -159,9 +159,9 @@ git_oid GitAPI::CreateBlob(const std::vector<char>& data)
 	return oid;
 }
 
-git_pathspec* GitAPI::CreatePathSpec(const std::vector<std::string>& patterns)
+UniqueGitPathSpec GitAPI::CreatePathSpec(const std::vector<std::string>& patterns)
 {
-	git_pathspec* result = nullptr;
+	git_pathspec* pathspec;
 
 	git_strarray strs;
 	strs.count = patterns.size();
@@ -171,7 +171,7 @@ git_pathspec* GitAPI::CreatePathSpec(const std::vector<std::string>& patterns)
 		strs.strings[i] = strdup(patterns[i].c_str());
 	}
 
-	GIT2(git_pathspec_new(&result, &strs));
+	GIT2(git_pathspec_new(&pathspec, &strs));
 
 	for (size_t i = 0; i < strs.count; i++)
 	{
@@ -179,12 +179,7 @@ git_pathspec* GitAPI::CreatePathSpec(const std::vector<std::string>& patterns)
 	}
 	delete[] strs.strings;
 
-	return result;
-}
-
-void GitAPI::DestroyPathSpec(git_pathspec* pathSpec)
-{
-	git_pathspec_free(pathSpec);
+	return { pathspec, &git_pathspec_free };
 }
 
 std::string GitAPI::DetectLatestCL()

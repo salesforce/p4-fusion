@@ -119,7 +119,7 @@ void ChangeList::DownloadBatch(std::shared_ptr<std::vector<std::string>> printBa
 				const PrintResult& printData = p4->PrintFiles(*printBatchFiles);
 			    for (int i = 0; i < printBatchFiles->size(); i++)
 			    {
-					// If in LFS mode, then we determine whether a file is LFS-tracked, and if so, we do produce a pointer file and upload the file contents.
+					// If in LFS mode, we determine whether a file is LFS-tracked, and if so, we do produce a pointer file and upload the file contents.
 					if (! lfsClient ||  !lfsClient->IsLFSTracked(printBatchFileData->at(i)->GetRelativePath()))
 					{
 						printBatchFileData->at(i)->MoveContentsOnceFrom(printData.GetPrintData().at(i).contents);

@@ -367,18 +367,7 @@ bool PerformVerify(const std::string& username, const std::string& password, con
 	{
 		return false;
 	}
-
-	rapidjson::Document verifyDoc;
-	verifyDoc.SetObject();
-	rapidjson::Document::AllocatorType& verifyAllocator = verifyDoc.GetAllocator();
-	verifyDoc.AddMember("oid", rapidjson::StringRef(oid.c_str()), verifyAllocator);
-	verifyDoc.AddMember("size", static_cast<uint64_t>(fileSize), verifyAllocator);
-
-	rapidjson::StringBuffer verifyBuffer;
-	rapidjson::Writer<rapidjson::StringBuffer> verifyWriter(verifyBuffer);
-	verifyDoc.Accept(verifyWriter);
-	std::string verifyPayload = verifyBuffer.GetString();
-
+	std::string verifyPayload = CreateVerifyPayload(oid, fileSize);
 	struct curl_slist* verifyHeaders = nullptr;
 	verifyHeaders = curl_slist_append(verifyHeaders, "Content-Type: application/vnd.git-lfs+json");
 	verifyHeaders = curl_slist_append(verifyHeaders, "Accept: application/vnd.git-lfs+json");
@@ -402,12 +391,18 @@ LFSClient::LFSClient(GitAPI& gitAPI, const std::string& serverUrl, const std::st
     , m_Username(username)
     , m_Password(password)
     , m_LFSPatterns(lfsPatterns)
+    , m_LFSPathSpec(m_GitAPI.CreatePathSpec(lfsPatterns))
 {
-	m_LFSPathSpec = m_GitAPI.CreatePathSpec(lfsPatterns);
 }
 
 std::vector<char> LFSClient::CreatePointerFileContents(const std::vector<char>& fileContents) const
 {
+	// From the specs: "an empty file is the pointer for an empty file. That is, empty files are passed through LFS without any change."
+	if (fileContents.empty())
+	{
+		return {};
+	}
+
 	unsigned char hash[SHA256_DIGEST_LENGTH];
 	SHA256(reinterpret_cast<const unsigned char*>(fileContents.data()), fileContents.size(), hash);
 
@@ -471,7 +466,7 @@ LFSClient::UploadResult LFSClient::UploadFile(const std::vector<char>& fileConte
 
 bool LFSClient::IsLFSTracked(const std::string& filePath) const
 {
-	return git_pathspec_matches_path(m_LFSPathSpec, GIT_PATHSPEC_IGNORE_CASE, filePath.c_str()) == 1;
+	return git_pathspec_matches_path(m_LFSPathSpec.get(), GIT_PATHSPEC_IGNORE_CASE, filePath.c_str()) == 1;
 }
 
 std::vector<char> LFSClient::GetGitAttributesContents() const
@@ -484,9 +479,4 @@ std::vector<char> LFSClient::GetGitAttributesContents() const
 	}
 
 	return result;
-}
-
-LFSClient::~LFSClient()
-{
-	m_GitAPI.DestroyPathSpec(m_LFSPathSpec);
 }

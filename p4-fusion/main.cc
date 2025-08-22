@@ -61,7 +61,7 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameterList("--exclude", "A regex used to exclude files from the conversion. Can be specified more than once.");
 	Arguments::GetSingleton()->OptionalParameter("--excludeLogPath", "", "Path to a file where the excluded files will be logged.");
 	Arguments::GetSingleton()->OptionalParameter("--streamMappings", "false", "Use Mappings defined by Perforce Stream Spec for a given stream");
-	Arguments::GetSingleton()->OptionalParameter("--lfsSpecPath", "", "File path containings path specs for files to be handled by Git LFS.");
+	Arguments::GetSingleton()->OptionalParameter("--lfsSpecPath", "", "File path containing path specs for files to be handled by Git LFS.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsServerUrl", "", "URL of the Git LFS server to use for uploading files with basic transfer.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsUsername", "", "Git LFS username for basic access authentication.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsPassword", "", "Git LFS password for basic access authentication.");

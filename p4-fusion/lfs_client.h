@@ -25,7 +25,6 @@ public:
 	};
 
 	LFSClient(GitAPI& gitAPI, const std::string& serverUrl, const std::string& username, const std::string& password, const std::vector<std::string>& lfsPatterns);
-	~LFSClient();
 
 	std::vector<char> CreatePointerFileContents(const std::vector<char>& fileContents) const;
 
@@ -43,5 +42,5 @@ private:
 	const std::string m_Password;
 
 	std::vector<std::string> m_LFSPatterns;
-	git_pathspec* m_LFSPathSpec;
+	UniqueGitPathSpec m_LFSPathSpec;
 };
