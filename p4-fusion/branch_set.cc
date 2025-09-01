@@ -122,6 +122,8 @@ BranchSet::BranchSet(GitAPI& gitAPI,
     , m_exclusions(exclusions)
     , m_includeBinaries(includeBinaries)
     , m_excludes(excludes)
+	, m_overrideToTextSpec(nullptr, nullptr)
+	, m_overrideToBinarySpec(nullptr, nullptr)
 {
 	m_view.InsertTranslationMapping(clientViewMapping);
 	if (STDHelpers::EndsWith(baseDepotPath, "/..."))
@@ -138,14 +140,14 @@ BranchSet::BranchSet(GitAPI& gitAPI,
 		m_basePath = baseDepotPath;
 	}
 
-	m_overrideToTextSpec = overrideToTextSpecs.empty() ? nullptr : m_gitApi.CreatePathSpec(overrideToTextSpecs);
-	m_overrideToBinarySpec = overrideToBinarySpecs.empty() ? nullptr : m_gitApi.CreatePathSpec(overrideToBinarySpecs);
-}
-
-BranchSet::~BranchSet()
-{
-	m_gitApi.DestroyPathSpec(m_overrideToTextSpec);
-	m_gitApi.DestroyPathSpec(m_overrideToBinarySpec);
+	if (!overrideToTextSpecs.empty())
+	{
+		m_overrideToTextSpec = m_gitApi.CreatePathSpec(overrideToTextSpecs);
+	}
+	if (!overrideToBinarySpecs.empty())
+	{
+		m_overrideToBinarySpec = m_gitApi.CreatePathSpec(overrideToBinarySpecs);
+	}
 }
 
 std::array<std::string, 2> BranchSet::splitBranchPath(const std::string& relativeDepotPath) const
@@ -252,8 +254,8 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 
 		const bool isP4Binary = fileData.IsBinary();
 		const bool isLFSTracked = lfsClient && lfsClient->IsLFSTracked(relativeDepotPath);
-		const bool overrideToBinary = m_overrideToBinarySpec && git_pathspec_matches_path(m_overrideToBinarySpec, GIT_PATHSPEC_IGNORE_CASE, relativeDepotPath.c_str());
-		const bool overrideToText = m_overrideToTextSpec && git_pathspec_matches_path(m_overrideToTextSpec, GIT_PATHSPEC_IGNORE_CASE, relativeDepotPath.c_str());
+		const bool overrideToBinary = m_overrideToBinarySpec && git_pathspec_matches_path(m_overrideToBinarySpec.get(), GIT_PATHSPEC_IGNORE_CASE, relativeDepotPath.c_str());
+		const bool overrideToText = m_overrideToTextSpec && git_pathspec_matches_path(m_overrideToTextSpec.get(), GIT_PATHSPEC_IGNORE_CASE, relativeDepotPath.c_str());
 
 		if (
 		    // depot file should always be present.
