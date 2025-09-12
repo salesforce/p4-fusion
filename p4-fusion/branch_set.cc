@@ -122,8 +122,8 @@ BranchSet::BranchSet(GitAPI& gitAPI,
     , m_exclusions(exclusions)
     , m_includeBinaries(includeBinaries)
     , m_excludes(excludes)
-	, m_overrideToTextSpec(nullptr, nullptr)
-	, m_overrideToBinarySpec(nullptr, nullptr)
+    , m_overrideToTextSpec(nullptr, nullptr)
+    , m_overrideToBinarySpec(nullptr, nullptr)
 {
 	m_view.InsertTranslationMapping(clientViewMapping);
 	if (STDHelpers::EndsWith(baseDepotPath, "/..."))
@@ -270,11 +270,6 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 			continue;
 		}
 
-		if (isP4Binary && !overrideToText && m_includeBinaries && lfsClient && !isLFSTracked)
-		{
-			WARN("File " << depotFile << " at revision " << fileData.GetRevision() << " has filetype binary, but is not LFS tracked. It will be committed directly to the git repo.");
-		}
-
 		// Put logic for Absolutely do not dare map these files here, here :)
 		if (relativeDepotPath.empty())
 		{
@@ -307,6 +302,11 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 			if (!isImport)
 			{
 				continue;
+			}
+
+			if (isP4Binary && !overrideToText && m_includeBinaries && lfsClient && !isLFSTracked)
+			{
+				WARN("File " << depotFile << " at revision " << fileData.GetRevision() << " has filetype binary, but is not LFS tracked. It will be committed directly to the git repo.");
 			}
 		}
 
