@@ -16,6 +16,8 @@
 #include <typeinfo>
 #include <csignal>
 #include <iterator>
+#include <fstream>
+#include <aws/core/Aws.h>
 
 #include "common.h"
 
@@ -27,7 +29,9 @@
 #include "p4_api.h"
 #include "git_api.h"
 #include "branch_set.h"
-#include "lfs_client.h"
+#include "lfs/lfs_client.h"
+#include "lfs/communication/lfscomm.h"
+#include "lfs/communication/s3comm.h"
 
 #include "p4/p4libs.h"
 #include "minitrace.h"
@@ -64,6 +68,9 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameter("--lfsServerUrl", "", "URL of the Git LFS server to use for uploading files with basic transfer.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsUsername", "", "Git LFS username for basic access authentication.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsPassword", "", "Git LFS password for basic access authentication.");
+	Arguments::GetSingleton()->OptionalParameter("--lfsAPI", "lfs", "Specify the type of the used LFS server API. The types currently supported are 'lfs' (the default) and 's3'.");
+	Arguments::GetSingleton()->OptionalParameter("--lfsS3Bucket", "", "Specify the name of the S3 bucket to use for LFS storage.");
+	Arguments::GetSingleton()->OptionalParameter("--lfsS3Repository", "", "Specify the name of the repository used to store LFS files in S3 bucket.");
 	Arguments::GetSingleton()->OptionalParameterList("--overrideToText", "Path spec for files to be handled as text, even when their P4 type is binary or something else. "
 	                                                                     "Normally this results in them being committed to the Git repo instead of ignored. "
 	                                                                     "In includeBinaries+LFS mode, the LFS pathspecs control where to commit what; in that case this only serves to silence a warning."
@@ -119,14 +126,28 @@ int Main(int argc, char** argv)
 	const std::string lfsServerUrl = Arguments::GetSingleton()->GetLFSServerUrl();
 	const std::string lfsUsername = Arguments::GetSingleton()->GetLFSUsername();
 	const std::string lfsPassword = Arguments::GetSingleton()->GetLFSPassword();
+	const std::string lfsAPI = Arguments::GetSingleton()->GetLFSAPI();
+	const std::string lfsS3Bucket = Arguments::GetSingleton()->GetLFSS3Bucket();
+	const std::string lfsS3Repository = Arguments::GetSingleton()->GetLFSS3Repository();
+
 	std::vector<std::string> lfsPatterns = Arguments::GetSingleton()->GetLFSSpecs();
 
 	GitAPI git(fsyncEnable);
 	std::unique_ptr<LFSClient> lfsClient;
-	if (!lfsPatterns.empty() && !lfsServerUrl.empty())
+	if (!lfsPatterns.empty() && !lfsServerUrl.empty() && !lfsAPI.empty())
 	{
-		lfsClient.reset(new LFSClient(git, lfsServerUrl, lfsUsername, lfsPassword, lfsPatterns));
-		PRINT("Initialized LFS client with server URL: " << lfsServerUrl);
+ 		std::unique_ptr<Communicator> communicator;
+		if (lfsAPI == "s3")
+		{
+			communicator.reset(new S3Comm(lfsServerUrl, lfsS3Bucket, lfsS3Repository, lfsUsername, lfsPassword));
+		}
+		else if (lfsAPI == "lfs")
+		{
+			communicator.reset(new LFSComm(lfsServerUrl, lfsUsername, lfsPassword));
+		}
+		lfsClient.reset(new LFSClient(git, std::move(communicator), lfsPatterns));
+
+		PRINT("Initialized LFS client with server URL: " << lfsServerUrl << " and API type: " << lfsAPI);
 
 		if (!includeBinaries)
 		{
@@ -573,6 +594,9 @@ int main(int argc, char** argv)
 {
 	int exitCode = 0;
 
+	Aws::SDKOptions awsOptions;
+	Aws::InitAPI(awsOptions);
+
 	try
 	{
 		exitCode = Main(argc, argv);
@@ -583,5 +607,6 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	Aws::ShutdownAPI(awsOptions);
 	return exitCode;
 }

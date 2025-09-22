@@ -13,6 +13,7 @@
 #include "utils/std_helpers.h"
 
 #include "thread_pool.h"
+#include "lfs/communication/communicator.h"
 
 ChangeList::ChangeList(const std::string& clNumber, const std::string& clDescription, const std::string& userID, const int64_t& clTimestamp)
     : number(clNumber)
@@ -128,16 +129,16 @@ void ChangeList::DownloadBatch(std::shared_ptr<std::vector<std::string>> printBa
 						const auto& fileContents = printData.GetPrintData().at(i).contents;
 						auto& filePath = printBatchFileData->at(i)->GetRelativePath();
 						const std::vector<char> pointerFileContents = lfsClient->CreatePointerFileContents(fileContents);
-						LFSClient::UploadResult uploadResult = lfsClient->UploadFile(fileContents);
+						Communicator::UploadResult uploadResult = lfsClient->UploadFile(fileContents);
 						switch (uploadResult)
 						{
-							case LFSClient::UploadResult::Uploaded:
+							case Communicator::UploadResult::Uploaded:
 								SUCCESS("Uploaded file " << filePath << " to LFS (" << fileContents.size() << " bytes)");
 								break;
-							case LFSClient::UploadResult::AlreadyExists:
+							case Communicator::UploadResult::AlreadyExists:
 								SUCCESS("File " << filePath << " already exists in LFS, skipping upload");
 								break;
-							case LFSClient::UploadResult::Error:									
+							case Communicator::UploadResult::Error:
 								ERR("Failed to upload file " << filePath << " to LFS");
 								// Not nice, but we have no other means to signal any intermediate errors from here
 								std::abort();

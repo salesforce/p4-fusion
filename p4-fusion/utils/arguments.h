@@ -27,6 +27,7 @@ class Arguments
 	std::string GetParameter(const std::string& argName) const;
 	std::vector<std::string> GetParameterList(const std::string& argName) const;
 	void AddArgumentsFromFile (const std::string& filename);
+	bool ValidateS3Bucket() const;
 
 public:
 	static Arguments* GetSingleton();
@@ -65,6 +66,9 @@ public:
 	std::string GetLFSServerUrl() const { return GetParameter("--lfsServerUrl"); }
 	std::string GetLFSUsername() const { return GetParameter("--lfsUsername"); }
 	std::string GetLFSPassword() const { return GetParameter("--lfsPassword"); }
+	std::string GetLFSAPI() const { return GetParameter("--lfsAPI"); }
+	std::string GetLFSS3Bucket() const { return GetParameter("--lfsS3Bucket"); }
+	std::string GetLFSS3Repository() const { return GetParameter("--lfsS3Repository"); }
 	std::vector<std::string> GetOverrideToTextSpecs() const { return GetParameterList("--overrideToText"); }
 	std::vector<std::string> GetOverrideToBinarySpecs() const { return GetParameterList("--overrideToBinary"); }
 };

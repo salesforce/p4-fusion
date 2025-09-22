@@ -18,7 +18,7 @@
 #include "commands/file_data.h"
 #include "commands/stream_result.h"
 #include "utils/std_helpers.h"
-#include "lfs_client.h"
+#include "lfs/lfs_client.h"
 
 struct BranchedFileGroup
 {

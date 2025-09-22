@@ -1,12 +1,5 @@
-/*
- * Copyright (c) 2022 Salesforce, Inc.
- * All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
- */
-#include "lfs_client.h"
-
-#include "openssl/sha.h"
+#include "lfscomm.h"
+#include "lfs/lfs_client.h"
 #include <curl/curl.h>
 #include <memory>
 #include <sstream>
@@ -20,7 +13,7 @@
 
 namespace
 {
-
+	
 // Retry configuration
 const int MaxRetryAttempts = 3;
 const int InitialRetryDelayMs = 1000;
@@ -314,13 +307,13 @@ BatchResponse PerformBatchUploadRequest(const std::string& serverUrl, const std:
 	return result;
 }
 
-LFSClient::UploadResult PerformUpload(const std::string& username, const std::string& password, const std::string& uploadUrl, const std::vector<char>& fileContents)
+Communicator::UploadResult PerformUpload(const std::string& username, const std::string& password, const std::string& uploadUrl, const std::vector<char>& fileContents)
 {
 	// Initialize curl
 	CURLHandle curl;
 	if (!curl)
 	{
-		return LFSClient::UploadResult::Error;
+		return Communicator::UploadResult::Error;
 	}
 
 	// Set up headers for file upload
@@ -334,15 +327,15 @@ LFSClient::UploadResult PerformUpload(const std::string& username, const std::st
 
 	if (uploadResult.curl_result != CURLE_OK)
 	{
-		return LFSClient::UploadResult::Error;
+		return Communicator::UploadResult::Error;
 	}
 
 	if (uploadResult.response_code >= 200 && uploadResult.response_code < 300)
 	{
-		return LFSClient::UploadResult::Uploaded;
+		return Communicator::UploadResult::Uploaded;
 	}
 
-	return LFSClient::UploadResult::Error;
+	return Communicator::UploadResult::Error;
 }
 
 std::string CreateVerifyPayload(const std::string& oid, size_t fileSize)
@@ -383,60 +376,20 @@ bool PerformVerify(const std::string& username, const std::string& password, con
 	return (verifyResult.curl_result == CURLE_OK && verifyResult.response_code == 200);
 }
 
-}
+} // namespace
 
-LFSClient::LFSClient(GitAPI& gitAPI, const std::string& serverUrl, const std::string& username, const std::string& password, const std::vector<std::string>& lfsPatterns)
-    : m_GitAPI(gitAPI)
-    , m_ServerUrl(serverUrl)
-    , m_Username(username)
-    , m_Password(password)
-    , m_LFSPatterns(lfsPatterns)
-    , m_LFSPathSpec(m_GitAPI.CreatePathSpec(lfsPatterns))
+LFSComm::LFSComm(const std::string& serverURL, const std::string& username, const std::string& password)
+	: m_ServerURL(serverURL)
+	, m_Username(username)
+	, m_Password(password)
 {
 }
 
-std::vector<char> LFSClient::CreatePointerFileContents(const std::vector<char>& fileContents) const
+Communicator::UploadResult LFSComm::UploadFile(const std::vector<char>& fileContents) const
 {
-	// From the specs: "an empty file is the pointer for an empty file. That is, empty files are passed through LFS without any change."
-	if (fileContents.empty())
-	{
-		return {};
-	}
+	std::string oid = LFSClient::CalcOID(fileContents);
 
-	unsigned char hash[SHA256_DIGEST_LENGTH];
-	SHA256(reinterpret_cast<const unsigned char*>(fileContents.data()), fileContents.size(), hash);
-
-	std::string hexHash;
-	for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-	{
-		char hex[3];
-		snprintf(hex, sizeof(hex), "%02x", hash[i]);
-		hexHash += hex;
-	}
-
-	std::string pointerContent = "version https://git-lfs.github.com/spec/v1\n"
-	                             "oid sha256:"
-	    + hexHash + "\n"
-	                "size "
-	    + std::to_string(fileContents.size()) + "\n";
-
-	return std::vector<char>(pointerContent.begin(), pointerContent.end());
-}
-
-LFSClient::UploadResult LFSClient::UploadFile(const std::vector<char>& fileContents) const
-{
-	unsigned char hash[SHA256_DIGEST_LENGTH];
-	SHA256(reinterpret_cast<const unsigned char*>(fileContents.data()), fileContents.size(), hash);
-
-	std::string oid;
-	for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-	{
-		char hex[3];
-		snprintf(hex, sizeof(hex), "%02x", hash[i]);
-		oid += hex;
-	}
-
-	auto batchResponse = PerformBatchUploadRequest(m_ServerUrl, m_Username, m_Password, oid, fileContents.size());
+	auto batchResponse = PerformBatchUploadRequest(m_ServerURL, m_Username, m_Password, oid, fileContents.size());
 	if (!batchResponse.success)
 	{
 		return UploadResult::Error;
@@ -462,21 +415,4 @@ LFSClient::UploadResult LFSClient::UploadFile(const std::vector<char>& fileConte
 	}
 
 	return UploadResult::Uploaded;
-}
-
-bool LFSClient::IsLFSTracked(const std::string& filePath) const
-{
-	return git_pathspec_matches_path(m_LFSPathSpec.get(), GIT_PATHSPEC_IGNORE_CASE, filePath.c_str()) == 1;
-}
-
-std::vector<char> LFSClient::GetGitAttributesContents() const
-{
-	std::vector<char> result;
-	for (const auto& pattern : m_LFSPatterns)
-	{
-		const std::string line = pattern + " filter=lfs diff=lfs merge=lfs -text\n";
-		result.insert(result.end(), line.begin(), line.end());
-	}
-
-	return result;
 }

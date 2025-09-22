@@ -15,7 +15,7 @@
 #include "git2/sys/repository.h"
 #include "minitrace.h"
 
-#include "lfs_client.h"
+#include "lfs/lfs_client.h"
 #include "utils/std_helpers.h"
 
 namespace

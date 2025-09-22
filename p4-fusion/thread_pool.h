@@ -13,7 +13,7 @@
 #include <condition_variable>
 
 #include "common.h"
-#include "lfs_client.h"
+#include "lfs/lfs_client.h"
 
 class P4API;
 

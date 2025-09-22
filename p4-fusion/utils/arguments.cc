@@ -87,6 +87,40 @@ void Arguments::AddArgumentsFromFile(const std::string& filename)
 	}
 }
 
+bool Arguments::ValidateS3Bucket() const
+{
+	std::string bucket = GetLFSS3Bucket();
+	if (bucket.length() < 3 || bucket.length() > 63)
+	{
+		ERR("Invalid S3 bucket name '" << bucket << "'. Bucket names must be between 3 and 63 characters long.");
+		return false;
+	}
+
+	bool first = true;
+	for (char ch : bucket)
+	{
+		if (first)
+		{
+			if (!isdigit(ch) && !islower(ch))
+			{
+				ERR("Invalid first character '" << ch << "' in S3 bucket name '" << bucket << "'. The first character must be a lowercase letter or a number.");
+				return false;
+			}
+
+			first = false;
+		}
+		else
+		{
+			if (!isdigit(ch) && !islower(ch) && ch != '-' && ch != '.')
+			{
+				ERR("Invalid character '" << ch << "' in S3 bucket name '" << bucket << "'. Only alphanumeric characters, hyphens and periods are allowed after the first letter.");
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 void Arguments::Initialize(int argc, char** argv)
 {
 	m_Parameters.emplace("--config", ParameterData { false, false, {}, "Path to a file that can contain additional command line arguments." });
@@ -156,10 +190,29 @@ bool Arguments::IsValid() const
 		}
 	}
 
-	const bool hasAnyLFSParam = !GetLFSSpecs().empty() || !GetLFSServerUrl().empty() || !GetLFSUsername().empty() || !GetLFSPassword().empty();
-	const bool hasAllLFSParams = !GetLFSSpecs().empty() && !GetLFSServerUrl().empty();
+	const bool hasAnyLFSParam = !GetLFSSpecs().empty() || !GetLFSServerUrl().empty() ||
+		!GetLFSUsername().empty() || !GetLFSPassword().empty() || !GetLFSAPI().empty() ||
+		!GetLFSS3Bucket().empty() || !GetLFSS3Repository().empty();
+	const bool hasAllLFSParams = !GetLFSSpecs().empty() && !GetLFSServerUrl().empty() && !GetLFSAPI().empty();
 	if (hasAnyLFSParam && !hasAllLFSParams)
 		return false;
+	if (hasAnyLFSParam) {
+		const std::string& lfsAPI = GetLFSAPI();
+		if (lfsAPI != "lfs" && lfsAPI != "s3")
+		{
+			ERR("Unsupported lfsAPI type '" << lfsAPI << "'. Supported types are 'lfs' and 's3'.");
+			return false;
+		}
+		if (lfsAPI == "s3" && (GetLFSS3Bucket().empty() || GetLFSS3Repository().empty()))
+		{
+			ERR("When using 's3' for lfsAPI, both lfsS3Bucket and lfsS3Repository must be specified.");
+			return false;
+		}
+		if (lfsAPI == "s3" && !ValidateS3Bucket())
+		{
+			return false;
+		}
+	}
 
 	return true;
 }
