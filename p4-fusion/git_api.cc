@@ -364,7 +364,7 @@ std::string GitAPI::Commit(
 	GIT2(git_signature_new(&author, user.c_str(), email.c_str(), timestamp, timezone));
 
 	// -3 to remove the trailing "..."
-	std::string commitMsg = cl + " - " + desc + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl + "]";
+	std::string commitMsg = desc + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl + "]";
 
 	// Find the parent commits.
 	// Order is very important.
