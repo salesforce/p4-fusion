@@ -74,6 +74,18 @@ std::string STDHelpers::ToLower(const std::string& source)
 	return result;
 }
 
+void STDHelpers::ReplaceAll(std::string& str, const std::string& find, const std::string& replace)
+{
+	std::string::size_type pos;
+	std::string::size_type startPos = 0;
+
+	while ((pos = str.find(find, startPos)) != std::string::npos)
+	{
+		str.replace(pos, find.length(), replace);
+		startPos = pos + replace.length();
+	}
+}
+
 std::array<std::string, 2> STDHelpers::SplitAt(const std::string& source, const char c, const size_t startAt)
 {
 	size_t pos = source.find(c, startAt);

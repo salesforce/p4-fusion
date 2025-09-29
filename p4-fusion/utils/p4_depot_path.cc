@@ -170,3 +170,13 @@ bool P4DepotPath::operator!=(const P4DepotPath& other) const
 {
 	return !(*this == other);
 }
+
+std::string P4Unescape(std::string p4path)
+{
+	STDHelpers::ReplaceAll(p4path, "%40", "@");
+	STDHelpers::ReplaceAll(p4path, "%23", "#");
+	STDHelpers::ReplaceAll(p4path, "%2A", "*");
+	// Replace %25 last to avoid interfering with other escape sequences
+	STDHelpers::ReplaceAll(p4path, "%25", "%");
+	return p4path;
+}

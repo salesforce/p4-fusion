@@ -10,16 +10,6 @@
 static const std::string EMPTY_STRING = "";
 static const std::array<std::string, 2> INVALID_BRANCH_PATH { EMPTY_STRING, EMPTY_STRING };
 
-std::vector<std::string> BranchedFileGroup::GetRelativeFileNames()
-{
-	std::vector<std::string> ret;
-	for (auto& fileData : files)
-	{
-		ret.push_back(fileData.GetRelativePath());
-	}
-	return ret;
-}
-
 ChangedFileGroups::ChangedFileGroups()
     : totalFileCount(0)
 {
@@ -348,7 +338,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 
 			// It's a valid destination to a branch.
 			// Make sure the relative path is set.
-			fileData.SetRelativePath(branchPath[1]);
+			fileData.SetRelativeDepotPath(branchPath[1]);
 
 			bool needsHandling = true;
 			if (fileData.IsIntegrated())
@@ -379,7 +369,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 		{
 			// It's a non-branching setup.
 			// Make sure the relative path is set.
-			fileData.SetRelativePath(relativeDepotPath);
+			fileData.SetRelativeDepotPath(relativeDepotPath);
 			branchMap.addTarget(EMPTY_STRING, fileData);
 		}
 	}

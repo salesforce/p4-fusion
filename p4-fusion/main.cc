@@ -24,6 +24,7 @@
 #include "utils/std_helpers.h"
 #include "utils/timer.h"
 #include "utils/arguments.h"
+#include "utils/p4_depot_path.h"
 
 #include "thread_pool.h"
 #include "p4_api.h"
@@ -136,7 +137,7 @@ int Main(int argc, char** argv)
 	std::unique_ptr<LFSClient> lfsClient;
 	if (!lfsPatterns.empty() && !lfsServerUrl.empty() && !lfsAPI.empty())
 	{
- 		std::unique_ptr<Communicator> communicator;
+		std::unique_ptr<Communicator> communicator;
 		if (lfsAPI == "s3")
 		{
 			communicator.reset(new S3Comm(lfsServerUrl, lfsS3Bucket, lfsS3Repository, lfsUsername, lfsPassword));
@@ -468,13 +469,14 @@ int Main(int argc, char** argv)
 
 			for (auto& file : branchGroup.files)
 			{
+				std::string unescapedPath = P4Unescape(file.GetRelativeDepotPath());
 				if (file.IsDeleted())
 				{
-					git.RemoveFileFromIndex(file.GetRelativePath());
+					git.RemoveFileFromIndex(unescapedPath);
 				}
 				else
 				{
-					git.AddFileToIndex(file.GetRelativePath(), file.GetContents(), file.IsExecutable());
+					git.AddFileToIndex(unescapedPath, file.GetContents(), file.IsExecutable());
 				}
 
 				// No use for keeping the contents in memory once it has been added

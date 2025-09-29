@@ -71,3 +71,5 @@ struct hash<P4DepotPath>
 	}
 };
 }
+
+std::string P4Unescape(std::string p4path);
