@@ -91,6 +91,11 @@ bool FileData::IsExecutable() const
 	return STDHelpers::Contains(m_data->type, "+x");
 }
 
+bool FileData::IsSymlink() const
+{
+	return STDHelpers::Contains(m_data->type, "+l") || STDHelpers::Contains(m_data->type, "symlink");
+}
+
 FileAction extrapolateFileAction(std::string& action);
 
 void FileDataStore::SetAction(std::string fileAction)

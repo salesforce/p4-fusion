@@ -97,6 +97,8 @@ public:
 
 	bool IsBinary() const;
 	bool IsExecutable() const;
+	bool IsSymlink() const;
+
 
 	void Clear() { m_data->Clear(); };
 };
