@@ -221,20 +221,36 @@ void GitAPI::CreateIndex()
 	}
 }
 
-void GitAPI::AddFileToIndex(const std::string& relativePath, const std::vector<char>& contents, const bool plusx)
+void GitAPI::AddFileToIndex(const std::string& relativePath, const std::vector<char>& contents, const bool plusx, const bool isSymlink)
 {
 	MTR_SCOPE("Git", __func__);
 
 	git_index_entry entry = {};
-	entry.mode = GIT_FILEMODE_BLOB;
-	if (plusx)
+	
+	if (isSymlink)
 	{
-		entry.mode = GIT_FILEMODE_BLOB_EXECUTABLE; // 0100755
+		entry.mode = GIT_FILEMODE_LINK; // 0120000
+		
+		std::vector<char> cleanedContents = contents;
+		while (!cleanedContents.empty() && (cleanedContents.back() == '\n' || cleanedContents.back() == '\r'))
+		{
+			cleanedContents.pop_back();
+		}
+		
+		entry.path = relativePath.c_str();
+		GIT2(git_index_add_from_buffer(m_Index, &entry, cleanedContents.data(), cleanedContents.size()));
 	}
-
-	entry.path = relativePath.c_str();
-
-	GIT2(git_index_add_from_buffer(m_Index, &entry, contents.data(), contents.size()));
+	else
+	{
+		entry.mode = GIT_FILEMODE_BLOB;
+		if (plusx)
+		{
+			entry.mode = GIT_FILEMODE_BLOB_EXECUTABLE; // 0100755
+		}
+		
+		entry.path = relativePath.c_str();
+		GIT2(git_index_add_from_buffer(m_Index, &entry, contents.data(), contents.size()));
+	}
 }
 
 void GitAPI::RemoveFileFromIndex(const std::string& relativePath)

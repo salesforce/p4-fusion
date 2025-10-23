@@ -396,7 +396,7 @@ int Main(int argc, char** argv)
 				}
 				else
 				{
-					git.AddFileToIndex(file.GetRelativePath(), file.GetContents(), file.IsExecutable());
+					git.AddFileToIndex(file.GetRelativePath(), file.GetContents(), file.IsExecutable(), file.IsSymlink());
 				}
 
 				// No use for keeping the contents in memory once it has been added

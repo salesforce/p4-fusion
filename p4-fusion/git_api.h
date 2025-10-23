@@ -38,7 +38,7 @@ public:
 
 	void CreateIndex();
 	void SetActiveBranch(const std::string& branchName);
-	void AddFileToIndex(const std::string& relativePath, const std::vector<char>& contents, const bool plusx);
+	void AddFileToIndex(const std::string& relativePath, const std::vector<char>& contents, const bool plusx, const bool isSymlink = false);
 	void RemoveFileFromIndex(const std::string& relativePath);
 
 	std::string Commit(
