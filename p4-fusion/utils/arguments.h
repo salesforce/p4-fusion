@@ -66,6 +66,7 @@ public:
 	std::string GetLFSServerUrl() const { return GetParameter("--lfsServerUrl"); }
 	std::string GetLFSUsername() const { return GetParameter("--lfsUsername"); }
 	std::string GetLFSPassword() const { return GetParameter("--lfsPassword"); }
+	std::string GetLFSToken() const { return GetParameter("--lfsToken"); }
 	std::string GetLFSAPI() const { return GetParameter("--lfsAPI"); }
 	std::string GetLFSS3Bucket() const { return GetParameter("--lfsS3Bucket"); }
 	std::string GetLFSS3Repository() const { return GetParameter("--lfsS3Repository"); }

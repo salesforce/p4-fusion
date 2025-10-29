@@ -191,7 +191,7 @@ bool Arguments::IsValid() const
 	}
 
 	const bool hasAnyLFSParam = !GetLFSSpecs().empty() || !GetLFSServerUrl().empty() ||
-		!GetLFSUsername().empty() || !GetLFSPassword().empty() || !GetLFSAPI().empty() ||
+		!GetLFSUsername().empty() || !GetLFSPassword().empty() || !GetLFSToken().empty() || !GetLFSAPI().empty() ||
 		!GetLFSS3Bucket().empty() || !GetLFSS3Repository().empty();
 	const bool hasAllLFSParams = !GetLFSSpecs().empty() && !GetLFSServerUrl().empty() && !GetLFSAPI().empty();
 	if (hasAnyLFSParam && !hasAllLFSParams)
@@ -210,6 +210,15 @@ bool Arguments::IsValid() const
 		}
 		if (lfsAPI == "s3" && !ValidateS3Bucket())
 		{
+			return false;
+		}
+
+		// Validate authentication method exclusivity
+		const bool hasUsernamePassword = !GetLFSUsername().empty() || !GetLFSPassword().empty();
+		const bool hasToken = !GetLFSToken().empty();
+		if (hasUsernamePassword && hasToken)
+		{
+			ERR("Cannot use both username/password and token authentication for LFS. Please specify either lfsUsername/lfsPassword OR lfsToken, not both.");
 			return false;
 		}
 	}

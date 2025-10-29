@@ -69,6 +69,7 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameter("--lfsServerUrl", "", "URL of the Git LFS server to use for uploading files with basic transfer.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsUsername", "", "Git LFS username for basic access authentication.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsPassword", "", "Git LFS password for basic access authentication.");
+	Arguments::GetSingleton()->OptionalParameter("--lfsToken", "", "Git LFS token for authentication.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsAPI", "lfs", "Specify the type of the used LFS server API. The types currently supported are 'lfs' (the default) and 's3'.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsS3Bucket", "", "Specify the name of the S3 bucket to use for LFS storage.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsS3Repository", "", "Specify the name of the repository used to store LFS files in S3 bucket.");
@@ -127,6 +128,7 @@ int Main(int argc, char** argv)
 	const std::string lfsServerUrl = Arguments::GetSingleton()->GetLFSServerUrl();
 	const std::string lfsUsername = Arguments::GetSingleton()->GetLFSUsername();
 	const std::string lfsPassword = Arguments::GetSingleton()->GetLFSPassword();
+	const std::string lfsToken = Arguments::GetSingleton()->GetLFSToken();
 	const std::string lfsAPI = Arguments::GetSingleton()->GetLFSAPI();
 	const std::string lfsS3Bucket = Arguments::GetSingleton()->GetLFSS3Bucket();
 	const std::string lfsS3Repository = Arguments::GetSingleton()->GetLFSS3Repository();
@@ -144,7 +146,8 @@ int Main(int argc, char** argv)
 		}
 		else if (lfsAPI == "lfs")
 		{
-			communicator.reset(new LFSComm(lfsServerUrl, lfsUsername, lfsPassword));
+			Credentials creds = lfsToken.empty() ? Credentials(lfsUsername, lfsPassword) : Credentials(lfsToken);
+			communicator.reset(new LFSComm(lfsServerUrl, creds));
 		}
 		lfsClient.reset(new LFSClient(git, std::move(communicator), lfsPatterns));
 
