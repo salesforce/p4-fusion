@@ -15,6 +15,7 @@
 #include "utils/std_helpers.h"
 #include "utils/timer.h"
 #include "utils/arguments.h"
+#include "utils/p4_helpers.h"
 
 #include "thread_pool.h"
 #include "p4_api.h"
@@ -390,13 +391,14 @@ int Main(int argc, char** argv)
 
 			for (auto& file : branchGroup.files)
 			{
+				const std::string unescapedPath = P4Unescape(file.GetRelativeDepotPath());
 				if (file.IsDeleted())
 				{
-					git.RemoveFileFromIndex(file.GetRelativePath());
+					git.RemoveFileFromIndex(unescapedPath);
 				}
 				else
 				{
-					git.AddFileToIndex(file.GetRelativePath(), file.GetContents(), file.IsExecutable());
+					git.AddFileToIndex(unescapedPath, file.GetContents(), file.IsExecutable());
 				}
 
 				// No use for keeping the contents in memory once it has been added
