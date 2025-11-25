@@ -62,7 +62,7 @@ GitAPI::~GitAPI()
 	git_libgit2_shutdown();
 }
 
-bool GitAPI::IsRepositoryClonedFrom(const std::string& depotPath)
+std::string GitAPI::GetDepotPathFromLastCommit() const
 {
 	git_oid oid;
 	GIT2(git_reference_name_to_id(&oid, m_Repo, "HEAD"));
@@ -73,11 +73,11 @@ bool GitAPI::IsRepositoryClonedFrom(const std::string& depotPath)
 	std::string message = git_commit_message(headCommit);
 	size_t depotPathStart = message.find("depot-paths = \"") + 15;
 	size_t depotPathEnd = message.find("\": change") - 1;
-	std::string repoDepotPath = message.substr(depotPathStart, depotPathEnd - depotPathStart + 1) + "...";
+	std::string repoDepotPath = message.substr(depotPathStart, depotPathEnd - depotPathStart + 1);
 
 	git_commit_free(headCommit);
 
-	return repoDepotPath == depotPath;
+	return repoDepotPath;
 }
 
 void GitAPI::OpenRepository(const std::string& repoPath)
@@ -363,8 +363,7 @@ std::string GitAPI::Commit(
 	git_signature* author = nullptr;
 	GIT2(git_signature_new(&author, user.c_str(), email.c_str(), timestamp, timezone));
 
-	// -3 to remove the trailing "..."
-	std::string commitMsg = desc + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl + "]";
+	std::string commitMsg = desc + "\n[p4-fusion: depot-paths = \"" + depotPath + "\": change = " + cl + "]";
 
 	// Find the parent commits.
 	// Order is very important.

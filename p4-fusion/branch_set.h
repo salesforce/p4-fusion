@@ -28,6 +28,7 @@ struct BranchedFileGroup
 	// These branch names will be the Git branch names.
 	std::string sourceBranch;
 	std::string targetBranch;
+	std::string depotBranchPath;
 	bool hasSource;
 	std::vector<FileData> files;
 };
@@ -58,9 +59,7 @@ public:
 
 	Branch(const std::string& branch, const std::string& alias);
 
-	// splitBranchPath If the relativeDepotPath matches, returns {branch alias, branch file path}.
-	//   Otherwise, returns {"", ""}
-	std::array<std::string, 2> SplitBranchPath(const std::string& relativeDepotPath) const;
+	bool IsInBranch(const std::string& relativeDepotPath) const;
 };
 
 // A singular view on the branches and a base view (acts as a filter to trim down affected files).
@@ -84,9 +83,7 @@ private:
 	// stripBasePath remove the base path from the depot path, or "" if not in the base path.
 	std::string stripBasePath(const std::string& depotPath) const;
 
-	// splitBranchPath extract the branch name and path under the branch (no leading '/' on the path)
-	//    relativeDepotPath - already stripped from running stripBasePath.
-	std::array<std::string, 2> splitBranchPath(const std::string& relativeDepotPath) const;
+	const Branch* getBranchFor(const std::string& relativeDepotPath) const;
 
 	bool matchesExcludes(const std::string& depotPath) const;
 
@@ -106,6 +103,8 @@ public:
 	bool HasMergeableBranch() const { return !m_branches.empty(); };
 
 	int Count() const { return m_branches.size(); };
+
+	const std::vector<Branch>& GetBranches() const { return m_branches; };
 
 	// ParseAffectedFiles create collections of merges and commits.
 	// Breaks up the files into those that are within the view, with each item in the

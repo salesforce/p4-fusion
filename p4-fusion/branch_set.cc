@@ -50,19 +50,15 @@ Branch::Branch(const std::string& branch, const std::string& alias)
 	}
 }
 
-std::array<std::string, 2> Branch::SplitBranchPath(const std::string& relativeDepotPath) const
+bool Branch::IsInBranch(const std::string& relativeDepotPath) const
 {
-	if (
+	return
 	    // The relative depot branch, to match this branch path, must start with the
 	    // branch path + "/".  The "StartsWith" is put at the end of the 'and' checks,
 	    // because it takes the longest.
 	    relativeDepotPath.size() > depotBranchPath.size()
 	    && relativeDepotPath[depotBranchPath.size()] == '/'
-	    && STDHelpers::StartsWith(relativeDepotPath, depotBranchPath))
-	{
-		return { gitAlias, relativeDepotPath.substr(depotBranchPath.size() + 1) };
-	}
-	return { "", "" };
+	    && STDHelpers::StartsWith(relativeDepotPath, depotBranchPath);
 }
 
 Branch createBranchFromPath(const std::string& depotBranchPath)
@@ -140,7 +136,7 @@ BranchSet::BranchSet(GitAPI& gitAPI,
 	}
 }
 
-std::array<std::string, 2> BranchSet::splitBranchPath(const std::string& relativeDepotPath) const
+const Branch* BranchSet::getBranchFor(const std::string& relativeDepotPath) const
 {
 	// Check if the relative depot path starts with any of the branches.
 	// This checks the branches in their stored order, which can mean that having a branch
@@ -148,15 +144,14 @@ std::array<std::string, 2> BranchSet::splitBranchPath(const std::string& relativ
 	// To do this properly, the stored branches should be scanned based on their length - longest
 	// first, but that's extra processing and code for a use case that is rare and has a manual
 	// work around (list branches in a specific order).
-	for (auto& branch : m_branches)
+	for (const Branch& branch : m_branches)
 	{
-		auto split = branch.SplitBranchPath(relativeDepotPath);
-		if (!split[0].empty() && !split[1].empty())
+		if (branch.IsInBranch(relativeDepotPath))
 		{
-			return split;
+			return &branch;
 		}
 	}
-	return { "", "" };
+	return nullptr;
 }
 
 bool BranchSet::matchesExcludes(const std::string& depotPath) const
@@ -187,19 +182,19 @@ struct branchIntegrationMap
 	std::unordered_map<std::string, int> branchIndicies;
 	int fileCount = 0;
 
-	void addMerge(const std::string& sourceBranch, const std::string& targetBranch, const FileData& rev);
-	void addTarget(const std::string& targetBranch, const FileData& rev);
+	void addMerge(const std::string& sourceBranch, const std::string& targetBranch, const std::string& depotBranchPath, const FileData& rev);
+	void addTarget(const std::string& targetBranch, const std::string& depotBranchPath, const FileData& rev);
 
 	// note: not const, because it cleans out the branchGroups.
 	std::unique_ptr<ChangedFileGroups> createChangedFileGroups() { return std::unique_ptr<ChangedFileGroups>(new ChangedFileGroups(branchGroups, fileCount)); };
 };
 
-void branchIntegrationMap::addTarget(const std::string& targetBranch, const FileData& fileData)
+void branchIntegrationMap::addTarget(const std::string& targetBranch, const std::string& depotBranchPath, const FileData& fileData)
 {
-	addMerge(EMPTY_STRING, targetBranch, fileData);
+	addMerge(EMPTY_STRING, targetBranch, depotBranchPath, fileData);
 }
 
-void branchIntegrationMap::addMerge(const std::string& sourceBranch, const std::string& targetBranch, const FileData& fileData)
+void branchIntegrationMap::addMerge(const std::string& sourceBranch, const std::string& targetBranch, const std::string& depotBranchPath, const FileData& fileData)
 {
 	// Need to store this in the integration map, using "src/tgt" as the
 	// key.  Because stream names can't have a '/' in them, this creates a unique key.
@@ -214,6 +209,7 @@ void branchIntegrationMap::addMerge(const std::string& sourceBranch, const std::
 		BranchedFileGroup& bfg = branchGroups[index];
 		bfg.sourceBranch = sourceBranch;
 		bfg.targetBranch = targetBranch;
+		bfg.depotBranchPath = depotBranchPath;
 		bfg.hasSource = !sourceBranch.empty();
 		bfg.files.push_back(fileData);
 	}
@@ -327,10 +323,8 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 		if (HasMergeableBranch())
 		{
 			// [0] == branch name, [1] == relative path in the branch.
-			std::array<std::string, 2> branchPath = splitBranchPath(relativeDepotPath);
-			if (
-			    branchPath[0].empty()
-			    || branchPath[1].empty())
+			const Branch* branch = getBranchFor(relativeDepotPath);
+			if (branch == nullptr)
 			{
 				// not a valid branch file.  skip it.
 				continue;
@@ -338,31 +332,29 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 
 			// It's a valid destination to a branch.
 			// Make sure the relative path is set.
-			fileData.SetRelativeDepotPath(branchPath[1]);
+			const std::string branchFilePath = relativeDepotPath.substr(branch->depotBranchPath.size() + 1);
+			fileData.SetRelativeDepotPath(branchFilePath);
 
 			bool needsHandling = true;
 			if (fileData.IsIntegrated())
 			{
 				// Only add the integration if the source is from a branch we care about.
 				// [0] == branch name, [1] == relative path in the branch.
-				std::array<std::string, 2> fromBranchPath = splitBranchPath(stripBasePath(fileData.GetFromDepotFile()));
-				if (
-				    !fromBranchPath[0].empty()
-				    && !fromBranchPath[1].empty()
-
+				const Branch* fromBranch = getBranchFor(stripBasePath(fileData.GetFromDepotFile()));
+				if (fromBranch != nullptr
 				    // Can't have source and target be pointing to the same branch; that's not
 				    // a branch operation in the Git sense.
-				    && fromBranchPath[0] != branchPath[0])
+				    && fromBranch->gitAlias != branch->gitAlias)
 				{
 					// This is a valid integrate from a known source to a known target branch.
-					branchMap.addMerge(fromBranchPath[0], branchPath[0], fileData);
+					branchMap.addMerge(fromBranch->gitAlias, branch->gitAlias, branch->depotBranchPath, fileData);
 					needsHandling = false;
 				}
 			}
 			if (needsHandling)
 			{
 				// Either not a valid integrate, or a normal operation.
-				branchMap.addTarget(branchPath[0], fileData);
+				branchMap.addTarget(branch->gitAlias, branch->depotBranchPath, fileData);
 			}
 		}
 		else
@@ -370,7 +362,7 @@ std::unique_ptr<ChangedFileGroups> BranchSet::ParseAffectedFiles(const std::vect
 			// It's a non-branching setup.
 			// Make sure the relative path is set.
 			fileData.SetRelativeDepotPath(relativeDepotPath);
-			branchMap.addTarget(EMPTY_STRING, fileData);
+			branchMap.addTarget(EMPTY_STRING, EMPTY_STRING, fileData);
 		}
 	}
 	return branchMap.createChangedFileGroups();

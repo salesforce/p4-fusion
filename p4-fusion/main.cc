@@ -350,10 +350,32 @@ int Main(int argc, char** argv)
 	std::string resumeFromCL;
 	if (git.IsHEADExists())
 	{
-		if (!git.IsRepositoryClonedFrom(depotPath))
+		if (branchSet.HasMergeableBranch())
 		{
-			ERR("Git repository at " << srcPath << " was not initially cloned with depotPath = " << depotPath << ". Exiting.");
-			return 1;
+			bool foundMatchingBranch = false;
+			for (const Branch& branch : branchSet.GetBranches())
+			{
+				const std::string branchDepotPath = depotPath.substr(0, depotPath.size() - 3) + branch.depotBranchPath;
+
+				if (git.GetDepotPathFromLastCommit() == branchDepotPath)
+				{
+					foundMatchingBranch = true;
+					break;
+				}
+			}
+			if (!foundMatchingBranch)
+			{
+				ERR("Git repository at " << srcPath << " was not initially cloned with any provided branches. Exiting.");
+				return 1;
+			}
+		}
+		else
+		{
+			if (git.GetDepotPathFromLastCommit() + "..." != depotPath)
+			{
+				ERR("Git repository at " << srcPath << " was not initially cloned with depotPath = \"" << depotPath << "\". Exiting.");
+				return 1;
+			}
 		}
 
 		resumeFromCL = git.DetectLatestCL();
@@ -362,7 +384,25 @@ int Main(int argc, char** argv)
 
 	PRINT("Requesting changelists to convert from the Perforce server");
 
-	std::vector<ChangeList> changes = std::move(p4.Changes(depotPath, resumeFromCL, maxChanges).GetChanges());
+	std::vector<ChangeList> changes;
+	if (branchSet.HasMergeableBranch())
+	{
+		for (const Branch& branch : branchSet.GetBranches())
+		{
+			const std::string branchDepotPath = depotPath.substr(0, depotPath.size() - 3) + branch.depotBranchPath + "/...";
+
+			std::vector<ChangeList> branchChanges = std::move(p4.Changes(branchDepotPath, resumeFromCL, maxChanges).GetChanges());
+			for (ChangeList& cl : branchChanges)
+			{
+				changes.push_back(std::move(cl));
+			}
+		}
+		std::sort(changes.begin(), changes.end());
+	}
+	else
+	{
+		changes = std::move(p4.Changes(depotPath, resumeFromCL, maxChanges).GetChanges());
+	}
 
 	if (streamMappings)
 	{
@@ -380,6 +420,17 @@ int Main(int argc, char** argv)
 			// We don't need to consider the case if this ever expands the vector.
 			changes.resize(maxChanges);
 		}
+	}
+
+	// Check if all changelists appear only once
+	std::set<std::string> uniqueChangeListNumbers;
+	for (const ChangeList& cl : changes) {
+		uniqueChangeListNumbers.insert(cl.number);
+	}
+	if (uniqueChangeListNumbers.size() != changes.size())
+	{
+		ERR("Changelists appear more than once. Exiting.");
+		return 1;
 	}
 
 	// Return early if we have no work to do
@@ -494,7 +545,17 @@ int Main(int argc, char** argv)
 				mergeFrom = branchGroup.sourceBranch;
 			}
 
-			std::string commitSHA = git.Commit(depotPath,
+			std::string depotPathString = branchSet.HasMergeableBranch() ? branchGroup.depotBranchPath : depotPath;
+			if (STDHelpers::EndsWith(depotPathString, "/..."))
+			{
+				depotPathString = depotPathString.substr(0, depotPathString.size() - 3);
+			}
+			if (!STDHelpers::StartsWith(depotPathString, "//"))
+			{
+				depotPathString = "//" + depotPathString;
+			}
+
+			std::string commitSHA = git.Commit(depotPathString,
 			    cl.number,
 			    fullName,
 			    email,

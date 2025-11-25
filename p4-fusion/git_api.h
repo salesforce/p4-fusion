@@ -36,7 +36,7 @@ public:
 	void OpenRepository(const std::string& repoPath);
 
 	bool IsHEADExists();
-	bool IsRepositoryClonedFrom(const std::string& depotPath);
+	std::string GetDepotPathFromLastCommit() const;
 	std::string DetectLatestCL();
 
 	git_oid CreateBlob(const std::vector<char>& data);
