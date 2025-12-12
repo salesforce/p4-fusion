@@ -1,56 +1,99 @@
 name: build-check
 
-on: [push, pull_request]
+on:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
-  ubuntu:
-    runs-on: "ubuntu-latest"
+  macos:
+    runs-on: "macos-latest"
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         submodules: true
+        fetch-depth: 0
+
+    - name: Ensure OpenSSL 3 is installed
+      run: |
+        brew list openssl@3 &>/dev/null || brew install openssl@3
 
     - name: Cache vendor/
-      uses: actions/cache@v1
+      uses: actions/cache@v4
       with:
         path: vendor/
         key: ${{ runner.OS }}-p4-fusion-vendor-cache-${{ github.ref }}
         restore-keys: |
           ${{ runner.OS }}-p4-fusion-vendor-cache-
 
-    # Adopted from: https://github.com/sourcegraph/sourcegraph/blob/main/cmd/gitserver/p4-fusion-install-alpine.sh#L82
-    - name: Install OpenSSL 1.1.1w
+    - name: Download Helix Core C++ API
       run: |
-        pushd vendor
+        mkdir -p vendor/helix-core-api/mac
+        wget https://filehost.perforce.com/perforce/r24.1/bin.macosx12arm64/p4api-openssl3.tgz
+        tar -C vendor/helix-core-api/mac -xzf p4api-openssl3.tgz --strip 1
+        rm p4api-openssl3.tgz
 
-        mkdir -p openssl-src
-        wget https://www.openssl.org/source/openssl-1.1.1w.tar.gz
-        tar -C openssl-src -xzf openssl-1.1.1w.tar.gz --strip 1
-        pushd openssl-src
-        ./config
-        make build_libs
-        sudo make install
-        popd
-
-        popd
-    
-    - name: Install Helix Core C++ API
+    - name: Download rapidjson source
       run: |
-        mkdir -p vendor/helix-core-api/linux
-        wget https://www.perforce.com/downloads/perforce/r24.1/bin.linux26x86_64/p4api-glibc2.12-openssl1.1.1.tgz
-        tar -C vendor/helix-core-api/linux -xzf p4api-glibc2.12-openssl1.1.1.tgz --strip 1
+        mkdir -p vendor/rapidjson
+        wget https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz
+        tar -C vendor/helix-core-api/mac -xzf v1.1.0.tar.gz --strip 1
+        rm v1.1.0.tar.gz
 
-    - name: Configure CMake cache
+    - name: Determine version
+      id: version
       run: |
-        ./generate_cache.sh Release pt
+        if [ "${{ github.ref_type }}" = "tag" ]; then  # Tagged release
+          echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+        else
+          CALVER="$(date -u +%Y%m%d).r$(git rev-list --count HEAD)"
+          
+          if [ -n "${{ github.head_ref }}" ]; then
+            BRANCH_NAME="${{ github.head_ref }}"
+          else
+            BRANCH_NAME="${{ github.ref_name }}"
+          fi
 
-    - name: Build p4-fusion
+          if [ "$BRANCH_NAME" = "main" ]; then  # main branch release
+            echo "version=v${CALVER}" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            SAFE_BRANCH=$(echo "$BRANCH_NAME" | tr '/' '-')  # prerelease
+            echo "version=v${CALVER}-${SAFE_BRANCH}" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+        fi
+
+    - name: Generate CMake project
+      run: |
+        ./generate_cache.sh Release p
+
+    - name: Build
       run: |
         ./build.sh
 
-    - name: Test p4-fusion
+    - name: Smoke test
       run: |
-        ldd build/p4-fusion/p4-fusion
-        ./build/p4-fusion/p4-fusion
-        ./build/tests/p4-fusion-test
+        BINARY_PATH="./build/p4-fusion/p4-fusion"
+
+        echo "Dependency check..."
+        otool -L "$BINARY_PATH"
+
+        echo "Help output"
+        "$BINARY_PATH" --help
+
+    - name: Package binary
+      run: |
+        mkdir pkg
+        tar -C build/p4-fusion -czf pkg/p4-fusion-${{ steps.version.outputs.version }}.tar.gz p4-fusion
+
+    - name: Publish release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        files: pkg/p4-fusion-${{ steps.version.outputs.version }}.tar.gz
+        prerelease: ${{ steps.version.outputs.is_prerelease }}
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
