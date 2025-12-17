@@ -7,6 +7,8 @@ set(CXX_STANDARD_REQUIRED true)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(OPENSSL_USE_STATIC_LIBS ON)
+
 find_package(Git QUIET)
 if(GIT_EXECUTABLE)
 	message(STATUS "Updating submodules...")
