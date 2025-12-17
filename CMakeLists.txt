@@ -7,6 +7,23 @@ set(CXX_STANDARD_REQUIRED true)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(Git QUIET)
+if(GIT_EXECUTABLE)
+	message(STATUS "Updating submodules...")
+	set(GIT_SUBMODULE_FLAGS update --init --recursive)
+	if(DEFINED ENV{CI})
+		list(APPEND GIT_SUBMODULE_FLAGS --force)
+	endif()
+
+	execute_process(COMMAND ${GIT_EXECUTABLE} submodule ${GIT_SUBMODULE_FLAGS}
+					WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+					RESULT_VARIABLE GIT_SUBMODULE_RESULT)
+	if(NOT GIT_SUBMODULE_RESULT EQUAL "0")
+		message(FATAL_ERROR "git submodule update --init --recursive failed with ${GIT_SUBMODULE_RESULT}, please checkout submodules")
+	endif()
+endif()
+
+
 project(
     p4-fusion
     LANGUAGES CXX
