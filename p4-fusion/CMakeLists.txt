@@ -100,7 +100,7 @@ target_link_libraries(p4-fusion PUBLIC
     ${CURL_LIBRARIES}
     ${ZLIB_LIBRARIES}
     ${AWSSDK_LINK_LIBRARIES}
-    git2
+    libgit2package
     minitrace
 )
 
