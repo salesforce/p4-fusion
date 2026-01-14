@@ -1,3 +1,6 @@
 [submodule "vendor/rapidjson"]
 	path = vendor/rapidjson
     url = https://github.com/Tencent/rapidjson
+[submodule "vendor/libgit2"]
+	path = vendor/libgit2
+	url = https://github.com/libgit2/libgit2.git
