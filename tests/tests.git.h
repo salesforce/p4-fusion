@@ -16,7 +16,7 @@ int TestGitAPI()
 	GitAPI git(false);
 
 	TEST(git.InitializeRepository("/tmp/test-repo"), true);
-	git.CreateIndex();
+	git.CreateIndex(nullptr);
 	git.AddFileToIndex("foo.txt", { 'x', 'y', 'z' }, false);
 	git.Commit(
 	    "//a/b/c/...",
@@ -28,9 +28,11 @@ int TestGitAPI()
 	    10000000,
 	    "");
 	TEST(git.IsHEADExists(), true);
-	TEST(git.IsRepositoryClonedFrom("//a/b/c/..."), true);
-	TEST(git.IsRepositoryClonedFrom("//a/b/c/d/..."), false);
-	TEST(git.IsRepositoryClonedFrom("//x/y/z/..."), false);
+
+	auto depoPath = git.GetDepotPathFromLastCommit();
+	TEST(depoPath, "//a/b/c/...");
+	TEST_NEQ(depoPath, "//a/b/c/d/...");
+	TEST_NEQ(depoPath, "//x/y/z/...");
 	TEST(git.DetectLatestCL(), "12345678");
 
 	git.RemoveFileFromIndex("foo.txt");
@@ -44,9 +46,11 @@ int TestGitAPI()
 	    20000000,
 	    "");
 	TEST(git.IsHEADExists(), true);
-	TEST(git.IsRepositoryClonedFrom("//a/b/c/..."), true);
-	TEST(git.IsRepositoryClonedFrom("//a/b/c/d/..."), false);
-	TEST(git.IsRepositoryClonedFrom("//x/y/z/..."), false);
+
+	depoPath = git.GetDepotPathFromLastCommit();
+	TEST(depoPath, "//a/b/c/...");
+	TEST_NEQ(depoPath, "//a/b/c/d/...");
+	TEST_NEQ(depoPath, "//x/y/z/...");
 	TEST(git.DetectLatestCL(), "12345679");
 
 	git.CloseIndex();
