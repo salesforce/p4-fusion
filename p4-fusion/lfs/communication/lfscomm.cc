@@ -26,11 +26,12 @@ const char* GetUserAgent()
 	static std::once_flag init_flag;
 	std::call_once(init_flag, []()
 	    {
-		curl_version_info_data* version_info = curl_version_info(CURLVERSION_NOW);
-		if (version_info && version_info->version)
-		{
-			result = std::string("curl/") + version_info->version;
-		} });
+		    curl_version_info_data* version_info = curl_version_info(CURLVERSION_NOW);
+		    if (version_info && version_info->version)
+		    {
+			    result = std::string("curl/") + version_info->version;
+		    }
+	    });
 
 	return result.c_str();
 }
@@ -191,14 +192,16 @@ RequestResult PerformPostRequestWithRetry(CURL* curl,
 	SetupRequest(curl, url, data, data_size, headers, &result, auth);
 
 	return PerformRequestWithRetry([&]() -> RequestResult
-	    {        
-        result.curl_result = curl_easy_perform(curl);
-        
-        if (result.curl_result == CURLE_OK) {
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.response_code);
-        }
-        
-        return result; });
+	    {
+		    result.curl_result = curl_easy_perform(curl);
+
+		    if (result.curl_result == CURLE_OK)
+		    {
+			    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.response_code);
+		    }
+
+		    return result;
+	    });
 }
 
 // Helper function to perform a PUT request with binary data
@@ -214,13 +217,15 @@ RequestResult PerformPutRequestWithRetry(CURL* curl, const std::string& url,
 
 	return PerformRequestWithRetry([&]() -> RequestResult
 	    {
-        result.curl_result = curl_easy_perform(curl);
-        
-        if (result.curl_result == CURLE_OK) {
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.response_code);
-        }
-        
-        return result; });
+		    result.curl_result = curl_easy_perform(curl);
+
+		    if (result.curl_result == CURLE_OK)
+		    {
+			    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.response_code);
+		    }
+
+		    return result;
+	    });
 }
 
 struct BatchResponse
@@ -397,11 +402,13 @@ Communicator::UploadResult PerformUpload(const std::string& uploadUrl, const std
 
 	uploadResult = PerformRequestWithRetry([&]() -> RequestResult
 	    {
-		uploadResult.curl_result = curl_easy_perform(curl.get());
-		if (uploadResult.curl_result == CURLE_OK) {
-			curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &uploadResult.response_code);
-		}
-		return uploadResult; });
+		    uploadResult.curl_result = curl_easy_perform(curl.get());
+		    if (uploadResult.curl_result == CURLE_OK)
+		    {
+			    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &uploadResult.response_code);
+		    }
+		    return uploadResult;
+	    });
 
 	curl_slist_free_all(uploadHeaders);
 
@@ -454,11 +461,13 @@ bool PerformVerify(const std::string& verifyUrl, const std::string& oid, size_t 
 
 	verifyResult = PerformRequestWithRetry([&]() -> RequestResult
 	    {
-		verifyResult.curl_result = curl_easy_perform(curl.get());
-		if (verifyResult.curl_result == CURLE_OK) {
-			curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &verifyResult.response_code);
-		}
-		return verifyResult; });
+		    verifyResult.curl_result = curl_easy_perform(curl.get());
+		    if (verifyResult.curl_result == CURLE_OK)
+		    {
+			    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &verifyResult.response_code);
+		    }
+		    return verifyResult;
+	    });
 
 	curl_slist_free_all(verifyHeaders);
 

@@ -10,11 +10,11 @@
 #include <aws/core/utils/stream/PreallocatedStreamBuf.h>
 
 S3Comm::S3Comm(const std::string& serverURL, const std::string& bucket, const std::string& repository, const std::string& username, const std::string& password)
-	: m_ServerURL(serverURL)
-	, m_Bucket(bucket)
-	, m_Repository(repository)
-	, m_Username(username)
-	, m_Password(password)
+    : m_ServerURL(serverURL)
+    , m_Bucket(bucket)
+    , m_Repository(repository)
+    , m_Username(username)
+    , m_Password(password)
 {
 }
 
@@ -26,14 +26,14 @@ Communicator::UploadResult S3Comm::UploadFile(const std::vector<char>& fileConte
 
 	bool isHttps = m_ServerURL.find("https://") == 0;
 
-    Aws::S3::S3ClientConfiguration config;
-    config.endpointOverride = m_ServerURL;
-    config.scheme = isHttps ? Aws::Http::Scheme::HTTPS : Aws::Http::Scheme::HTTP;
-    config.verifySSL = isHttps;
+	Aws::S3::S3ClientConfiguration config;
+	config.endpointOverride = m_ServerURL;
+	config.scheme = isHttps ? Aws::Http::Scheme::HTTPS : Aws::Http::Scheme::HTTP;
+	config.verifySSL = isHttps;
 	config.useVirtualAddressing = false;
 
 	Aws::S3::S3Client s3Client(credentials, config,
-	Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, false);
+	    Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, false);
 
 	std::string objectKey = m_Repository + "/" + oid;
 
@@ -53,15 +53,13 @@ Communicator::UploadResult S3Comm::UploadFile(const std::vector<char>& fileConte
 	objectRequest.SetKey(objectKey);
 
 	auto streamBuf = Aws::MakeShared<Aws::Utils::Stream::PreallocatedStreamBuf>("",
-		reinterpret_cast<unsigned char*>(const_cast<char*>(fileContents.data())), 
-		fileContents.size());
+	    reinterpret_cast<unsigned char*>(const_cast<char*>(fileContents.data())),
+	    fileContents.size());
 	auto stream = Aws::MakeShared<Aws::IOStream>("", streamBuf.get());
-    stream->seekg(0, std::ios::beg);
+	stream->seekg(0, std::ios::beg);
 
-    objectRequest.SetBody(stream);
+	objectRequest.SetBody(stream);
 
 	auto uploadResult = s3Client.PutObject(objectRequest);
-	return uploadResult.IsSuccess() ?
-		UploadResult::Uploaded :
-		UploadResult::Error;
+	return uploadResult.IsSuccess() ? UploadResult::Uploaded : UploadResult::Error;
 }

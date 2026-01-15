@@ -134,7 +134,8 @@ void ThreadPool::Initialize(int size, LFSClient* lfsClient)
 					    m_ThreadExceptions[i] = std::current_exception();
 				    }
 				    m_JobsProcessing--;
-			    } }));
+			    }
+		    }));
 	}
 }
 

@@ -424,7 +424,8 @@ int Main(int argc, char** argv)
 
 	// Check if all changelists appear only once
 	std::set<std::string> uniqueChangeListNumbers;
-	for (const ChangeList& cl : changes) {
+	for (const ChangeList& cl : changes)
+	{
 		uniqueChangeListNumbers.insert(cl.number);
 	}
 	if (uniqueChangeListNumbers.size() != changes.size())
