@@ -60,7 +60,7 @@ jobs:
 
     - name: Generate CMake project
       run: |
-        ./generate_cache.sh Release p
+        ./generate_cache.sh Release pt
 
     - name: Build
       run: |
@@ -75,6 +75,10 @@ jobs:
 
         echo "Help output"
         "$BINARY_PATH" --help
+
+    - name: Test
+      run: |
+          ./build/tests/p4-fusion-test
 
     - name: Package binary
       run: |
