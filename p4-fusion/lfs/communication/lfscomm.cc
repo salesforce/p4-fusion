@@ -30,8 +30,7 @@ const char* GetUserAgent()
 		    if (version_info && version_info->version)
 		    {
 			    result = std::string("curl/") + version_info->version;
-		    }
-	    });
+		    } });
 
 	return result.c_str();
 }
@@ -200,8 +199,7 @@ RequestResult PerformPostRequestWithRetry(CURL* curl,
 			    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.response_code);
 		    }
 
-		    return result;
-	    });
+		    return result; });
 }
 
 // Helper function to perform a PUT request with binary data
@@ -224,8 +222,7 @@ RequestResult PerformPutRequestWithRetry(CURL* curl, const std::string& url,
 			    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.response_code);
 		    }
 
-		    return result;
-	    });
+		    return result; });
 }
 
 struct BatchResponse
@@ -407,8 +404,7 @@ Communicator::UploadResult PerformUpload(const std::string& uploadUrl, const std
 		    {
 			    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &uploadResult.response_code);
 		    }
-		    return uploadResult;
-	    });
+		    return uploadResult; });
 
 	curl_slist_free_all(uploadHeaders);
 
@@ -466,8 +462,7 @@ bool PerformVerify(const std::string& verifyUrl, const std::string& oid, size_t 
 		    {
 			    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &verifyResult.response_code);
 		    }
-		    return verifyResult;
-	    });
+		    return verifyResult; });
 
 	curl_slist_free_all(verifyHeaders);
 

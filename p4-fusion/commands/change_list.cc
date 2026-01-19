@@ -56,8 +56,7 @@ void ChangeList::PrepareDownload(const BranchSet& branchSet)
 
 		    std::unique_lock<std::mutex> lock(*cl.stateMutex);
 		    cl.state = Described;
-		    cl.stateCV->notify_all();
-	    });
+		    cl.stateCV->notify_all(); });
 }
 
 void ChangeList::StartDownloadAndLFSUpload(int nPrintBatch)
@@ -108,8 +107,7 @@ void ChangeList::StartDownloadAndLFSUpload(int nPrintBatch)
 
 		    // Download any remaining files that were smaller in number than the total batch size.
 		    // Additionally, signal the batch processing end.
-		    cl.DownloadBatch(printBatchFiles, printBatchFileData);
-	    });
+		    cl.DownloadBatch(printBatchFiles, printBatchFileData); });
 }
 
 void ChangeList::DownloadBatch(std::shared_ptr<std::vector<std::string>> printBatchFiles, std::shared_ptr<std::vector<FileData*>> printBatchFileData)
@@ -160,8 +158,7 @@ void ChangeList::DownloadBatch(std::shared_ptr<std::vector<std::string>> printBa
 		    {
 			    state = CommitReady;
 			    stateCV->notify_all();
-		    }
-	    });
+		    } });
 }
 
 void ChangeList::WaitForBeingCommitReady()

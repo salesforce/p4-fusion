@@ -37,7 +37,7 @@ Communicator::UploadResult S3Comm::UploadFile(const std::vector<char>& fileConte
 
 	std::string objectKey = m_Repository + "/" + oid;
 
-	//Check if object already exists
+	// Check if object already exists
 	Aws::S3::Model::HeadObjectRequest headRequest;
 	headRequest.SetBucket(m_Bucket);
 	headRequest.SetKey(objectKey);

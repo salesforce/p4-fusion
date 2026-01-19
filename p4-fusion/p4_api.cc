@@ -205,7 +205,8 @@ ChangesResult P4API::Changes(const std::string& path, const std::string& from, i
 {
 	std::vector<std::string> args = {
 		"-l", // Get full descriptions instead of sending cut-short ones
-		"-s", "submitted", // Only include submitted CLs
+		"-s",
+		"submitted", // Only include submitted CLs
 	};
 
 	// This needs to be declared outside the if scope below to
