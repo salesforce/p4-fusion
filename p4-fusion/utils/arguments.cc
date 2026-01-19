@@ -42,12 +42,23 @@ static std::unique_ptr<std::vector<std::string>> ArgsFromFile(const std::string&
 		std::string errorMessage;
 		switch (resultCode)
 		{
-			case WRDE_BADCHAR: errorMessage = "Illegal newline or |&;<>(){}"; break; 
-			case WRDE_BADVAL: errorMessage = "An undefined shell variable was referenced"; break;
-			case WRDE_CMDSUB: errorMessage = "Command substitution not allowed"; break;
-			case WRDE_NOSPACE: errorMessage = "Out of memory"; break;
-			case WRDE_SYNTAX: errorMessage = "Syntax error"; break;
-			default: break;
+		case WRDE_BADCHAR:
+			errorMessage = "Illegal newline or |&;<>(){}";
+			break;
+		case WRDE_BADVAL:
+			errorMessage = "An undefined shell variable was referenced";
+			break;
+		case WRDE_CMDSUB:
+			errorMessage = "Command substitution not allowed";
+			break;
+		case WRDE_NOSPACE:
+			errorMessage = "Out of memory";
+			break;
+		case WRDE_SYNTAX:
+			errorMessage = "Syntax error";
+			break;
+		default:
+			break;
 		}
 		ERR("Error parsing config file: " << errorMessage);
 		return nullptr;
@@ -190,13 +201,12 @@ bool Arguments::IsValid() const
 		}
 	}
 
-	const bool hasAnyLFSParam = !GetLFSSpecs().empty() || !GetLFSServerUrl().empty() ||
-		!GetLFSUsername().empty() || !GetLFSPassword().empty() || !GetLFSToken().empty() || !GetLFSAPI().empty() ||
-		!GetLFSS3Bucket().empty() || !GetLFSS3Repository().empty();
+	const bool hasAnyLFSParam = !GetLFSSpecs().empty() || !GetLFSServerUrl().empty() || !GetLFSUsername().empty() || !GetLFSPassword().empty() || !GetLFSToken().empty() || !GetLFSAPI().empty() || !GetLFSS3Bucket().empty() || !GetLFSS3Repository().empty();
 	const bool hasAllLFSParams = !GetLFSSpecs().empty() && !GetLFSServerUrl().empty() && !GetLFSAPI().empty();
 	if (hasAnyLFSParam && !hasAllLFSParams)
 		return false;
-	if (hasAnyLFSParam) {
+	if (hasAnyLFSParam)
+	{
 		const std::string& lfsAPI = GetLFSAPI();
 		if (lfsAPI != "lfs" && lfsAPI != "s3")
 		{
