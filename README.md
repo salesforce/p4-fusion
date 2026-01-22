@@ -119,10 +119,16 @@ These execution times are expected to scale as expected with larger depots (mill
         Specify the name of the repository used to store LFS files in S3 bucket.
 
 --overrideToBinary [Optional, Default is empty]
-        Path spec for files to be handled as binary, even when their P4 type is something else. Normally this results in them being ignored instead of committed. In includeBinaries+LFS mode, the LFS pathspecs control where to commit what; in that case this does nothing.Can be specified more than once.
+        Path spec for files to be handled as binary, even when their P4 type is something else.
+        Normally this results in them being ignored instead of committed.
+        In includeBinaries+LFS mode, the LFS pathspecs control where to commit what;
+        in that case this does nothing.Can be specified more than once.
 
 --overrideToText [Optional, Default is empty]
-        Path spec for files to be handled as text, even when their P4 type is binary or something else. Normally this results in them being committed to the Git repo instead of ignored. In includeBinaries+LFS mode, the LFS pathspecs control where to commit what; in that case this only serves to silence a warning.Can be specified more than once.
+        Path spec for files to be handled as text, even when their P4 type is binary or something else.
+        Normally this results in them being committed to the Git repo instead of ignored.
+        In includeBinaries+LFS mode, the LFS pathspecs control where to commit what;
+        in that case this only serves to silence a warning.Can be specified more than once.
 ```
 
 ## Notes On Branches
