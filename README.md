@@ -84,6 +84,45 @@ These execution times are expected to scale as expected with larger depots (mill
 
 --user [Required]
         Specify which P4USER to use. Please ensure that the user is logged in.
+
+--config [Optional, Default is empty]
+        Path to a file that can contain additional command line arguments.
+
+--exclude [Optional, Default is empty]
+        A regex used to exclude files from the conversion. Can be specified more than once.
+
+--excludeLogPath [Optional, Default is empty string]
+        Path to a file where the excluded files will be logged. If not provided, logging to file will not occur.
+
+--lfsSpec [Optional, Default is empty]
+        Path spec for files to be handled by Git LFS. Can be specified more than once.
+
+--lfsServerUrl [Optional, Default is empty string]
+        URL of the Git LFS server to use for uploading files with basic transfer.
+
+--lfsUsername [Optional, Default is empty string]
+        Git LFS username for basic access authentication.
+
+--lfsPassword [Optional, Default is empty string]
+        Git LFS password for basic access authentication.
+
+--lfsToken [Optional, Default is empty string]
+        Git LFS token for authentication.
+
+--lfsAPI [Optional, Default is lfs]
+        Specify the type of the used LFS server API. The types currently supported are 'lfs' (the default) and 's3'.
+
+--lfsS3Bucket [Optional, Default is empty string]
+        Specify the name of the S3 bucket to use for LFS storage.
+
+--lfsS3Repository [Optional, Default is empty string]
+        Specify the name of the repository used to store LFS files in S3 bucket.
+
+--overrideToBinary [Optional, Default is empty]
+        Path spec for files to be handled as binary, even when their P4 type is something else. Normally this results in them being ignored instead of committed. In includeBinaries+LFS mode, the LFS pathspecs control where to commit what; in that case this does nothing.Can be specified more than once.
+
+--overrideToText [Optional, Default is empty]
+        Path spec for files to be handled as text, even when their P4 type is binary or something else. Normally this results in them being committed to the Git repo instead of ignored. In includeBinaries+LFS mode, the LFS pathspecs control where to commit what; in that case this only serves to silence a warning.Can be specified more than once.
 ```
 
 ## Notes On Branches
