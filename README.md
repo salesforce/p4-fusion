@@ -91,9 +91,9 @@ These execution times are expected to scale as expected with larger depots (mill
 --exclude [Optional, Default is empty]
         A regex used to exclude files from the conversion. Can be specified more than once.
         Examples:
-                Exclude all files in DeveloperScripts except files in GSPython folders and InstallGSPython scripts: --exclude "//Internal-Tools/Main/Development/DeveloperScripts/(?!GSPython/.|GSPython3/.|GSPythonTest/.|InstallGSPythonMac.sh|InstallGSPythonWin.bat)"
-                Exclude all .pyc files: --exclude ".*.pyc"
-                Exclude a specific file: -exclude "//Internal-Tools/Main/Development/DeveloperScripts/Coverage/FilteredOpenCppCoverage/config/OpenCppCoverageSetup-x64-0.9.9.0.exe"
+                Exclude all files in Tools/Development, except AModule.ini and files in AModule, AModuleTest: --exclude "//Tools/Development/(?!AModule/.*|AModuleTest/.*|AModule\.ini).*"
+                Exclude all .pyc files: --exclude ".*\.pyc"
+                Exclude a specific file: --exclude "//Tools/Development/BModule/OpenCppCoverageSetup-x64-0.9.9.0.exe"
 
 --excludeLogPath [Optional, Default is empty string]
         Path to a file where the excluded files will be logged. If not provided, logging to file will not occur.
