@@ -252,7 +252,7 @@ std::string Arguments::Help()
 		}
 		else
 		{
-			text += "\033[93m[Optional, Default is " + (paramData.valueList.empty() ? "empty" : paramData.valueList.back()) + "]\033[0m";
+			text += "\033[93m[Optional, Default is " + (paramData.valueList.empty() ? "empty" : paramData.valueList.back().empty() ? "empty string" : paramData.valueList.back()) + "]\033[0m";
 		}
 		text += "\n        " + paramData.helpText + "\n\n";
 	}
