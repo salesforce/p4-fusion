@@ -62,8 +62,12 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->OptionalParameter("--includeBinaries", "false", "Do not discard binary files while downloading changelists.");
 	Arguments::GetSingleton()->OptionalParameter("--flushRate", "1000", "Rate at which profiling data is flushed on the disk.");
 	Arguments::GetSingleton()->OptionalParameter("--noColor", "false", "Disable colored output.");
-	Arguments::GetSingleton()->OptionalParameterList("--exclude", "A regex used to exclude files from the conversion. Can be specified more than once.");
-	Arguments::GetSingleton()->OptionalParameter("--excludeLogPath", "", "Path to a file where the excluded files will be logged.");
+	Arguments::GetSingleton()->OptionalParameterList("--exclude", "A regex used to exclude files from the conversion. Can be specified more than once.\n"
+	                                                              "\tExamples:\n"
+	                                                              "\t\tExclude all files in Tools/Development, except AModule.ini and files in AModule, AModuleTest: --exclude \"//Tools/Development/(?!AModule/.*|AModuleTest/.*|AModule\\.ini).*\"\n"
+	                                                              "\t\tExclude all .pyc files: --exclude \".*\\.pyc\"\n"
+	                                                              "\t\tExclude a specific file: --exclude \"//Tools/Development/BModule/OpenCppCoverageSetup-x64-0.9.9.0.exe\"\n");
+	Arguments::GetSingleton()->OptionalParameter("--excludeLogPath", "", "Path to a file where the excluded files will be logged. If not provided, logging to file will not occur.");
 	Arguments::GetSingleton()->OptionalParameter("--streamMappings", "false", "Use Mappings defined by Perforce Stream Spec for a given stream");
 	Arguments::GetSingleton()->OptionalParameterList("--lfsSpec", "Path spec for files to be handled by Git LFS. Can be specified more than once.");
 	Arguments::GetSingleton()->OptionalParameter("--lfsServerUrl", "", "URL of the Git LFS server to use for uploading files with basic transfer.");
