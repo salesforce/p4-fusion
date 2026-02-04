@@ -369,7 +369,7 @@ BatchResponse PerformBatchUploadRequest(const std::string& serverUrl, const Cred
 	return result;
 }
 
-Communicator::UploadResult PerformUpload(const std::string& uploadUrl, const std::vector<char>& fileContents, const std::map<std::string, std::string>& actionHeaders)
+Communicator::UploadResult PerformUpload(const std::string& uploadUrl, const std::vector<char>& fileContents, const std::map<std::string, std::string>& actionHeaders, const Credentials& auth = Credentials())
 {
 	// Initialize curl
 	CURLHandle curl;
@@ -394,7 +394,7 @@ Communicator::UploadResult PerformUpload(const std::string& uploadUrl, const std
 	uploadHeaders = CreateHeadersFromMap(actionHeaders, uploadHeaders);
 
 	RequestResult uploadResult = {};
-	SetupRequest(curl.get(), uploadUrl, fileContents.data(), fileContents.size(), uploadHeaders, &uploadResult);
+	SetupRequest(curl.get(), uploadUrl, fileContents.data(), fileContents.size(), uploadHeaders, &uploadResult, auth);
 	curl_easy_setopt(curl.get(), CURLOPT_CUSTOMREQUEST, "PUT");
 
 	uploadResult = PerformRequestWithRetry([&]() -> RequestResult
@@ -436,7 +436,7 @@ std::string CreateVerifyPayload(const std::string& oid, size_t fileSize)
 	return verifyBuffer.GetString();
 }
 
-bool PerformVerify(const std::string& verifyUrl, const std::string& oid, size_t fileSize, const std::map<std::string, std::string>& actionHeaders)
+bool PerformVerify(const std::string& verifyUrl, const std::string& oid, size_t fileSize, const std::map<std::string, std::string>& actionHeaders, const Credentials& auth = Credentials())
 {
 	CURLHandle curl;
 	if (!curl)
@@ -453,7 +453,7 @@ bool PerformVerify(const std::string& verifyUrl, const std::string& oid, size_t 
 
 	// Perform request without authentication (headers from action should contain auth)
 	RequestResult verifyResult = {};
-	SetupRequest(curl.get(), verifyUrl, verifyPayload.data(), verifyPayload.size(), verifyHeaders, &verifyResult);
+	SetupRequest(curl.get(), verifyUrl, verifyPayload.data(), verifyPayload.size(), verifyHeaders, &verifyResult, auth);
 
 	verifyResult = PerformRequestWithRetry([&]() -> RequestResult
 	    {
@@ -492,7 +492,7 @@ Communicator::UploadResult LFSComm::UploadFile(const std::vector<char>& fileCont
 		return UploadResult::AlreadyExists;
 	}
 
-	auto uploadResult = PerformUpload(batchResponse.uploadUrl, fileContents, batchResponse.uploadHeaders);
+	auto uploadResult = PerformUpload(batchResponse.uploadUrl, fileContents, batchResponse.uploadHeaders, m_Creds);
 	if (uploadResult != UploadResult::Uploaded)
 	{
 		return uploadResult;
@@ -500,7 +500,7 @@ Communicator::UploadResult LFSComm::UploadFile(const std::vector<char>& fileCont
 
 	if (!batchResponse.verifyUrl.empty())
 	{
-		if (!PerformVerify(batchResponse.verifyUrl, oid, fileContents.size(), batchResponse.verifyHeaders))
+		if (!PerformVerify(batchResponse.verifyUrl, oid, fileContents.size(), batchResponse.verifyHeaders, m_Creds))
 		{
 			return UploadResult::Error;
 		}
