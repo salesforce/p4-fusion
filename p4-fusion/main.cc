@@ -90,7 +90,7 @@ int Main(int argc, char** argv)
 	P4API::P4PORT = Arguments::GetSingleton()->GetPort();
 	P4API::P4USER = Arguments::GetSingleton()->GetUsername();
 
-	const Error& serviceConnectionResult = P4API().TestConnection(5).GetError();
+	const Error serviceConnectionResult = P4API().TestConnection(5)->GetError();
 	bool serverAvailable = serviceConnectionResult.IsError() == 0;
 	if (serverAvailable)
 	{
@@ -102,7 +102,7 @@ int Main(int argc, char** argv)
 		return 1;
 	}
 	P4API::P4CLIENT = Arguments::GetSingleton()->GetClient();
-	P4API::ClientSpec = P4API().Client().GetClientSpec();
+	P4API::ClientSpec = P4API().Client()->GetClientSpec();
 
 	if (P4API::ClientSpec.mapping.empty())
 	{
@@ -169,7 +169,7 @@ int Main(int argc, char** argv)
 		auto tempStr = depotPath.substr(0, depotPath.size() - 4);
 		auto val = p4.Stream(tempStr);
 		// First we get the shallow imports.
-		for (auto const& v : val.GetStreamSpec().mapping)
+		for (auto const& v : val->GetStreamSpec().mapping)
 		{
 			// We don't need stream isolate or share, so we don't check them
 			if (v.rule == StreamResult::EStreamImport)
@@ -196,7 +196,7 @@ int Main(int argc, char** argv)
 			// A path isn't nessecarily a fully qualified stream in itself but p4 stream works with arbitrary paths
 			auto streamName = mappings[idx].stream2.substr(0, mappings[idx].stream2.size() - 4);
 			auto subStream = p4.Stream(streamName);
-			for (auto& v : subStream.GetStreamSpec().mapping)
+			for (auto& v : subStream->GetStreamSpec().mapping)
 			{
 				// According to the perforce rules, exclude should not be propagated outside the parent stream
 				// The only rules we need to care about are import and exclude.
@@ -279,14 +279,14 @@ int Main(int argc, char** argv)
 
 	PRINT("Requesting changelists to convert from the Perforce server");
 
-	std::vector<ChangeList> changes = std::move(p4.Changes(depotPath, resumeFromCL, maxChanges).GetChanges());
+	std::vector<ChangeList> changes = std::move(p4.Changes(depotPath, resumeFromCL, maxChanges)->GetChanges());
 
 	if (streamMappings)
 	{
 		PRINT("Path: " << depotPath << " has " << changes.size() << " changes!");
 		for (auto const& mapped : mappings)
 		{
-			std::vector<ChangeList> temp = std::move(p4.Changes(mapped.stream2, resumeFromCL, maxChanges).GetChanges());
+			std::vector<ChangeList> temp = std::move(p4.Changes(mapped.stream2, resumeFromCL, maxChanges)->GetChanges());
 			PRINT("Path: " << mapped.stream2 << " has " << temp.size() << " changes!");
 			changes.insert(changes.end(), std::make_move_iterator(temp.begin()), std::make_move_iterator(temp.end()));
 		}
@@ -340,11 +340,11 @@ int Main(int argc, char** argv)
 
 	SUCCESS("Queued first " << startupDownloadsCount << " CLs up until CL " << changes.at(lastDownloadedCL).number << " for downloading");
 
-	int timezoneMinutes = p4.Info().GetServerTimezoneMinutes();
+	int timezoneMinutes = p4.Info()->GetServerTimezoneMinutes();
 	SUCCESS("Perforce server timezone is " << timezoneMinutes << " minutes");
 
 	// Map usernames to emails
-	const std::unordered_map<UsersResult::UserID, UsersResult::UserData> users = std::move(p4.Users().GetUserEmails());
+	const std::unordered_map<UsersResult::UserID, UsersResult::UserData> users = std::move(p4.Users()->GetUserEmails());
 	SUCCESS("Received userbase details from the Perforce server");
 
 	// Commit procedure start

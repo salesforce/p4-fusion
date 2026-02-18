@@ -29,7 +29,20 @@
 GitAPI::GitAPI(bool fsyncEnable)
 {
 	git_libgit2_init();
+
 	GIT2(git_libgit2_opts(GIT_OPT_ENABLE_FSYNC_GITDIR, (int)fsyncEnable));
+
+    // Since we trust the hard-drive and operating system, we can skip the verification.
+    GIT2(git_libgit2_opts(GIT_OPT_ENABLE_STRICT_HASH_VERIFICATION, (int)0));
+
+    // Global RAM cache: 1gb...
+    GIT2(git_libgit2_opts(GIT_OPT_SET_CACHE_MAX_SIZE, (ssize_t)(1024 * 1024 * 1024)));
+
+    // 20Mb for the file name tree cache...
+    GIT2(git_libgit2_opts(GIT_OPT_SET_CACHE_OBJECT_LIMIT, GIT_OBJECT_TREE, (size_t)(20 * 1024 * 1024)));
+    
+    // 20Mb for commit info cache...
+    GIT2(git_libgit2_opts(GIT_OPT_SET_CACHE_OBJECT_LIMIT, GIT_OBJECT_COMMIT, (size_t)(20 * 1024 * 1024)));
 }
 
 GitAPI::~GitAPI()

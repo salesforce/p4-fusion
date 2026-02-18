@@ -13,7 +13,15 @@ class Result : public ClientUser
 	Error m_Error;
 
 public:
+    Result() = default;
+
 	void HandleError(Error* e) override;
 
 	const Error& GetError() const { return m_Error; }
+
+    Result(const Result&) = delete;
+    Result& operator=(const Result&) = delete;
+
+    Result(Result&&) = delete;
+    Result& operator=(Result&&) = delete;
 };

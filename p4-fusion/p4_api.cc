@@ -7,6 +7,7 @@
 #include "p4_api.h"
 
 #include <csignal>
+#include <memory>
 
 #include "commands/stream_result.h"
 #include "utils/std_helpers.h"
@@ -166,32 +167,32 @@ void P4API::UpdateClientSpec()
 	Run<Result>("client", {});
 }
 
-ClientResult P4API::Client()
+std::unique_ptr<ClientResult> P4API::Client()
 {
 	return Run<ClientResult>("client", { "-o" });
 }
 
-StreamResult P4API::Stream(const std::string& path)
+std::unique_ptr<StreamResult> P4API::Stream(const std::string& path)
 {
 	return Run<StreamResult>("stream", { "-o", path });
 }
 
-TestResult P4API::TestConnection(const int retries)
+std::unique_ptr<TestResult> P4API::TestConnection(const int retries)
 {
 	return RunEx<TestResult>("changes", { "-m", "1", "//..." }, retries);
 }
 
-ChangesResult P4API::ShortChanges(const std::string& path)
+std::unique_ptr<ChangesResult> P4API::ShortChanges(const std::string& path)
 {
-	ChangesResult changes = Run<ChangesResult>("changes", {
+	std::unique_ptr<ChangesResult> changes = Run<ChangesResult>("changes", {
 	                                                          "-s", "submitted", // Only include submitted CLs
 	                                                          path // Depot path to get CLs from
 	                                                      });
-	changes.reverse();
+	changes->reverse();
 	return changes;
 }
 
-ChangesResult P4API::Changes(const std::string& path)
+std::unique_ptr<ChangesResult> P4API::Changes(const std::string& path)
 {
 	MTR_SCOPE("P4", __func__);
 	return Run<ChangesResult>("changes", {
@@ -201,7 +202,7 @@ ChangesResult P4API::Changes(const std::string& path)
 	                                     });
 }
 
-ChangesResult P4API::Changes(const std::string& path, const std::string& from, int32_t maxCount)
+std::unique_ptr<ChangesResult> P4API::Changes(const std::string& path, const std::string& from, int32_t maxCount)
 {
 	std::vector<std::string> args = {
 		"-l", // Get full descriptions instead of sending cut-short ones
@@ -231,12 +232,12 @@ ChangesResult P4API::Changes(const std::string& path, const std::string& from, i
 
 	args.push_back(path + pathAddition);
 
-	ChangesResult result = Run<ChangesResult>("changes", args);
-	result.reverse();
+	std::unique_ptr<ChangesResult> result = Run<ChangesResult>("changes", args);
+	result->reverse();
 	return result;
 }
 
-ChangesResult P4API::ChangesFromTo(const std::string& path, const std::string& from, const std::string& to)
+std::unique_ptr<ChangesResult> P4API::ChangesFromTo(const std::string& path, const std::string& from, const std::string& to)
 {
 	std::string pathArg = path + "@" + from + "," + to;
 	return Run<ChangesResult>("changes", {
@@ -245,7 +246,7 @@ ChangesResult P4API::ChangesFromTo(const std::string& path, const std::string& f
 	                                     });
 }
 
-ChangesResult P4API::LatestChange(const std::string& path)
+std::unique_ptr<ChangesResult> P4API::LatestChange(const std::string& path)
 {
 	MTR_SCOPE("P4", __func__);
 	return Run<ChangesResult>("changes", {
@@ -255,25 +256,25 @@ ChangesResult P4API::LatestChange(const std::string& path)
 	                                     });
 }
 
-ChangesResult P4API::OldestChange(const std::string& path)
+std::unique_ptr<ChangesResult> P4API::OldestChange(const std::string& path)
 {
-	ChangesResult changes = Run<ChangesResult>("changes", {
+	std::unique_ptr<ChangesResult> changes = Run<ChangesResult>("changes", {
 	                                                          "-s", "submitted", // Only include submitted CLs,
 	                                                          "-m", "1", // Get top-most change
 	                                                          path // Depot path to get CLs from
 	                                                      });
-	changes.reverse();
+	changes->reverse();
 	return changes;
 }
 
-DescribeResult P4API::Describe(const std::string& cl)
+std::unique_ptr<DescribeResult> P4API::Describe(const std::string& cl)
 {
 	MTR_SCOPE("P4", __func__);
 	return Run<DescribeResult>("describe", { "-s", // Omit the diffs
 	                                           cl });
 }
 
-FileLogResult P4API::FileLog(const std::string& changelist)
+std::unique_ptr<FileLogResult> P4API::FileLog(const std::string& changelist)
 {
 	return Run<FileLogResult>("filelog", {
 	                                         "-c", // restrict output to a single changelist
@@ -283,17 +284,17 @@ FileLogResult P4API::FileLog(const std::string& changelist)
 	                                     });
 }
 
-SizesResult P4API::Size(const std::string& file)
+std::unique_ptr<SizesResult> P4API::Size(const std::string& file)
 {
 	return Run<SizesResult>("sizes", { "-a", "-s", file });
 }
 
-Result P4API::Sync()
+std::unique_ptr<Result> P4API::Sync()
 {
 	return Run<Result>("sync", {});
 }
 
-SyncResult P4API::GetFilesToSyncAtCL(const std::string& path, const std::string& cl)
+std::unique_ptr<SyncResult> P4API::GetFilesToSyncAtCL(const std::string& path, const std::string& cl)
 {
 	std::string clCommand = "@" + cl;
 	return Run<SyncResult>("sync", {
@@ -302,40 +303,40 @@ SyncResult P4API::GetFilesToSyncAtCL(const std::string& path, const std::string&
 	                               });
 }
 
-PrintResult P4API::PrintFile(const std::string& filePathRevision)
+std::unique_ptr<PrintResult> P4API::PrintFile(const std::string& filePathRevision)
 {
 	return Run<PrintResult>("print", {
 	                                     filePathRevision,
 	                                 });
 }
 
-PrintResult P4API::PrintFiles(const std::vector<std::string>& fileRevisions)
+std::unique_ptr<PrintResult> P4API::PrintFiles(const std::vector<std::string>& fileRevisions)
 {
 	MTR_SCOPE("P4", __func__);
 
 	if (fileRevisions.empty())
 	{
-		return PrintResult();
+		return std::unique_ptr<PrintResult>(new PrintResult());
 	}
 
 	return Run<PrintResult>("print", fileRevisions);
 }
 
-Result P4API::Sync(const std::string& path)
+std::unique_ptr<Result> P4API::Sync(const std::string& path)
 {
 	return Run<Result>("sync", {
 	                               path // Sync a particular depot path
 	                           });
 }
 
-UsersResult P4API::Users()
+std::unique_ptr<UsersResult> P4API::Users()
 {
 	return Run<UsersResult>("users", {
 	                                     "-a" // Include service accounts
 	                                 });
 }
 
-InfoResult P4API::Info()
+std::unique_ptr<InfoResult> P4API::Info()
 {
 	return Run<InfoResult>("info", {});
 }
