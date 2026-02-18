@@ -138,7 +138,8 @@ Because of the extra effort the script performs, expect it to take orders of mag
 ## Build
 
 0. Pre-requisites
-  * Install openssl (both 1.1.1 and 3 work)
+  * Install zlib - `brew install zlib`
+  * Install openssl (try 1.1.1, 3.x.x doesn't work with p4 API libs) - `brew install openssl@1.1`
   * Install CMake 3.16+.
   * Install g++ 11.2.0 (older versions compatible with C++11 are also supported).
   * Clone this repository or [get a release distribution](https://github.com/salesforce/p4-fusion/releases).

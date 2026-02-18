@@ -9,13 +9,13 @@ cmakeArgs=(
     -DBUILD_SHARED_LIBS=OFF
     -DBUILD_CLAR=OFF
     -DBUILD_EXAMPLES=OFF
-    -DUSE_BUNDLED_ZLIB=ON
+    -DUSE_BUNDLED_ZLIB=OFF
     -DREGEX_BACKEND=builtin
     -DTHREADSAFE=ON
     -DUSE_SSH=OFF
     -DUSE_HTTPS=OFF
     -DUSE_THREADS=ON
-    -DOPENSSL_ROOT_DIR=/usr/local/ssl
+    -DOPENSSL_ROOT_DIR=/opt/homebrew/Cellar/openssl@1.1/1.1.1w
     -DCMAKE_C_COMPILER=/usr/bin/gcc
     -DCMAKE_CXX_COMPILER=/usr/bin/g++
 )
