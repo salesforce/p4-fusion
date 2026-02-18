@@ -263,7 +263,7 @@ std::string GitAPI::Commit(
     const std::string& user,
     const std::string& email,
     const int& timezone,
-    const std::string& desc,
+    std::string desc,
     const int64_t& timestamp,
     const std::string& mergeFromStream)
 {
@@ -277,6 +277,11 @@ std::string GitAPI::Commit(
 
 	git_signature* author = nullptr;
 	GIT2(git_signature_new(&author, user.c_str(), email.c_str(), timestamp, timezone));
+
+	STDHelpers::StripSurrounding(desc, '\n');
+	STDHelpers::StripSurrounding(desc, '\r');
+	STDHelpers::StripSurrounding(desc, ' ');
+	STDHelpers::StripSurrounding(desc, '\t');
 
 	// -3 to remove the trailing "..."
 	std::string commitMsg = cl + " - " + desc + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl + "]";

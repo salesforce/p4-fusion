@@ -313,29 +313,30 @@ int Main(int argc, char** argv)
 	ThreadPool::GetSingleton()->Initialize(networkThreads);
 	SUCCESS("Created " << ThreadPool::GetSingleton()->GetThreadCount() << " threads in thread pool");
 
-	int startupDownloadsCount = 0;
-
+	
 	// Go in the chronological order
 	size_t lastDownloadedCL = 0;
 	for (size_t currentCL = 0; currentCL < changes.size() && currentCL < lookAhead; currentCL++)
 	{
 		ChangeList& cl = changes.at(currentCL);
-
+		
 		// Start gathering changed files with `p4 describe` or `p4 filelog`
 		cl.PrepareDownload(branchSet);
-
+		
 		lastDownloadedCL = currentCL;
 	}
-
+	
 	// This is intentionally put in a separate loop.
 	// We want to submit `p4 describe` commands before sending any of the `p4 print` commands.
 	// Gives ~15% perf boost.
+	int startupDownloadsCount = 0;
 	for (size_t currentCL = 0; currentCL <= lastDownloadedCL; currentCL++)
 	{
 		ChangeList& cl = changes.at(currentCL);
 
 		// Start running `p4 print` on changed files when the describe is finished
 		cl.StartDownload(printBatch);
+		startupDownloadsCount++;
 	}
 
 	SUCCESS("Queued first " << startupDownloadsCount << " CLs up until CL " << changes.at(lastDownloadedCL).number << " for downloading");
