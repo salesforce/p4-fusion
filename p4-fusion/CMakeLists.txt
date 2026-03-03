@@ -48,6 +48,6 @@ target_link_libraries(p4-fusion PUBLIC
     p4script_cstub
     ${OPENSSL_SSL_LIBRARIES}
     ${OPENSSL_CRYPTO_LIBRARIES}
-    git2
+    libgit2package
     minitrace
 )
