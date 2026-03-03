@@ -76,7 +76,7 @@ public:
 	FileData& operator=(FileData& other);
 
 	void SetFromDepotFile(const std::string& fromDepotFile, const std::string& fromRevision);
-	void SetRelativePath(std::string& relativePath);
+	void SetRelativeDepotPath(const std::string& relativePath);
 	void SetFakeIntegrationDeleteAction() { m_data->SetAction(FAKE_INTEGRATION_DELETE_ACTION_NAME); };
 
 	// moves the argument's data into this file data structure.
@@ -88,7 +88,7 @@ public:
 	const std::string& GetDepotFile() const { return m_data->depotFile; };
 	const std::string& GetRevision() const { return m_data->revision; };
 	const FileAction GetAction() const { return m_data->actionCategory; };
-	const std::string& GetRelativePath() const { return m_data->relativePath; };
+	const std::string& GetRelativeDepotPath() const { return m_data->relativePath; };
 	const std::vector<char>& GetContents() const { return m_data->contents; };
 	bool IsDeleted() const { return m_data->isDeleted; };
 	bool IsIntegrated() const { return m_data->isIntegrated; };

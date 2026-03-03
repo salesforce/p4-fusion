@@ -76,7 +76,7 @@ void FileData::SetPendingDownload()
 	}
 }
 
-void FileData::SetRelativePath(std::string& relativePath)
+void FileData::SetRelativeDepotPath(const std::string& relativePath)
 {
 	m_data->relativePath = relativePath;
 }
