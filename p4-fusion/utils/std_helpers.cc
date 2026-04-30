@@ -5,6 +5,7 @@
  * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 #include "std_helpers.h"
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -64,6 +65,25 @@ void STDHelpers::StripSurrounding(std::string& source, const char c)
 	if (start > 0)
 	{
 		source.erase(0, start);
+	}
+}
+
+std::string STDHelpers::ToLower(const std::string& source)
+{
+	std::string result = source;
+	std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+	return result;
+}
+
+void STDHelpers::ReplaceAll(std::string& str, const std::string& find, const std::string& replace)
+{
+	std::string::size_type pos;
+	std::string::size_type startPos = 0;
+
+	while ((pos = str.find(find, startPos)) != std::string::npos)
+	{
+		str.replace(pos, find.length(), replace);
+		startPos = pos + replace.length();
 	}
 }
 
