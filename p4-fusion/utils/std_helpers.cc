@@ -5,6 +5,7 @@
  * For full license text, see the LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 #include "std_helpers.h"
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
