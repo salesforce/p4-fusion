@@ -86,6 +86,16 @@ These execution times are expected to scale as expected with larger depots (mill
         Specify which P4USER to use. Please ensure that the user is logged in.
 ```
 
+### Capturing Output
+
+Though not required, we recommend capturing the output from standard out and standard error.  This allows you to review any errors reported by the tool, and also captures the mapping between the git commit ID, git branch, and Perforce changelist.
+
+With a POSIX shell, you can capture them both to the same file with:
+
+```shell
+p4-fusion ARGUMENTS 2>&1 | tee p4-fusion.log
+```
+
 ## Notes On Branches
 
 When at least one branch argument exists, the tool will enable branching mode.
@@ -131,7 +141,7 @@ A side effect of stream mapping mode is that you can use stream mappings to excl
 
 In order to test the validity of the logic, we need to run the program over a Perforce depot and compare each changelist against the corresponding Git commit SHA, to ensure the files match up.
 
-The provided script [validate-migration.sh](validate-migration.sh) runs through every generated Git commit, and ensures the file state exactly matches the state of the Perforce depot.
+The provided script [validate-migration.sh](validate-migration.sh) runs through every generated Git commit, and ensures the file state exactly matches the state of the Perforce depot.  In order to run this script, you must capture the output from the p4-fusion command to a file.
 
 Because of the extra effort the script performs, expect it to take orders of magnitude longer than the original p4-fusion execution.
 
@@ -192,6 +202,12 @@ E.g. You can build tests and at the same time enable profiling by running `./gen
 There should be a Git repo being created in the `clones/.git` directory with commits being created as the tool runs.
 
 > Note: The Git repository is created bare i.e. without a working directory and running the same command again shall detect the last committed CL and only continue from that CL onwards. Binaries files are ignored by default and this behaviour can be changed by using the `--includeBinaries` option. We do not handle `.git` directories in the Perforce history.
+
+If you wish to check your results with the [validate-migration.sh](#checking-results) script, then you will also need to capture the output from standard out.  You can do that by running the command, like above, with the standard shell commands to pipe the output to a file:
+
+```shell
+./build/p4-fusion/p4-fusion ARGUMENTS | tee p4-fusion.log
+```
 
 ## Contributing
 
