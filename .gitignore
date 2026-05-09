@@ -14,3 +14,4 @@ clones/
 
 # Testing failures
 core
+.cache/

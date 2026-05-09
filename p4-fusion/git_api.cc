@@ -29,7 +29,20 @@
 GitAPI::GitAPI(bool fsyncEnable)
 {
 	git_libgit2_init();
+
 	GIT2(git_libgit2_opts(GIT_OPT_ENABLE_FSYNC_GITDIR, (int)fsyncEnable));
+
+	// Since we trust the hard-drive and operating system, we can skip the verification.
+	GIT2(git_libgit2_opts(GIT_OPT_ENABLE_STRICT_HASH_VERIFICATION, (int)0));
+
+	// Global RAM cache: 1gb...
+	GIT2(git_libgit2_opts(GIT_OPT_SET_CACHE_MAX_SIZE, (ssize_t)(1024 * 1024 * 1024)));
+
+	// 20Mb for the file name tree cache...
+	GIT2(git_libgit2_opts(GIT_OPT_SET_CACHE_OBJECT_LIMIT, GIT_OBJECT_TREE, (size_t)(20 * 1024 * 1024)));
+
+	// 20Mb for commit info cache...
+	GIT2(git_libgit2_opts(GIT_OPT_SET_CACHE_OBJECT_LIMIT, GIT_OBJECT_COMMIT, (size_t)(20 * 1024 * 1024)));
 }
 
 GitAPI::~GitAPI()
@@ -250,7 +263,7 @@ std::string GitAPI::Commit(
     const std::string& user,
     const std::string& email,
     const int& timezone,
-    const std::string& desc,
+    std::string desc,
     const int64_t& timestamp,
     const std::string& mergeFromStream)
 {
@@ -264,6 +277,11 @@ std::string GitAPI::Commit(
 
 	git_signature* author = nullptr;
 	GIT2(git_signature_new(&author, user.c_str(), email.c_str(), timestamp, timezone));
+
+	STDHelpers::StripSurrounding(desc, '\n');
+	STDHelpers::StripSurrounding(desc, '\r');
+	STDHelpers::StripSurrounding(desc, ' ');
+	STDHelpers::StripSurrounding(desc, '\t');
 
 	// -3 to remove the trailing "..."
 	std::string commitMsg = cl + " - " + desc + "\n[p4-fusion: depot-paths = \"" + depotPath.substr(0, depotPath.size() - 3) + "\": change = " + cl + "]";

@@ -9,6 +9,7 @@
 #include <thread>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 
 #include "common.h"
 
@@ -37,9 +38,9 @@ class P4API
 	bool CheckErrors(Error& e, StrBuf& msg);
 
 	template <class T>
-	T Run(const char* command, const std::vector<std::string>& stringArguments);
+	std::unique_ptr<T> Run(const char* command, const std::vector<std::string>& stringArguments);
 	template <class T>
-	T RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries);
+	std::unique_ptr<T> RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries);
 
 public:
 	static std::string P4PORT;
@@ -65,30 +66,30 @@ public:
 
 	void AddClientSpecView(const std::vector<std::string>& viewStrings);
 
-	TestResult TestConnection(const int retries);
-	ChangesResult ShortChanges(const std::string& path);
-	ChangesResult Changes(const std::string& path);
-	ChangesResult Changes(const std::string& path, const std::string& from, int32_t maxCount);
-	ChangesResult ChangesFromTo(const std::string& path, const std::string& from, const std::string& to);
-	ChangesResult LatestChange(const std::string& path);
-	ChangesResult OldestChange(const std::string& path);
-	DescribeResult Describe(const std::string& cl);
-	FileLogResult FileLog(const std::string& changelist);
-	SizesResult Size(const std::string& file);
-	Result Sync();
-	Result Sync(const std::string& path);
-	SyncResult GetFilesToSyncAtCL(const std::string& path, const std::string& cl);
-	PrintResult PrintFile(const std::string& filePathRevision);
-	PrintResult PrintFiles(const std::vector<std::string>& fileRevisions);
+	std::unique_ptr<TestResult> TestConnection(const int retries);
+	std::unique_ptr<ChangesResult> ShortChanges(const std::string& path);
+	std::unique_ptr<ChangesResult> Changes(const std::string& path);
+	std::unique_ptr<ChangesResult> Changes(const std::string& path, const std::string& from, int32_t maxCount);
+	std::unique_ptr<ChangesResult> ChangesFromTo(const std::string& path, const std::string& from, const std::string& to);
+	std::unique_ptr<ChangesResult> LatestChange(const std::string& path);
+	std::unique_ptr<ChangesResult> OldestChange(const std::string& path);
+	std::unique_ptr<DescribeResult> Describe(const std::string& cl);
+	std::unique_ptr<FileLogResult> FileLog(const std::string& changelist);
+	std::unique_ptr<SizesResult> Size(const std::string& file);
+	std::unique_ptr<Result> Sync();
+	std::unique_ptr<Result> Sync(const std::string& path);
+	std::unique_ptr<SyncResult> GetFilesToSyncAtCL(const std::string& path, const std::string& cl);
+	std::unique_ptr<PrintResult> PrintFile(const std::string& filePathRevision);
+	std::unique_ptr<PrintResult> PrintFiles(const std::vector<std::string>& fileRevisions);
 	void UpdateClientSpec();
-	ClientResult Client();
-	StreamResult Stream(const std::string& path);
-	UsersResult Users();
-	InfoResult Info();
+	std::unique_ptr<ClientResult> Client();
+	std::unique_ptr<StreamResult> Stream(const std::string& path);
+	std::unique_ptr<UsersResult> Users();
+	std::unique_ptr<InfoResult> Info();
 };
 
 template <class T>
-inline T P4API::RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries)
+inline std::unique_ptr<T> P4API::RunEx(const char* command, const std::vector<std::string>& stringArguments, const int commandRetries)
 {
 	std::string argsString;
 	for (const std::string& stringArg : stringArguments)
@@ -102,13 +103,13 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 		argsCharArray.push_back((char*)arg.c_str());
 	}
 
-	T clientUser;
+	std::unique_ptr<T> clientUser = std::unique_ptr<T>(new T());
 
 	m_ClientAPI.SetArgv(argsCharArray.size(), argsCharArray.data());
-	m_ClientAPI.Run(command, &clientUser);
+	m_ClientAPI.Run(command, clientUser.get());
 
 	int retries = commandRetries;
-	while (m_ClientAPI.Dropped() || clientUser.GetError().IsError())
+	while (m_ClientAPI.Dropped() || clientUser->GetError().IsError())
 	{
 		if (retries == 0)
 		{
@@ -129,15 +130,15 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 
 		WARN("Retrying: p4 " << command << argsString);
 
-		clientUser = T();
+		clientUser = std::unique_ptr<T>(new T());
 
 		m_ClientAPI.SetArgv(argsCharArray.size(), argsCharArray.data());
-		m_ClientAPI.Run(command, &clientUser);
+		m_ClientAPI.Run(command, clientUser.get());
 
 		retries--;
 	}
 
-	if (m_ClientAPI.Dropped() || clientUser.GetError().IsFatal())
+	if (m_ClientAPI.Dropped() || clientUser->GetError().IsFatal())
 	{
 		ERR("Exiting due to receiving errors even after retrying " << CommandRetries << " times");
 		Deinitialize();
@@ -173,7 +174,7 @@ inline T P4API::RunEx(const char* command, const std::vector<std::string>& strin
 }
 
 template <class T>
-inline T P4API::Run(const char* command, const std::vector<std::string>& stringArguments)
+inline std::unique_ptr<T> P4API::Run(const char* command, const std::vector<std::string>& stringArguments)
 {
 	return RunEx<T>(command, stringArguments, CommandRetries);
 }
