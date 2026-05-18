@@ -8,6 +8,11 @@
 
 void DescribeResult::OutputStat(StrDict* varList)
 {
+	int result = 0;
+	do
+	{
+		result = OutputStatPartial(varList);
+	} while (result == 1);
 }
 
 int DescribeResult::OutputStatPartial(StrDict* varList)
