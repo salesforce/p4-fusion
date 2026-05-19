@@ -13,6 +13,11 @@ void PrintResult::OutputStat(StrDict* varList)
 
 void PrintResult::OutputText(const char* data, int length)
 {
+	if (m_Data.empty())
+	{
+		WARN("Received file content before OutputStat header. Skipping.");
+		return;
+	}
 	std::vector<char>& fileContent = m_Data.back().contents;
 	fileContent.insert(fileContent.end(), data, data + length);
 }
