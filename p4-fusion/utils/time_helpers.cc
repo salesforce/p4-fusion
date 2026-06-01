@@ -6,16 +6,30 @@
  */
 #include "time_helpers.h"
 
+#include <cctype>
+#include <iostream>
+
+#include "log.h"
+
 int Time::GetTimezoneMinutes(const std::string& timezoneStr)
 {
-	// string -> ... serverDate 2021/09/06 04:49:28 -0700 PDT
-	//                          ^                   ^
-	// index  ->                0                  20
-	std::string timezone = timezoneStr.substr(20, 5);
+	// Expected format: "YYYY/MM/DD HH:MM:SS [+-]HHMM TZ"
+	// The timezone sign is at index 20, digits at 21-24.
+	if (timezoneStr.size() < 25)
+	{
+		WARN("Could not parse timezone from serverDate: '" << timezoneStr << "'. Defaulting to UTC.");
+		return 0;
+	}
 
-	int hours = std::stoi(timezone.substr(1, 2));
-	int minutes = std::stoi(timezone.substr(3, 2));
-	int sign = timezone[0] == '-' ? -1 : +1;
+	char c = timezoneStr[20];
+	if ((c != '+' && c != '-') || !std::isdigit(static_cast<unsigned char>(timezoneStr[21])) || !std::isdigit(static_cast<unsigned char>(timezoneStr[22])) || !std::isdigit(static_cast<unsigned char>(timezoneStr[23])) || !std::isdigit(static_cast<unsigned char>(timezoneStr[24])))
+	{
+		WARN("Could not parse timezone from serverDate: '" << timezoneStr << "'. Defaulting to UTC.");
+		return 0;
+	}
 
+	int sign = (c == '-') ? -1 : 1;
+	int hours = (timezoneStr[21] - '0') * 10 + (timezoneStr[22] - '0');
+	int minutes = (timezoneStr[23] - '0') * 10 + (timezoneStr[24] - '0');
 	return sign * (hours * 60 + minutes);
 }

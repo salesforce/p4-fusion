@@ -64,9 +64,17 @@ bool GitAPI::IsRepositoryClonedFrom(const std::string& depotPath)
 	GIT2(git_commit_lookup(&headCommit, m_Repo, &oid));
 
 	std::string message = git_commit_message(headCommit);
-	size_t depotPathStart = message.find("depot-paths = \"") + 15;
-	size_t depotPathEnd = message.find("\": change") - 1;
-	std::string repoDepotPath = message.substr(depotPathStart, depotPathEnd - depotPathStart + 1) + "...";
+
+	size_t startMarker = message.find("depot-paths = \"");
+	size_t endMarker = message.find("\": change");
+	if (startMarker == std::string::npos || endMarker == std::string::npos || endMarker <= startMarker + 15)
+	{
+		WARN("HEAD commit does not contain p4-fusion metadata. Cannot verify depot path.");
+		git_commit_free(headCommit);
+		return false;
+	}
+	size_t depotPathStart = startMarker + 15;
+	std::string repoDepotPath = message.substr(depotPathStart, endMarker - depotPathStart) + "...";
 
 	git_commit_free(headCommit);
 
@@ -161,11 +169,22 @@ std::string GitAPI::DetectLatestCL()
 	GIT2(git_commit_lookup(&headCommit, m_Repo, &oid));
 
 	std::string message = git_commit_message(headCommit);
-	// Look for the specific change message generated from the Commit method.
-	// Note that extra branching information can be added after it.
-	// ": change = " is 11 characters long.
-	size_t clStart = message.rfind(": change = ") + 11;
+
+	size_t marker = message.rfind(": change = ");
+	if (marker == std::string::npos)
+	{
+		ERR("HEAD commit does not contain p4-fusion changelist metadata.");
+		git_commit_free(headCommit);
+		return "";
+	}
+	size_t clStart = marker + 11;
 	size_t clEnd = message.find(']', clStart);
+	if (clEnd == std::string::npos)
+	{
+		ERR("Malformed p4-fusion metadata in HEAD commit.");
+		git_commit_free(headCommit);
+		return "";
+	}
 	std::string cl(message, clStart, clEnd - clStart);
 
 	git_commit_free(headCommit);
