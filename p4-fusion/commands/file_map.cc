@@ -22,13 +22,12 @@ FileMap::FileMap(const FileMap& src)
 
 bool FileMap::IsInLeft(const std::string fileRevision) const
 {
-	MapApi argMap;
-	argMap.SetCaseSensitivity(m_sensitivity);
-	argMap.Insert(StrBuf(fileRevision.c_str()), MapType::MapInclude);
+	StrBuf from(fileRevision.c_str());
+	StrBuf to;
 
 	// MapAPI is poorly written and doesn't declare things as const when it should.
-	std::unique_ptr<MapApi> joinResult(MapApi::Join(const_cast<MapApi*>(&m_map), &argMap));
-	return joinResult != nullptr;
+	MapApi* ref = const_cast<MapApi*>(&m_map);
+	return ref->Translate(from, to, MapDir::MapLeftRight);
 }
 
 bool FileMap::IsInRight(const std::string fileRevision) const
