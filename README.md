@@ -55,6 +55,9 @@ These execution times are expected to scale as expected with larger depots (mill
 --networkThreads [Optional, Default is 16]
         Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.
 
+--noCLRefs [Optional, Default is false]
+        Disable creating a 'refs/cl/<CL>' Git reference for each commit. These refs let you look up the commit for a given Perforce changelist number directly, e.g. 'git show cl/12345'. Enabled by default.
+
 --noColor [Optional, Default is false]
         Disable colored output.
 
@@ -109,6 +112,20 @@ If a Perforce changelist contains an integration like action (move, integrate, c
 Because Perforce integration isn't a 1-to-1 mapping onto Git merge, there can be situations where having the tool mark a commit as a merge, but not bringing over all the changes, leads to later merge logic not picking up every changed file correctly.  To avoid this situation, the `--noMerge true` will ensure they only have the single zero-content root commit shared, so any merge done after the migration will force full file tree inspection.
 
 If the Perforce tree contains sub-branches, such as `//base/tree/sub` being a sub-branch of `//base/tree`, then you can use the arguments `--path //base/... --branch tree/sub:tree-sub --branch tree`.  The ordering is important here - provide the deeper paths first to have them take priority over the others.  Because Git creates branches with '/' characters as implicit directories, you must provide the Git branch alias to prevent Git reporting an error where the branch "tree" can't be created because is already a directory, or "tree/sub" can't be created because "tree" isn't a directory.
+
+## Notes on CL Git refs
+
+By default, every commit created by p4-fusion is also given a Git reference in the form `refs/cl/<CL>`, where `<CL>` is the Perforce changelist number that produced the commit. This lets you go from a changelist number straight to the commit it produced without searching commit messages, e.g.:
+
+```shell
+git show cl/12345
+git rev-parse cl/12345
+git log cl/12345
+```
+
+This is enabled by default. Pass `--noCLRefs true` to disable creating these references, for example if you don't want the extra refs cluttering `git for-each-ref`/`git ls-remote`, or don't want them pushed along with the mirrored repository.
+
+Each ref is created as a loose ref file, one per changelist. On very large depots (millions of CLs) this creates a correspondingly large number of files under `.git/refs/cl/`; running `git pack-refs --all` periodically on the destination repository is recommended to keep this efficient.
 
 ## Notes on stream mapping mode
 

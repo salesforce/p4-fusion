@@ -22,9 +22,12 @@ class GitAPI
 	git_oid m_FirstCommitOid;
 
 	std::string m_CurrentBranch = "";
+	bool m_CLRefsEnabled = true;
+
+	void CreateCLRef(const std::string& cl, const git_oid& commitID);
 
 public:
-	GitAPI(bool fsyncEnable);
+	GitAPI(bool fsyncEnable, bool clRefsEnabled = true);
 	~GitAPI();
 
 	bool InitializeRepository(const std::string& srcPath);
@@ -51,4 +54,8 @@ public:
 	    const int64_t& timestamp,
 	    const std::string& mergeFromStream);
 	void CloseIndex();
+
+	// Resolves the "refs/cl/<cl>" reference created for the given Perforce changelist number
+	// (when CL refs are enabled) to the Git commit SHA it points to. Returns "" if not found.
+	std::string ResolveCL(const std::string& cl) const;
 };
