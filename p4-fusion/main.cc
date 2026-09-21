@@ -41,6 +41,7 @@ int Main(int argc, char** argv)
 	Arguments::GetSingleton()->RequiredParameter("--lookAhead", "How many CLs in the future, at most, shall we keep downloaded by the time it is to commit them?");
 	Arguments::GetSingleton()->OptionalParameterList("--branch", "A branch to migrate under the depot path.  May be specified more than once.  If at least one is given and the noMerge option is false, then the Git repository will include merges between branches in the history.  You may use the formatting 'depot/path:git-alias', separating the Perforce branch sub-path from the git alias name by a ':'; if the depot path contains a ':', then you must provide the git branch alias.");
 	Arguments::GetSingleton()->OptionalParameter("--noMerge", "false", "Disable performing a Git merge when a Perforce branch integrates (or copies, etc) into another branch.");
+	Arguments::GetSingleton()->OptionalParameter("--noCLRefs", "false", "Disable creating a 'refs/cl/<CL>' Git reference for each commit. These refs let you look up the commit for a given Perforce changelist number directly, e.g. 'git show cl/12345'. Enabled by default.");
 	Arguments::GetSingleton()->OptionalParameter("--networkThreads", std::to_string(std::thread::hardware_concurrency()), "Specify the number of threads in the threadpool for running network calls. Defaults to the number of logical CPUs.");
 	Arguments::GetSingleton()->OptionalParameter("--printBatch", "1", "Specify the p4 print batch size.");
 	Arguments::GetSingleton()->OptionalParameter("--maxChanges", "-1", "Specify the max number of changelists which should be processed in a single run. -1 signifies unlimited range.");
@@ -68,6 +69,7 @@ int Main(int argc, char** argv)
 	}
 
 	const bool noMerge = Arguments::GetSingleton()->GetNoMerge() != "false";
+	const bool clRefsEnabled = Arguments::GetSingleton()->GetNoCLRefs() == "false";
 
 	const std::string depotPath = Arguments::GetSingleton()->GetDepotPath();
 	const std::string srcPath = Arguments::GetSingleton()->GetSourcePath();
@@ -243,6 +245,7 @@ int Main(int argc, char** argv)
 	PRINT("Profiling: " << profiling);
 	PRINT("Profiling Flush Rate: " << flushRate);
 	PRINT("No Colored Output: " << noColor);
+	PRINT("CL Git Refs: " << clRefsEnabled);
 	PRINT("Inspecting " << branchSet.Count() << " branches");
 	PRINT("Stream Mapping " << streamMappings);
 	if (streamMappings)
@@ -251,7 +254,7 @@ int Main(int argc, char** argv)
 		PRINT("Excluded paths: " << exclusions.size());
 	}
 
-	GitAPI git(fsyncEnable);
+	GitAPI git(fsyncEnable, clRefsEnabled);
 
 	if (!git.InitializeRepository(srcPath))
 	{

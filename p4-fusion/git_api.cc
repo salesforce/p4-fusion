@@ -26,7 +26,8 @@
 		}                                                                      \
 	} while (false)
 
-GitAPI::GitAPI(bool fsyncEnable)
+GitAPI::GitAPI(bool fsyncEnable, bool clRefsEnabled)
+    : m_CLRefsEnabled(clRefsEnabled)
 {
 	git_libgit2_init();
 
@@ -350,7 +351,34 @@ std::string GitAPI::Commit(
 	git_signature_free(author);
 	git_tree_free(commitTree);
 
+	if (m_CLRefsEnabled)
+	{
+		CreateCLRef(cl, commitID);
+	}
+
 	return git_oid_tostr_s(&commitID);
+}
+
+void GitAPI::CreateCLRef(const std::string& cl, const git_oid& commitID)
+{
+	// Creates a "refs/cl/<cl>" reference pointing directly at the commit created for
+	// this changelist. "refs/<name>" is the first path git's short-name resolution checks,
+	// so this ref can be looked up as just "cl/<cl>" (e.g. `git show cl/12345`) without
+	// colliding with branch or tag namespaces.
+	git_reference* ref = nullptr;
+	GIT2(git_reference_create(&ref, m_Repo, ("refs/cl/" + cl).c_str(), &commitID, /*force=*/1, nullptr));
+	git_reference_free(ref);
+}
+
+std::string GitAPI::ResolveCL(const std::string& cl) const
+{
+	git_oid oid;
+	int errorCode = git_reference_name_to_id(&oid, m_Repo, ("refs/cl/" + cl).c_str());
+	if (errorCode != 0)
+	{
+		return "";
+	}
+	return git_oid_tostr_s(&oid);
 }
 
 void GitAPI::CloseIndex()
